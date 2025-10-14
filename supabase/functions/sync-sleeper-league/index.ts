@@ -24,16 +24,26 @@ serve(async (req) => {
       throw new Error('Unauthorized');
     }
 
-    const { username } = await req.json();
+    const { username: rawUsername } = await req.json();
 
-    if (!username) {
+    if (!rawUsername) {
       throw new Error('Sleeper username is required');
+    }
+
+    // Validate username format and length
+    const username = rawUsername.trim();
+    if (username.length < 1 || username.length > 50) {
+      throw new Error('Username must be between 1 and 50 characters');
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+      throw new Error('Username can only contain letters, numbers, hyphens, and underscores');
     }
 
     console.log(`Fetching Sleeper user: ${username}`);
 
-    // Get user from Sleeper API
-    const userResponse = await fetch(`https://api.sleeper.app/v1/user/${username}`);
+    // Get user from Sleeper API (encode username for URL safety)
+    const encodedUsername = encodeURIComponent(username);
+    const userResponse = await fetch(`https://api.sleeper.app/v1/user/${encodedUsername}`);
     if (!userResponse.ok) {
       throw new Error('Sleeper user not found');
     }
