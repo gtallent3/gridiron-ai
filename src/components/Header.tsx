@@ -1,7 +1,19 @@
-import { Zap } from "lucide-react";
+import { Zap, LogOut, LogIn } from "lucide-react";
 import { Button } from "./ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
-export const Header = () => {
+
+type HeaderProps = {
+  user?: any;
+};
+
+export const Header = ({ user }: HeaderProps) => {
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+  };
   return <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
@@ -28,10 +40,17 @@ export const Header = () => {
             </a>
           </nav>
 
-          <Button variant="hero" size="sm">
-            <Zap className="h-4 w-4" />
-            Get Started
-          </Button>
+          {user ? (
+            <Button variant="outline" size="sm" onClick={handleSignOut}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Sign Out
+            </Button>
+          ) : (
+            <Button variant="hero" size="sm" onClick={() => navigate('/auth')}>
+              <LogIn className="h-4 w-4 mr-2" />
+              Sign In
+            </Button>
+          )}
         </div>
       </div>
     </header>;
