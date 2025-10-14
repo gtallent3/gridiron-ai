@@ -21,13 +21,33 @@ export const AIAssistant = () => {
   ]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  
+  const MAX_MESSAGE_LENGTH = 2000;
+  const MAX_CONVERSATION_LENGTH = 40;
 
   const handleSend = async () => {
     if (!input.trim()) return;
+    
+    // Validate message length
+    if (input.length > MAX_MESSAGE_LENGTH) {
+      toast({
+        title: "Message too long",
+        description: `Please limit your message to ${MAX_MESSAGE_LENGTH} characters.`,
+        variant: "destructive",
+      });
+      return;
+    }
 
     const userMessage: Message = { role: "user", content: input };
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    
+    // Trim conversation history if too long
+    let conversationHistory = [...messages, userMessage];
+    if (conversationHistory.length > MAX_CONVERSATION_LENGTH) {
+      conversationHistory = conversationHistory.slice(-MAX_CONVERSATION_LENGTH);
+      setMessages(conversationHistory.slice(0, -1)); // Update state without the new message yet
+    }
+    
+    setMessages(conversationHistory);
     setInput("");
     setIsTyping(true);
 
@@ -53,7 +73,7 @@ export const AIAssistant = () => {
             Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({
-            messages: newMessages.map((msg) => ({
+            messages: conversationHistory.map((msg) => ({
               role: msg.role,
               content: msg.content,
             })),
@@ -163,6 +183,7 @@ export const AIAssistant = () => {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyPress={(e) => e.key === "Enter" && handleSend()}
                     className="bg-background border-border"
+                    maxLength={MAX_MESSAGE_LENGTH}
                   />
                   <Button onClick={handleSend} disabled={!input.trim() || isTyping} variant="glow">
                     <Send className="h-4 w-4" />

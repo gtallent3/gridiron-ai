@@ -12,10 +12,49 @@ serve(async (req) => {
 
   try {
     const { messages } = await req.json();
+    
+    // Validate message structure and length
+    const MAX_MESSAGE_LENGTH = 2000;
+    const MAX_CONVERSATION_LENGTH = 50;
+    
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Invalid request format." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    if (messages.length > MAX_CONVERSATION_LENGTH) {
+      return new Response(
+        JSON.stringify({ error: "Conversation is too long. Please start a new chat." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
+    for (const msg of messages) {
+      if (!msg.role || !msg.content || typeof msg.content !== 'string') {
+        return new Response(
+          JSON.stringify({ error: "Invalid message format." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      if (msg.content.length > MAX_MESSAGE_LENGTH) {
+        return new Response(
+          JSON.stringify({ error: `Message is too long. Please limit to ${MAX_MESSAGE_LENGTH} characters.` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+    
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+      console.error("LOVABLE_API_KEY is not configured");
+      return new Response(
+        JSON.stringify({ error: "Service temporarily unavailable. Please try again later." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // System prompt with fantasy football context and data
@@ -72,7 +111,10 @@ Current 2024 NFL Context:
       
       const errorText = await response.text();
       console.error("AI gateway error:", response.status, errorText);
-      throw new Error("AI gateway error");
+      return new Response(
+        JSON.stringify({ error: "Unable to process your request. Please try again." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const data = await response.json();
@@ -87,7 +129,7 @@ Current 2024 NFL Context:
   } catch (error) {
     console.error("Fantasy AI chat error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: "Unable to process your request. Please try again." }),
       {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
