@@ -14,7 +14,140 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      connected_leagues: {
+        Row: {
+          access_token: string | null
+          auto_refresh: boolean | null
+          created_at: string | null
+          id: string
+          last_synced_at: string | null
+          league_id: string
+          league_name: string
+          league_size: number | null
+          platform: Database["public"]["Enums"]["league_platform"]
+          refresh_token: string | null
+          scoring_settings: Json | null
+          scoring_type: Database["public"]["Enums"]["scoring_type"]
+          token_expires_at: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token?: string | null
+          auto_refresh?: boolean | null
+          created_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          league_id: string
+          league_name: string
+          league_size?: number | null
+          platform: Database["public"]["Enums"]["league_platform"]
+          refresh_token?: string | null
+          scoring_settings?: Json | null
+          scoring_type: Database["public"]["Enums"]["scoring_type"]
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string | null
+          auto_refresh?: boolean | null
+          created_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          league_id?: string
+          league_name?: string
+          league_size?: number | null
+          platform?: Database["public"]["Enums"]["league_platform"]
+          refresh_token?: string | null
+          scoring_settings?: Json | null
+          scoring_type?: Database["public"]["Enums"]["scoring_type"]
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      normalized_players: {
+        Row: {
+          created_at: string | null
+          espn_id: string | null
+          id: string
+          player_id: string
+          player_name: string
+          position: string
+          sleeper_id: string | null
+          stats: Json | null
+          team: string | null
+          updated_at: string | null
+          yahoo_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          espn_id?: string | null
+          id?: string
+          player_id: string
+          player_name: string
+          position: string
+          sleeper_id?: string | null
+          stats?: Json | null
+          team?: string | null
+          updated_at?: string | null
+          yahoo_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          espn_id?: string | null
+          id?: string
+          player_id?: string
+          player_name?: string
+          position?: string
+          sleeper_id?: string | null
+          stats?: Json | null
+          team?: string | null
+          updated_at?: string | null
+          yahoo_id?: string | null
+        }
+        Relationships: []
+      }
+      user_teams: {
+        Row: {
+          created_at: string | null
+          id: string
+          league_id: string
+          roster: Json
+          team_id: string
+          team_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          league_id: string
+          roster: Json
+          team_id: string
+          team_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          league_id?: string
+          roster?: Json
+          team_id?: string
+          team_name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_teams_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "connected_leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +156,8 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      league_platform: "espn" | "yahoo" | "sleeper"
+      scoring_type: "standard" | "ppr" | "half_ppr" | "custom"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +284,9 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      league_platform: ["espn", "yahoo", "sleeper"],
+      scoring_type: ["standard", "ppr", "half_ppr", "custom"],
+    },
   },
 } as const
