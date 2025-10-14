@@ -23,6 +23,9 @@ export const Header = () => {
             <a href="#assistant" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               AI Assistant
             </a>
+            <a href="/connect-league" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Connect League
+            </a>
           </nav>
 
           <Button variant="hero" size="sm">

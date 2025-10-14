@@ -2,3 +2,6 @@ project_id = "zeklwogchobqttevcckl"
 
 [functions.fantasy-ai-chat]
 verify_jwt = false
+
+[functions.sync-sleeper-league]
+verify_jwt = true
