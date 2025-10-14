@@ -22,9 +22,9 @@ const mockPlayers = [
   },
 ];
 
-export const PlayerComparison = () => {
+export const TradeAnalyzer = () => {
   return (
-    <section id="compare" className="py-20 bg-gradient-to-b from-background to-secondary/20">
+    <section id="trade-analyzer" className="py-20 bg-gradient-to-b from-background to-secondary/20">
       <div className="container mx-auto px-4">
         <div className="max-w-6xl mx-auto space-y-8">
           {/* Section Header */}
@@ -33,9 +33,9 @@ export const PlayerComparison = () => {
               <BarChart3 className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium text-primary">Side-by-Side Analysis</span>
             </div>
-            <h2 className="text-4xl font-bold">Player Comparison</h2>
+            <h2 className="text-4xl font-bold">Trade Analyzer</h2>
             <p className="text-muted-foreground text-lg">
-              Compare player stats, projections, and matchup advantages
+              Analyze trade values and player projections side-by-side
             </p>
           </div>
 

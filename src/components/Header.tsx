@@ -17,8 +17,8 @@ export const Header = () => {
             <a href="#start-sit" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Start/Sit
             </a>
-            <a href="#compare" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              Compare
+            <a href="#trade-analyzer" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Trade Analyzer
             </a>
             <a href="#assistant" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               AI Assistant

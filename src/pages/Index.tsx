@@ -2,7 +2,7 @@ import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { Features } from "@/components/Features";
 import { StartSitAnalyzer } from "@/components/StartSitAnalyzer";
-import { PlayerComparison } from "@/components/PlayerComparison";
+import { TradeAnalyzer } from "@/components/TradeAnalyzer";
 import { AIAssistant } from "@/components/AIAssistant";
 
 const Index = () => {
@@ -12,7 +12,7 @@ const Index = () => {
       <Hero />
       <Features />
       <StartSitAnalyzer />
-      <PlayerComparison />
+      <TradeAnalyzer />
       <AIAssistant />
       
       {/* Footer */}
