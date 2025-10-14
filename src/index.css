@@ -18,8 +18,8 @@ All colors MUST be HSL.
     --popover: 0 0% 8%;
     --popover-foreground: 0 0% 95%;
 
-    /* Neon Green Primary */
-    --primary: 125 100% 50%;
+    /* Subtle Green Primary */
+    --primary: 142 70% 45%;
     --primary-foreground: 0 0% 5%;
 
     /* Dark Gray Secondary */
@@ -29,8 +29,8 @@ All colors MUST be HSL.
     --muted: 0 0% 12%;
     --muted-foreground: 0 0% 60%;
 
-    /* Electric Green Accent */
-    --accent: 120 100% 45%;
+    /* Muted Green Accent */
+    --accent: 142 65% 42%;
     --accent-foreground: 0 0% 5%;
 
     --destructive: 0 84% 60%;
@@ -38,16 +38,16 @@ All colors MUST be HSL.
 
     --border: 0 0% 18%;
     --input: 0 0% 15%;
-    --ring: 125 100% 50%;
+    --ring: 142 70% 45%;
 
     --radius: 0.75rem;
 
     /* Custom design tokens */
-    --glow-primary: 125 100% 50%;
+    --glow-primary: 142 70% 45%;
     --surface-elevated: 0 0% 10%;
-    --gradient-tech: linear-gradient(135deg, hsl(125, 100%, 50%), hsl(120, 100%, 35%));
+    --gradient-tech: linear-gradient(135deg, hsl(142, 70%, 45%), hsl(142, 65%, 38%));
     --gradient-dark: linear-gradient(180deg, hsl(0, 0%, 8%), hsl(0, 0%, 5%));
-    --shadow-glow: 0 0 40px hsl(125 100% 50% / 0.3);
+    --shadow-glow: 0 0 40px hsl(142 70% 45% / 0.25);
     --shadow-elevated: 0 10px 40px -10px hsl(0 0% 0% / 0.6);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
