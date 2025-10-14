@@ -6,7 +6,7 @@ export const Header = () => {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src={logo} alt="Fantasy AI Logo" className="h-8 w-8" />
+            <img src={logo} alt="Gridiron GM Logo" className="h-10 w-10" />
             <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Gridiron GM</h1>
           </div>
           
