@@ -1,1 +1,4 @@
 project_id = "zeklwogchobqttevcckl"
+
+[functions.fantasy-ai-chat]
+verify_jwt = false
