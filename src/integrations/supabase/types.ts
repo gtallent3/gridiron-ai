@@ -16,7 +16,6 @@ export type Database = {
     Tables: {
       connected_leagues: {
         Row: {
-          access_token: string | null
           auto_refresh: boolean | null
           created_at: string | null
           id: string
@@ -25,15 +24,12 @@ export type Database = {
           league_name: string
           league_size: number | null
           platform: Database["public"]["Enums"]["league_platform"]
-          refresh_token: string | null
           scoring_settings: Json | null
           scoring_type: Database["public"]["Enums"]["scoring_type"]
-          token_expires_at: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
-          access_token?: string | null
           auto_refresh?: boolean | null
           created_at?: string | null
           id?: string
@@ -42,15 +38,12 @@ export type Database = {
           league_name: string
           league_size?: number | null
           platform: Database["public"]["Enums"]["league_platform"]
-          refresh_token?: string | null
           scoring_settings?: Json | null
           scoring_type: Database["public"]["Enums"]["scoring_type"]
-          token_expires_at?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
-          access_token?: string | null
           auto_refresh?: boolean | null
           created_at?: string | null
           id?: string
@@ -59,10 +52,8 @@ export type Database = {
           league_name?: string
           league_size?: number | null
           platform?: Database["public"]["Enums"]["league_platform"]
-          refresh_token?: string | null
           scoring_settings?: Json | null
           scoring_type?: Database["public"]["Enums"]["scoring_type"]
-          token_expires_at?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -153,7 +144,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_oauth_token: {
+        Args: { p_league_id: string; p_platform: string; p_user_id: string }
+        Returns: Json
+      }
+      store_oauth_token: {
+        Args: {
+          p_league_id: string
+          p_platform: string
+          p_token_data: Json
+          p_user_id: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       league_platform: "espn" | "yahoo" | "sleeper"
