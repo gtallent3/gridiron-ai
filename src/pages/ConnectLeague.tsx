@@ -111,9 +111,25 @@ export default function ConnectLeague() {
       setTimeout(() => navigate('/'), 1500);
     } catch (error: any) {
       console.error('Error connecting ESPN:', error);
+      
+      // Try to extract the actual error message from the backend response
+      let errorMessage = "Failed to connect to ESPN";
+      
+      if (error.message && error.message.includes("non-2xx")) {
+        // Edge function returned an error - try to get the error from data
+        errorMessage = "Could not connect to ESPN. Please verify your cookies and league membership.";
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // If the error context contains an error field, use that
+      if (error.context?.error) {
+        errorMessage = error.context.error;
+      }
+      
       toast({
         title: "Connection failed",
-        description: error.message || "Failed to connect to ESPN",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {

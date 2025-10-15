@@ -55,8 +55,8 @@ serve(async (req) => {
     const now = new Date();
     const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
-    // Fetch league data from ESPN API
-    const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentYear}/segments/0/leagues/${leagueId}?view=mSettings&view=mTeam&view=mRoster`;
+    // Fetch league data from ESPN API (include mMembers for owner details)
+    const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentYear}/segments/0/leagues/${leagueId}?view=mSettings&view=mTeam&view=mRoster&view=mMembers`;
     
     console.log('Fetching ESPN league data...');
     const leagueResponse = await fetch(leagueUrl, {
@@ -85,13 +85,37 @@ serve(async (req) => {
       }
     }
 
-    // Find the user's team
-    const userTeam = leagueData.teams?.find((team: any) => 
-      team.owners?.some((ownerId: string) => ownerId === swid.replace(/[{}]/g, ''))
-    );
+    // Normalize IDs for robust matching (remove braces, hyphens, lowercase)
+    const normalizeId = (id: string): string => {
+      return (id || '').trim().toLowerCase().replace(/[{}\-]/g, '');
+    };
+
+    const normalizedSwid = normalizeId(swid);
+    console.log('Normalized SWID for matching:', normalizedSwid.substring(0, 8) + '...');
+
+    // Find the user's team with robust owner matching
+    const userTeam = leagueData.teams?.find((team: any) => {
+      const owners = (team.owners || []).map(normalizeId);
+      const primaryOwner = normalizeId(team.primaryOwner || '');
+      
+      // Check if SWID matches any owner or the primary owner
+      const isMatch = owners.includes(normalizedSwid) || (primaryOwner && primaryOwner === normalizedSwid);
+      
+      if (isMatch) {
+        console.log(`Found user team: ${team.name || team.location + ' ' + team.nickname} (ID: ${team.id})`);
+      }
+      
+      return isMatch;
+    });
 
     if (!userTeam) {
-      throw new Error('Could not find your team in this league. Make sure you are a member of this league.');
+      // Log team owner details for debugging (without exposing full IDs)
+      console.log('Could not find matching team. League teams summary:');
+      leagueData.teams?.slice(0, 3).forEach((team: any, idx: number) => {
+        console.log(`  Team ${idx + 1}: ${team.name || team.location + ' ' + team.nickname}, owners count: ${team.owners?.length || 0}, primaryOwner exists: ${!!team.primaryOwner}`);
+      });
+      
+      throw new Error('Could not find your team in this league. Make sure the SWID cookie belongs to an account that is a member of this league.');
     }
 
     console.log(`Found user team: ${userTeam.name || userTeam.location + ' ' + userTeam.nickname}`);
