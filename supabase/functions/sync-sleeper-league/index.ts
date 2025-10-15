@@ -127,28 +127,54 @@ serve(async (req) => {
       const usersResponse = await fetch(`https://api.sleeper.app/v1/league/${league.league_id}/users`);
       const leagueUsers = usersResponse.ok ? await usersResponse.json() : [];
 
-      // Find user's roster
-      const userRoster = rosters.find((r: any) => {
-        const leagueUser = leagueUsers.find((u: any) => u.user_id === sleeperUser.user_id);
-        return leagueUser && r.owner_id === leagueUser.user_id;
-      });
+      // Build normalized players map for this league's rosters
+      const allPlayerIds = Array.from(new Set(
+        rosters.flatMap((r: any) => (r.players || []).map((id: any) => id?.toString()))
+      ));
 
-      if (userRoster) {
-        const leagueUser = leagueUsers.find((u: any) => u.user_id === sleeperUser.user_id);
-        const teamName = leagueUser?.metadata?.team_name || leagueUser?.display_name || 'My Team';
+      let normalizedMap = new Map<string, { player_name: string; position: string; team: string }>();
+      if (allPlayerIds.length > 0) {
+        const { data: normPlayers } = await supabase
+          .from('normalized_players')
+          .select('sleeper_id, player_name, position, team')
+          .in('sleeper_id', allPlayerIds);
+        if (normPlayers) {
+          for (const p of normPlayers) {
+            normalizedMap.set(p.sleeper_id, {
+              player_name: p.player_name,
+              position: p.position,
+              team: p.team,
+            });
+          }
+        }
+      }
 
-        // Upsert team
+      // Upsert ALL teams in the league so "Other Teams" can be displayed
+      for (const r of rosters) {
+        const owner = leagueUsers.find((u: any) => u.user_id === r.owner_id);
+        const teamName = owner?.metadata?.team_name || owner?.display_name || `Team ${r.roster_id}`;
+
+        const startersSet = new Set((r.starters || []).map((id: any) => id?.toString()));
+        const rosterArray = (r.players || []).map((pid: any) => {
+          const id = pid?.toString();
+          const meta = normalizedMap.get(id);
+          return {
+            player_id: id,
+            player_name: meta?.player_name || 'Unknown Player',
+            position: meta?.position || 'FLEX',
+            team: meta?.team || 'NFL',
+            projected: 0,
+            starter: startersSet.has(id),
+          };
+        });
+
         await supabase
           .from('user_teams')
           .upsert({
             league_id: connectedLeague.id,
-            team_id: userRoster.roster_id.toString(),
+            team_id: r.roster_id?.toString(),
             team_name: teamName,
-            roster: {
-              starters: userRoster.starters || [],
-              players: userRoster.players || [],
-              reserve: userRoster.reserve || [],
-            },
+            roster: rosterArray,
           }, {
             onConflict: 'league_id,team_id',
           });
