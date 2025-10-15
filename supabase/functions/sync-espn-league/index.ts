@@ -18,17 +18,30 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const authHeader = req.headers.get('Authorization');
+    console.log('Auth header present:', !!authHeader);
+    
     if (!authHeader) {
+      console.error('No authorization header found in request');
       throw new Error('No authorization header');
     }
 
     const token = authHeader.replace('Bearer ', '');
+    console.log('Token format check:', token.substring(0, 10) + '...' + token.substring(token.length - 10));
+    
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      console.error('Auth error:', authError);
+      console.error('Auth error details:', {
+        hasError: !!authError,
+        errorName: authError?.name,
+        errorMessage: authError?.message,
+        errorStatus: authError?.status,
+        hasUser: !!user
+      });
       throw new Error('Unauthorized');
     }
+
+    console.log('Auth successful for user:', user.id);
 
     const { espn_s2, swid, leagueId } = await req.json();
 

@@ -88,6 +88,15 @@ export default function ConnectLeague() {
 
     setIsLoading(true);
     try {
+      // Explicitly refresh the session to ensure we have a valid token
+      const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+      
+      if (refreshError || !session) {
+        throw new Error('Your session has expired. Please log out and log back in.');
+      }
+
+      console.log('Session valid, invoking ESPN sync function...');
+
       const { data, error } = await supabase.functions.invoke('sync-espn-league', {
         body: espnCredentials,
       });
