@@ -13,6 +13,7 @@ type League = {
   league_name: string;
   league_size: number;
   scoring_type: string;
+  scoring_settings?: any;
   last_synced_at: string;
 };
 
@@ -21,6 +22,28 @@ export const ConnectedLeagues = () => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  const getDisplayScoringType = (lg: any) => {
+    const defaultType = lg.scoring_type;
+    if (lg.platform !== 'espn' || !lg.scoring_settings) return defaultType;
+    const items = lg.scoring_settings.scoringItems;
+    if (!items) return defaultType;
+
+    let recPoints: number | undefined;
+    if (Array.isArray(items)) {
+      const recItem = items.find((it: any) => it?.statId === 53);
+      recPoints = recItem?.points ?? recItem?.value;
+    } else if (typeof items === 'object') {
+      const candidate = items['53'] ?? items[53];
+      recPoints = candidate?.points ?? candidate?.value ?? candidate;
+    }
+
+    if (typeof recPoints !== 'number') return defaultType;
+    if (recPoints === 1 || recPoints === 1.0) return 'ppr';
+    if (recPoints === 0.5) return 'half_ppr';
+    if (recPoints === 0) return 'standard';
+    return 'custom';
+  };
 
   useEffect(() => {
     fetchLeagues();
@@ -102,7 +125,7 @@ export const ConnectedLeagues = () => {
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
               </div>
               <p className="text-sm text-muted-foreground">
-                {league.league_size} teams • {league.scoring_type.replace('_', ' ').toUpperCase()}
+                {league.league_size} teams • {getDisplayScoringType(league).replace('_', ' ').toUpperCase()}
               </p>
               <p className="text-xs text-muted-foreground">
                 Last synced: {new Date(league.last_synced_at).toLocaleString()}

@@ -14,6 +14,7 @@ type League = {
   league_name: string;
   league_size: number;
   scoring_type: string;
+  scoring_settings?: any;
   auto_refresh: boolean;
   last_synced_at: string;
 };
@@ -23,6 +24,28 @@ export const LeagueSettings = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const { toast } = useToast();
+
+  const getDisplayScoringType = (lg: any) => {
+    const defaultType = lg.scoring_type;
+    if (lg.platform !== 'espn' || !lg.scoring_settings) return defaultType;
+    const items = lg.scoring_settings.scoringItems;
+    if (!items) return defaultType;
+
+    let recPoints: number | undefined;
+    if (Array.isArray(items)) {
+      const recItem = items.find((it: any) => it?.statId === 53);
+      recPoints = recItem?.points ?? recItem?.value;
+    } else if (typeof items === 'object') {
+      const candidate = items['53'] ?? items[53];
+      recPoints = candidate?.points ?? candidate?.value ?? candidate;
+    }
+
+    if (typeof recPoints !== 'number') return defaultType;
+    if (recPoints === 1 || recPoints === 1.0) return 'ppr';
+    if (recPoints === 0.5) return 'half_ppr';
+    if (recPoints === 0) return 'standard';
+    return 'custom';
+  };
 
   useEffect(() => {
     fetchLeagues();
@@ -171,7 +194,7 @@ export const LeagueSettings = () => {
                   </Badge>
                 </CardTitle>
                 <CardDescription>
-                  {league.league_size} teams • {league.scoring_type.replace('_', ' ').toUpperCase()}
+                  {league.league_size} teams • {getDisplayScoringType(league).replace('_', ' ').toUpperCase()}
                 </CardDescription>
               </div>
               <CheckCircle2 className="h-5 w-5 text-green-500" />
