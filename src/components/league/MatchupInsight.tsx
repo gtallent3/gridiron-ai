@@ -112,16 +112,24 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
     return espnPositionMap[position] || 'FLEX';
   };
 
-  // Calculate positional breakdowns
+  // Calculate positional breakdowns - ONLY FOR STARTERS
   const getPositionalProjections = (roster: any[]) => {
     const positions: Record<string, number> = {
       QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0
     };
     
+    // Filter to only include starters (slot 0-17, 23 for ESPN, starter=true for Sleeper)
+    const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+    
     roster.forEach((p: any) => {
-      const pos = getPositionString(p.position);
-      if (positions.hasOwnProperty(pos)) {
-        positions[pos] += p.projected || 0;
+      // Check if player is a starter
+      const isStarter = STARTER_SLOTS.includes(p.slot) || p.starter === true;
+      
+      if (isStarter) {
+        const pos = getPositionString(p.position);
+        if (positions.hasOwnProperty(pos)) {
+          positions[pos] += p.projected || 0;
+        }
       }
     });
     

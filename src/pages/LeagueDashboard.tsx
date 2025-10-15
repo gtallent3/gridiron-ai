@@ -10,6 +10,7 @@ import { MatchupInsight } from "@/components/league/MatchupInsight";
 import { WaiverWire } from "@/components/league/WaiverWire";
 import { OtherTeams } from "@/components/league/OtherTeams";
 import { LeagueHeader } from "@/components/league/LeagueHeader";
+import { TradeAnalyzer } from "@/components/league/trade/TradeAnalyzer";
 
 type League = {
   id: string;
@@ -130,9 +131,10 @@ export default function LeagueDashboard() {
         />
 
         <Tabs defaultValue="roster" className="mt-8">
-          <TabsList className="grid w-full grid-cols-4 max-w-2xl mx-auto">
+          <TabsList className="grid w-full grid-cols-5 max-w-3xl mx-auto">
             <TabsTrigger value="roster">My Team</TabsTrigger>
             <TabsTrigger value="matchup">Matchup</TabsTrigger>
+            <TabsTrigger value="trade">Trade Analyzer</TabsTrigger>
             <TabsTrigger value="waiver">Waiver Wire</TabsTrigger>
             <TabsTrigger value="teams">Other Teams</TabsTrigger>
           </TabsList>
@@ -146,6 +148,13 @@ export default function LeagueDashboard() {
 
           <TabsContent value="matchup" className="mt-6">
             <MatchupInsight 
+              league={league}
+              userTeam={userTeam}
+            />
+          </TabsContent>
+
+          <TabsContent value="trade" className="mt-6">
+            <TradeAnalyzer 
               league={league}
               userTeam={userTeam}
             />
