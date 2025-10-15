@@ -84,13 +84,26 @@ serve(async (req) => {
 
     const leagueData = await leagueResponse.json();
 
-    // Determine scoring type
+    // Determine scoring type - ESPN uses stat ID 53 for receptions
     let scoringType = 'standard';
     if (leagueData.settings?.scoringSettings?.scoringItems) {
-      const pprScore = leagueData.settings.scoringSettings.scoringItems['53']; // 53 is reception points
-      if (pprScore > 0) {
-        scoringType = pprScore === 1 ? 'ppr' : pprScore === 0.5 ? 'half_ppr' : 'custom';
+      const scoringItems = leagueData.settings.scoringSettings.scoringItems;
+      // Check for reception points (stat ID 53 in ESPN)
+      const pprScore = scoringItems['53']?.points || scoringItems[53]?.points || scoringItems['53'] || scoringItems[53];
+      
+      console.log('ESPN Scoring - Reception points value:', pprScore);
+      
+      if (pprScore !== undefined && pprScore !== null) {
+        if (pprScore === 1 || pprScore === 1.0) {
+          scoringType = 'ppr';
+        } else if (pprScore === 0.5) {
+          scoringType = 'half_ppr';
+        } else if (pprScore > 0) {
+          scoringType = 'custom';
+        }
       }
+      
+      console.log('Detected scoring type:', scoringType);
     }
 
     // Normalize IDs for robust matching (remove braces, hyphens, lowercase)
