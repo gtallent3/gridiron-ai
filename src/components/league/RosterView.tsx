@@ -43,19 +43,34 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
       const benchPlayers: any[] = [];
 
       userTeam.roster.forEach((player: any) => {
-        const positionName = POSITION_MAP[player.position] || 'FLEX';
+        // Handle both ESPN and Sleeper formats
+        const playerId = player.player_id || player.playerId;
+        const playerName = player.player_name || player.playerName || player.name || 'Unknown Player';
+        
+        // For ESPN
+        let positionName = POSITION_MAP[player.position] || 'FLEX';
+        let isStarter = STARTER_SLOTS.includes(player.slot);
+        let isBench = player.slot === BENCH_SLOT;
+        
+        // For Sleeper (different format)
+        if (league.platform === 'sleeper') {
+          positionName = player.position || 'FLEX';
+          isStarter = player.starter !== false; // Sleeper uses starter boolean
+          isBench = player.starter === false;
+        }
+
         const playerData = {
-          id: player.player_id,
-          name: player.player_name,
+          id: playerId,
+          name: playerName,
           position: positionName,
-          team: 'NFL', // Team info not in current data
-          projected: Math.random() * 20 + 5, // Mock projection for now
-          status: STARTER_SLOTS.includes(player.slot) ? 'starter' : 'bench',
+          team: player.team || 'NFL',
+          projected: 0, // Will be updated when we fetch projections
+          status: isStarter ? 'starter' : 'bench',
         };
 
-        if (STARTER_SLOTS.includes(player.slot)) {
+        if (isStarter) {
           starterPlayers.push(playerData);
-        } else if (player.slot === BENCH_SLOT) {
+        } else if (isBench) {
           benchPlayers.push(playerData);
         }
       });
@@ -63,7 +78,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
       setStarters(starterPlayers);
       setBench(benchPlayers);
     }
-  }, [userTeam]);
+  }, [userTeam, league.platform]);
 
   const handlePlayerSelect = (playerId: string) => {
     setSelectedPlayers(prev => 

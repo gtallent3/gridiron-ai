@@ -74,7 +74,9 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly }: PlayerCar
 
         <div className="pt-2 border-t border-border/50">
           <p className="text-xs text-muted-foreground">Projected</p>
-          <p className="text-lg font-bold">{player.projected.toFixed(1)}</p>
+          <p className="text-lg font-bold">
+            {player.projected > 0 ? player.projected.toFixed(1) : 'N/A'}
+          </p>
         </div>
       </CardContent>
     </Card>

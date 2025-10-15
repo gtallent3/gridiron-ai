@@ -21,10 +21,10 @@ type LeagueHeaderProps = {
 };
 
 export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
-  // Mock data - will be replaced with real data
-  const record = { wins: 5, losses: 2 };
-  const projectedPoints = 127.4;
-  const winProbability = 56;
+  // TODO: Fetch real team record and projections from league data
+  const record = { wins: 0, losses: 0 }; // Will be updated with real data
+  const projectedPoints = 0; // Will be calculated from roster
+  const winProbability = 50; // Will be calculated based on matchup
 
   return (
     <Card className="border-2 border-primary/50 bg-gradient-to-r from-primary/5 to-accent/5">
@@ -43,12 +43,16 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
               </p>
             )}
             <div className="flex items-center gap-4 text-sm">
-              <div className="flex items-center gap-2">
-                <Trophy className="h-4 w-4 text-primary" />
-                <span className="font-semibold">
-                  {record.wins}-{record.losses}
-                </span>
-              </div>
+              {record.wins > 0 || record.losses > 0 ? (
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-primary" />
+                  <span className="font-semibold">
+                    {record.wins}-{record.losses}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-muted-foreground">Record not available</span>
+              )}
               <span className="text-muted-foreground">•</span>
               <span className="text-muted-foreground">
                 {league.league_size} Teams
@@ -64,7 +68,9 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
             <Card className="bg-background/50">
               <CardContent className="p-4 text-center min-w-[140px]">
                 <p className="text-sm text-muted-foreground mb-1">Projected Points</p>
-                <p className="text-3xl font-bold text-primary">{projectedPoints}</p>
+                <p className="text-3xl font-bold text-primary">
+                  {projectedPoints > 0 ? projectedPoints.toFixed(1) : 'N/A'}
+                </p>
               </CardContent>
             </Card>
 
