@@ -28,6 +28,7 @@ export type Database = {
           scoring_type: Database["public"]["Enums"]["scoring_type"]
           updated_at: string | null
           user_id: string
+          user_team_id: string | null
         }
         Insert: {
           auto_refresh?: boolean | null
@@ -42,6 +43,7 @@ export type Database = {
           scoring_type: Database["public"]["Enums"]["scoring_type"]
           updated_at?: string | null
           user_id: string
+          user_team_id?: string | null
         }
         Update: {
           auto_refresh?: boolean | null
@@ -56,6 +58,7 @@ export type Database = {
           scoring_type?: Database["public"]["Enums"]["scoring_type"]
           updated_at?: string | null
           user_id?: string
+          user_team_id?: string | null
         }
         Relationships: []
       }

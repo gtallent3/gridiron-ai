@@ -99,7 +99,7 @@ serve(async (req) => {
       throw new Error('Unable to find your team in this league');
     }
 
-    // Upsert league data
+    // Upsert league data with user's team_id
     const { data: leagueRecord, error: leagueError } = await supabase
       .from('connected_leagues')
       .upsert({
@@ -110,6 +110,7 @@ serve(async (req) => {
         league_size: leagueData.settings.size,
         scoring_type: scoringType,
         scoring_settings: leagueData.settings.scoringSettings,
+        user_team_id: userTeam.id.toString(),
         last_synced_at: new Date().toISOString(),
       }, {
         onConflict: 'user_id,platform,league_id',

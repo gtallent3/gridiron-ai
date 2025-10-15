@@ -94,28 +94,6 @@ serve(async (req) => {
         scoringType = 'custom';
       }
 
-      // Upsert league
-      const { data: connectedLeague, error: leagueError } = await supabase
-        .from('connected_leagues')
-        .upsert({
-          user_id: user.id,
-          platform: 'sleeper',
-          league_id: league.league_id,
-          league_name: league.name,
-          scoring_type: scoringType,
-          league_size: league.total_rosters,
-          scoring_settings: league.scoring_settings,
-          last_synced_at: new Date().toISOString(),
-        }, {
-          onConflict: 'user_id,platform,league_id',
-        })
-        .select()
-        .single();
-
-      if (leagueError) {
-        continue;
-      }
-
       // Get rosters for this league
       const rostersResponse = await fetch(`https://api.sleeper.app/v1/league/${league.league_id}/rosters`);
       if (!rostersResponse.ok) {
@@ -126,6 +104,37 @@ serve(async (req) => {
       // Get users in the league to match roster to team names
       const usersResponse = await fetch(`https://api.sleeper.app/v1/league/${league.league_id}/users`);
       const leagueUsers = usersResponse.ok ? await usersResponse.json() : [];
+
+      // Find user's roster to get team_id
+      const userRoster = rosters.find((r: any) => {
+        const leagueUser = leagueUsers.find((u: any) => u.user_id === sleeperUser.user_id);
+        return leagueUser && r.owner_id === leagueUser.user_id;
+      });
+
+      const userTeamId = userRoster?.roster_id?.toString();
+
+      // Upsert league with user's team_id
+      const { data: connectedLeague, error: leagueError } = await supabase
+        .from('connected_leagues')
+        .upsert({
+          user_id: user.id,
+          platform: 'sleeper',
+          league_id: league.league_id,
+          league_name: league.name,
+          scoring_type: scoringType,
+          league_size: league.total_rosters,
+          scoring_settings: league.scoring_settings,
+          user_team_id: userTeamId,
+          last_synced_at: new Date().toISOString(),
+        }, {
+          onConflict: 'user_id,platform,league_id',
+        })
+        .select()
+        .single();
+
+      if (leagueError) {
+        continue;
+      }
 
       // Build normalized players map for this league's rosters
       const allPlayerIds = Array.from(new Set(
