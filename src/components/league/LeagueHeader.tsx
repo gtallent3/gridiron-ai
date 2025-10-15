@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trophy, TrendingUp } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 type League = {
   id: string;
@@ -8,11 +10,16 @@ type League = {
   league_name: string;
   league_size: number;
   scoring_type: string;
+  opponent_team_id?: string;
 };
 
 type Team = {
   team_name: string;
   roster: any;
+  wins?: number;
+  losses?: number;
+  ties?: number;
+  total_projected?: number;
 } | null;
 
 type LeagueHeaderProps = {
@@ -21,10 +28,42 @@ type LeagueHeaderProps = {
 };
 
 export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
-  // TODO: Fetch real team record and projections from league data
-  const record = { wins: 0, losses: 0 }; // Will be updated with real data
-  const projectedPoints = 0; // Will be calculated from roster
-  const winProbability = 50; // Will be calculated based on matchup
+  const [winProbability, setWinProbability] = useState(50);
+
+  useEffect(() => {
+    const fetchWinProbability = async () => {
+      if (!league.opponent_team_id) return;
+
+      const { data: opponentTeam } = await supabase
+        .from('user_teams')
+        .select('total_projected')
+        .eq('league_id', league.id)
+        .eq('team_id', league.opponent_team_id)
+        .maybeSingle();
+
+      if (opponentTeam && userTeam?.total_projected) {
+        const userProjected = userTeam.total_projected;
+        const opponentProjected = opponentTeam.total_projected || 0;
+        const totalProjected = userProjected + opponentProjected;
+        const calculatedWinProb = totalProjected > 0 
+          ? Math.round((userProjected / totalProjected) * 100) 
+          : 50;
+        setWinProbability(calculatedWinProb);
+      }
+    };
+
+    fetchWinProbability();
+  }, [league.id, league.opponent_team_id, userTeam?.total_projected]);
+
+  // Get projected points from starting lineup only (matches total_projected in database)
+  const projectedPoints = userTeam?.total_projected || 0;
+  
+  // Get actual team record from userTeam data
+  const record = {
+    wins: userTeam?.wins || 0,
+    losses: userTeam?.losses || 0,
+    ties: userTeam?.ties || 0
+  };
 
   return (
     <Card className="border-2 border-primary/50 bg-gradient-to-r from-primary/5 to-accent/5">
@@ -43,16 +82,12 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
               </p>
             )}
             <div className="flex items-center gap-4 text-sm">
-              {record.wins > 0 || record.losses > 0 ? (
-                <div className="flex items-center gap-2">
-                  <Trophy className="h-4 w-4 text-primary" />
-                  <span className="font-semibold">
-                    {record.wins}-{record.losses}
-                  </span>
-                </div>
-              ) : (
-                <span className="text-muted-foreground">Record not available</span>
-              )}
+              <div className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-primary" />
+                <span className="font-semibold">
+                  {record.wins}-{record.losses}{record.ties ? `-${record.ties}` : ''}
+                </span>
+              </div>
               <span className="text-muted-foreground">•</span>
               <span className="text-muted-foreground">
                 {league.league_size} Teams
