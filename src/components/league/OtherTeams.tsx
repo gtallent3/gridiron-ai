@@ -77,10 +77,19 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
     if (!team.roster || !Array.isArray(team.roster)) return [];
 
     return team.roster.map((player: any) => {
-      const rawPos = player.position;
-      const position = typeof rawPos === 'number' ? (POSITION_MAP[rawPos] || 'FLEX') : (rawPos || 'FLEX');
+      // Handle both ESPN (numeric position) and Sleeper (string position) formats
+      let position = 'FLEX';
+      
+      if (typeof player.position === 'string') {
+        // Sleeper format - position is already a string
+        position = player.position.toUpperCase();
+      } else if (typeof player.position === 'number') {
+        // ESPN format - position is a number that needs mapping
+        position = POSITION_MAP[player.position] || 'FLEX';
+      }
+
       return {
-        id: player.player_id || player.playerId,
+        id: player.player_id || player.playerId || Math.random().toString(),
         name: player.player_name || player.playerName || 'Unknown',
         position,
         team: player.team || 'NFL',
