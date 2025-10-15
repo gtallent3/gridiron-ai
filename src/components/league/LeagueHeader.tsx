@@ -10,6 +10,7 @@ type League = {
   league_name: string;
   league_size: number;
   scoring_type: string;
+  scoring_settings?: any;
   opponent_team_id?: string;
 };
 
@@ -79,6 +80,31 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
     ties: userTeam?.ties || 0
   };
 
+  // Derive scoring type from ESPN scoring settings when available (statId 53 = receptions)
+  const displayScoringType = (() => {
+    const defaultType = league.scoring_type;
+    const settings = (league as any).scoring_settings;
+    if (league.platform !== 'espn' || !settings) return defaultType;
+
+    const items = settings.scoringItems;
+    if (!items) return defaultType;
+
+    let recPoints: number | undefined;
+    if (Array.isArray(items)) {
+      const recItem = items.find((it: any) => it?.statId === 53);
+      recPoints = recItem?.points ?? recItem?.value;
+    } else if (typeof items === 'object') {
+      const candidate = items['53'] ?? items[53];
+      recPoints = candidate?.points ?? candidate?.value ?? candidate;
+    }
+
+    if (typeof recPoints !== 'number') return defaultType;
+    if (recPoints === 1 || recPoints === 1.0) return 'ppr';
+    if (recPoints === 0.5) return 'half_ppr';
+    if (recPoints === 0) return 'standard';
+    return 'custom';
+  })();
+
   return (
     <Card className="border-2 border-primary/50 bg-gradient-to-r from-primary/5 to-accent/5">
       <CardContent className="p-6">
@@ -108,7 +134,7 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
               </span>
               <span className="text-muted-foreground">•</span>
               <span className="text-muted-foreground capitalize">
-                {league.scoring_type.replace('_', ' ')}
+                {displayScoringType.replace('_', ' ')}
               </span>
             </div>
           </div>
