@@ -149,6 +149,34 @@ serve(async (req) => {
         }
       }
 
+      // Determine current NFL week and fetch projections for this league
+      let currentWeek = 1;
+      try {
+        const stateResp = await fetch('https://api.sleeper.app/v1/state/nfl');
+        if (stateResp.ok) {
+          const state = await stateResp.json();
+          currentWeek = state?.week || currentWeek;
+        }
+      } catch (_) { /* ignore */ }
+
+      // Choose projection scoring type based on league settings
+      const projType = scoringType === 'ppr' ? 'ppr' : (scoringType === 'half_ppr' ? 'half_ppr' : 'std');
+      const projField = projType === 'ppr' ? 'pts_ppr' : (projType === 'half_ppr' ? 'pts_half_ppr' : 'pts_std');
+
+      // Fetch projections for the current week
+      const projectionMap = new Map<string, number>();
+      try {
+        const projResp = await fetch(`https://api.sleeper.app/v1/projections/nfl/${currentYear}/${currentWeek}?type=${projType}`);
+        if (projResp.ok) {
+          const projections = await projResp.json();
+          for (const p of projections) {
+            const id = (p.player_id || p.player?.player_id || '').toString();
+            const pts = typeof p[projField] === 'number' ? p[projField] : 0;
+            if (id) projectionMap.set(id, pts);
+          }
+        }
+      } catch (_) { /* ignore */ }
+
       // Upsert ALL teams in the league so "Other Teams" can be displayed
       for (const r of rosters) {
         const owner = leagueUsers.find((u: any) => u.user_id === r.owner_id);
@@ -163,7 +191,7 @@ serve(async (req) => {
             player_name: meta?.player_name || 'Unknown Player',
             position: meta?.position || 'FLEX',
             team: meta?.team || 'NFL',
-            projected: 0,
+            projected: projectionMap.get(id) || 0,
             starter: startersSet.has(id),
           };
         });

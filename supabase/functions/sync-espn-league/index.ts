@@ -121,31 +121,29 @@ serve(async (req) => {
       throw new Error('Unable to save league data');
     }
 
-    // Sync ALL teams in the league (not just the user's team)
-    for (const team of leagueData.teams || []) {
-      const roster = team.roster?.entries?.map((entry: any) => {
-        const player = entry.playerPoolEntry?.player;
-        
-        // Get current week projection
-        let projected = 0;
-        if (player?.stats) {
-          const projectionStat = player.stats.find((stat: any) => 
-            stat.statSourceId === 1 && stat.scoringPeriodId === leagueData.scoringPeriodId
-          );
-          projected = projectionStat?.appliedTotal || 0;
-        }
+      // Sync ALL teams in the league (not just the user's team)
+      for (const team of leagueData.teams || []) {
+        const roster = (team.roster?.entries || []).map((entry: any) => {
+          const player = entry.playerPoolEntry?.player;
+          
+          // Get current week projection (kona)
+          let projected = 0;
+          if (player?.stats) {
+            const projectionStat = player.stats.find((stat: any) => 
+              stat.statSourceId === 1 && stat.scoringPeriodId === leagueData.scoringPeriodId
+            );
+            projected = projectionStat?.appliedTotal || 0;
+          }
 
-        return {
-          player_id: entry.playerId?.toString(),
-          player_name: player?.fullName,
-          position: player?.defaultPositionId,
-          slot: entry.lineupSlotId,
-          team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null,
-          projected: projected,
-        };
-      }) || [];
-
-      // Upsert each team
+          return {
+            player_id: entry.playerId?.toString(),
+            player_name: player?.fullName,
+            position: player?.defaultPositionId,
+            team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null,
+            projected,
+            slot: entry.lineupSlotId,
+          };
+        });
       await supabase
         .from('user_teams')
         .upsert({

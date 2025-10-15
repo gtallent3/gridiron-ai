@@ -12,6 +12,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+// ESPN numeric position -> label mapping
+const POSITION_MAP: Record<number, string> = {
+  1: 'QB',
+  2: 'RB',
+  3: 'WR',
+  4: 'TE',
+  5: 'K',
+  16: 'DEF',
+};
+
 type League = {
   id: string;
 };
@@ -65,14 +75,18 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
 
   const getTeamRoster = (team: LeagueTeam) => {
     if (!team.roster || !Array.isArray(team.roster)) return [];
-    
-    return team.roster.slice(0, 8).map((player: any) => ({
-      id: player.player_id || player.playerId,
-      name: player.player_name || player.playerName || 'Unknown',
-      position: player.position || 'FLEX',
-      team: player.team || 'NFL',
-      projected: 0,
-    }));
+
+    return team.roster.map((player: any) => {
+      const rawPos = player.position;
+      const position = typeof rawPos === 'number' ? (POSITION_MAP[rawPos] || 'FLEX') : (rawPos || 'FLEX');
+      return {
+        id: player.player_id || player.playerId,
+        name: player.player_name || player.playerName || 'Unknown',
+        position,
+        team: player.team || 'NFL',
+        projected: typeof player.projected === 'number' ? player.projected : 0,
+      };
+    });
   };
 
   if (isLoading) {
