@@ -21,7 +21,6 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      console.error('Authentication failed');
       return new Response(
         JSON.stringify({ error: 'Authentication required' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -54,14 +53,11 @@ serve(async (req) => {
       );
     }
 
-    console.log('Processing user lookup request');
-
     // Get user from Sleeper API (encode username for URL safety)
     const encodedUsername = encodeURIComponent(username);
     const userResponse = await fetch(`https://api.sleeper.app/v1/user/${encodedUsername}`);
     
     if (!userResponse.ok) {
-      console.error('External API error:', userResponse.status);
       return new Response(
         JSON.stringify({ error: 'Unable to find user' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -73,12 +69,10 @@ serve(async (req) => {
     // Get user's leagues for current season (NFL season typically starts in September)
     const now = new Date();
     const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-    console.log(`Fetching leagues for season: ${currentYear}`);
     
     const leaguesResponse = await fetch(`https://api.sleeper.app/v1/user/${sleeperUser.user_id}/leagues/nfl/${currentYear}`);
     
     if (!leaguesResponse.ok) {
-      console.error('External API error fetching leagues:', leaguesResponse.status);
       return new Response(
         JSON.stringify({ error: 'Unable to fetch leagues' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -86,8 +80,6 @@ serve(async (req) => {
     }
     
     const leagues = await leaguesResponse.json();
-
-    console.log(`Found ${leagues.length} leagues for user`);
 
     // Sync each league
     const syncedLeagues = [];
@@ -121,14 +113,12 @@ serve(async (req) => {
         .single();
 
       if (leagueError) {
-        console.error('Database error during league sync');
         continue;
       }
 
       // Get rosters for this league
       const rostersResponse = await fetch(`https://api.sleeper.app/v1/league/${league.league_id}/rosters`);
       if (!rostersResponse.ok) {
-        console.error('External API error fetching rosters');
         continue;
       }
       const rosters = await rostersResponse.json();
