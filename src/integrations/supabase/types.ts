@@ -18,11 +18,13 @@ export type Database = {
         Row: {
           auto_refresh: boolean | null
           created_at: string | null
+          current_week: number | null
           id: string
           last_synced_at: string | null
           league_id: string
           league_name: string
           league_size: number | null
+          opponent_team_id: string | null
           platform: Database["public"]["Enums"]["league_platform"]
           scoring_settings: Json | null
           scoring_type: Database["public"]["Enums"]["scoring_type"]
@@ -33,11 +35,13 @@ export type Database = {
         Insert: {
           auto_refresh?: boolean | null
           created_at?: string | null
+          current_week?: number | null
           id?: string
           last_synced_at?: string | null
           league_id: string
           league_name: string
           league_size?: number | null
+          opponent_team_id?: string | null
           platform: Database["public"]["Enums"]["league_platform"]
           scoring_settings?: Json | null
           scoring_type: Database["public"]["Enums"]["scoring_type"]
@@ -48,11 +52,13 @@ export type Database = {
         Update: {
           auto_refresh?: boolean | null
           created_at?: string | null
+          current_week?: number | null
           id?: string
           last_synced_at?: string | null
           league_id?: string
           league_name?: string
           league_size?: number | null
+          opponent_team_id?: string | null
           platform?: Database["public"]["Enums"]["league_platform"]
           scoring_settings?: Json | null
           scoring_type?: Database["public"]["Enums"]["scoring_type"]
@@ -109,28 +115,40 @@ export type Database = {
           created_at: string | null
           id: string
           league_id: string
+          losses: number | null
           roster: Json
           team_id: string
           team_name: string
+          ties: number | null
+          total_projected: number | null
           updated_at: string | null
+          wins: number | null
         }
         Insert: {
           created_at?: string | null
           id?: string
           league_id: string
+          losses?: number | null
           roster: Json
           team_id: string
           team_name: string
+          ties?: number | null
+          total_projected?: number | null
           updated_at?: string | null
+          wins?: number | null
         }
         Update: {
           created_at?: string | null
           id?: string
           league_id?: string
+          losses?: number | null
           roster?: Json
           team_id?: string
           team_name?: string
+          ties?: number | null
+          total_projected?: number | null
           updated_at?: string | null
+          wins?: number | null
         }
         Relationships: [
           {

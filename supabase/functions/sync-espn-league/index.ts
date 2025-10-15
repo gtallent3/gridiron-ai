@@ -99,7 +99,39 @@ serve(async (req) => {
       throw new Error('Unable to find your team in this league');
     }
 
-    // Upsert league data with user's team_id
+    // Get current week and matchup data
+    const currentWeek = leagueData.scoringPeriodId || 1;
+    const currentMatchupPeriod = leagueData.currentMatchupPeriod || currentWeek;
+
+    // Fetch schedule data for matchups
+    const scheduleUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentYear}/segments/0/leagues/${leagueId}?view=mMatchup&view=mMatchupScore`;
+    const scheduleResponse = await fetch(scheduleUrl, {
+      headers: {
+        'Cookie': `espn_s2=${espn_s2}; SWID=${swid}`,
+      },
+    });
+
+    let matchupData: any = {};
+    if (scheduleResponse.ok) {
+      const scheduleData = await scheduleResponse.json();
+      // Find current week matchup for user's team
+      const currentMatchup = scheduleData.schedule?.find((m: any) => 
+        m.matchupPeriodId === currentMatchupPeriod && 
+        (m.home?.teamId === userTeam.id || m.away?.teamId === userTeam.id)
+      );
+      
+      if (currentMatchup) {
+        const isHome = currentMatchup.home?.teamId === userTeam.id;
+        const opponentTeamId = isHome ? currentMatchup.away?.teamId : currentMatchup.home?.teamId;
+        
+        matchupData = {
+          current_week: currentMatchupPeriod,
+          opponent_team_id: opponentTeamId?.toString(),
+        };
+      }
+    }
+
+    // Upsert league data with user's team_id and matchup info
     const { data: leagueRecord, error: leagueError } = await supabase
       .from('connected_leagues')
       .upsert({
@@ -112,6 +144,7 @@ serve(async (req) => {
         scoring_settings: leagueData.settings.scoringSettings,
         user_team_id: userTeam.id.toString(),
         last_synced_at: new Date().toISOString(),
+        ...matchupData,
       }, {
         onConflict: 'user_id,platform,league_id',
       })
@@ -145,6 +178,15 @@ serve(async (req) => {
             slot: entry.lineupSlotId,
           };
         });
+
+        // Calculate total projected points for starters (slots 0-8 are starting positions in ESPN)
+        const totalProjected = roster
+          .filter((p: any) => p.slot !== undefined && p.slot < 20) // Active roster slots
+          .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
+
+        // Get team record
+        const record = team.record?.overall || { wins: 0, losses: 0, ties: 0 };
+
       await supabase
         .from('user_teams')
         .upsert({
@@ -152,6 +194,10 @@ serve(async (req) => {
           team_id: team.id.toString(),
           team_name: team.name || `${team.location} ${team.nickname}`,
           roster: roster,
+          wins: record.wins || 0,
+          losses: record.losses || 0,
+          ties: record.ties || 0,
+          total_projected: totalProjected,
         }, {
           onConflict: 'league_id,team_id',
         });

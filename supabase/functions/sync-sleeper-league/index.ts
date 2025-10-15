@@ -113,7 +113,34 @@ serve(async (req) => {
 
       const userTeamId = userRoster?.roster_id?.toString();
 
-      // Upsert league with user's team_id
+      // Get matchup week from league settings
+      const matchupWeek = parseInt(league.settings?.leg || '1');
+      
+      // Fetch matchups for current week
+      const matchupsUrl = `https://api.sleeper.app/v1/league/${league.league_id}/matchups/${matchupWeek}`;
+      const matchupsResponse = await fetch(matchupsUrl);
+      
+      let matchupData: any = {};
+      if (matchupsResponse.ok) {
+        const matchups = await matchupsResponse.json();
+        const userMatchup = matchups.find((m: any) => m.roster_id === userRoster?.roster_id);
+        
+        if (userMatchup && userMatchup.matchup_id) {
+          // Find opponent in same matchup
+          const opponentMatchup = matchups.find((m: any) => 
+            m.matchup_id === userMatchup.matchup_id && m.roster_id !== userRoster?.roster_id
+          );
+          
+          if (opponentMatchup) {
+            matchupData = {
+              current_week: matchupWeek,
+              opponent_team_id: opponentMatchup.roster_id.toString(),
+            };
+          }
+        }
+      }
+
+      // Upsert league with user's team_id and matchup info
       const { data: connectedLeague, error: leagueError } = await supabase
         .from('connected_leagues')
         .upsert({
@@ -126,6 +153,7 @@ serve(async (req) => {
           scoring_settings: league.scoring_settings,
           user_team_id: userTeamId,
           last_synced_at: new Date().toISOString(),
+          ...matchupData,
         }, {
           onConflict: 'user_id,platform,league_id',
         })
@@ -205,6 +233,16 @@ serve(async (req) => {
           };
         });
 
+        // Calculate total projected points for starters
+        const totalProjected = rosterArray
+          .filter((p: any) => p.starter)
+          .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
+
+        // Get team record from roster settings
+        const wins = r.settings?.wins || 0;
+        const losses = r.settings?.losses || 0;
+        const ties = r.settings?.ties || 0;
+
         await supabase
           .from('user_teams')
           .upsert({
@@ -212,6 +250,10 @@ serve(async (req) => {
             team_id: r.roster_id?.toString(),
             team_name: teamName,
             roster: rosterArray,
+            wins: wins,
+            losses: losses,
+            ties: ties,
+            total_projected: totalProjected,
           }, {
             onConflict: 'league_id,team_id',
           });

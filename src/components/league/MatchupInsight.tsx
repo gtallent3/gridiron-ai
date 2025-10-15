@@ -1,15 +1,25 @@
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { PlayerCard } from "./PlayerCard";
-import { Trophy, TrendingUp, TrendingDown } from "lucide-react";
+import { Trophy, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 type League = {
   id: string;
+  current_week?: number;
+  opponent_team_id?: string;
 };
 
 type Team = {
+  team_id: string;
   team_name: string;
+  roster: any[];
+  wins?: number;
+  losses?: number;
+  ties?: number;
+  total_projected?: number;
 } | null;
 
 type MatchupInsightProps = {
@@ -17,24 +27,94 @@ type MatchupInsightProps = {
   userTeam: Team;
 };
 
-// Mock opponent data
-const mockOpponent = {
-  name: "The Gronk Squad",
-  record: { wins: 4, losses: 3 },
-  projectedPoints: 119.8,
-  topPlayers: [
-    { id: 'o1', name: 'Josh Allen', position: 'QB', team: 'BUF', projected: 26.3 },
-    { id: 'o2', name: 'Derrick Henry', position: 'RB', team: 'BAL', projected: 19.5 },
-    { id: 'o3', name: 'Amon-Ra St. Brown', position: 'WR', team: 'DET', projected: 17.8 },
-  ]
-};
-
 export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
-  const userProjected = 127.4;
-  const opponentProjected = mockOpponent.projectedPoints;
+  const [opponentTeam, setOpponentTeam] = useState<Team | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOpponent = async () => {
+      if (!league.opponent_team_id) {
+        setLoading(false);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('user_teams')
+        .select('*')
+        .eq('league_id', league.id)
+        .eq('team_id', league.opponent_team_id)
+        .maybeSingle();
+
+      if (!error && data) {
+        setOpponentTeam({
+          ...data,
+          roster: Array.isArray(data.roster) ? data.roster : [],
+        });
+      }
+      setLoading(false);
+    };
+
+    fetchOpponent();
+  }, [league.id, league.opponent_team_id]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!opponentTeam) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center text-muted-foreground">
+          No matchup data available. Please sync your league to see matchup information.
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const userProjected = userTeam?.total_projected || 0;
+  const opponentProjected = opponentTeam?.total_projected || 0;
   const totalProjected = userProjected + opponentProjected;
-  const userWinProb = Math.round((userProjected / totalProjected) * 100);
+  const userWinProb = totalProjected > 0 ? Math.round((userProjected / totalProjected) * 100) : 50;
   const opponentWinProb = 100 - userWinProb;
+
+  const userRecord = `${userTeam?.wins || 0}-${userTeam?.losses || 0}${userTeam?.ties ? `-${userTeam.ties}` : ''}`;
+  const opponentRecord = `${opponentTeam?.wins || 0}-${opponentTeam?.losses || 0}${opponentTeam?.ties ? `-${opponentTeam.ties}` : ''}`;
+
+  // Get top 3 projected players from opponent
+  const opponentTopPlayers = (opponentTeam.roster || [])
+    .filter((p: any) => p.projected > 0)
+    .sort((a: any, b: any) => (b.projected || 0) - (a.projected || 0))
+    .slice(0, 3)
+    .map((p: any) => ({
+      id: p.player_id,
+      name: p.player_name,
+      position: p.position,
+      team: p.team,
+      projected: p.projected,
+    }));
+
+  // Calculate positional breakdowns
+  const getPositionalProjections = (roster: any[]) => {
+    const positions: Record<string, number> = {
+      QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0
+    };
+    
+    roster.forEach((p: any) => {
+      const pos = p.position?.toUpperCase();
+      if (positions.hasOwnProperty(pos)) {
+        positions[pos] += p.projected || 0;
+      }
+    });
+    
+    return positions;
+  };
+
+  const userPositions = getPositionalProjections(userTeam?.roster || []);
+  const oppPositions = getPositionalProjections(opponentTeam?.roster || []);
 
   return (
     <div className="space-y-6">
@@ -43,36 +123,50 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-5 w-5 text-primary" />
-            Week 7 Matchup
+            Week {league.current_week || 1} Matchup
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="grid md:grid-cols-2 gap-6">
             <div className="text-center space-y-2">
               <p className="font-semibold text-lg">{userTeam?.team_name || "Your Team"}</p>
-              <p className="text-muted-foreground text-sm">5-2</p>
+              <p className="text-muted-foreground text-sm">{userRecord}</p>
               <div className="flex items-center justify-center gap-2">
-                <TrendingUp className="h-5 w-5 text-green-500" />
-                <p className="text-4xl font-bold text-green-500">{userWinProb}%</p>
+                {userProjected >= opponentProjected ? (
+                  <TrendingUp className="h-5 w-5 text-green-500" />
+                ) : (
+                  <TrendingDown className="h-5 w-5 text-red-500" />
+                )}
+                <p className={`text-4xl font-bold ${userProjected >= opponentProjected ? 'text-green-500' : 'text-red-500'}`}>
+                  {userWinProb}%
+                </p>
               </div>
-              <p className="text-2xl font-semibold text-primary">{userProjected} pts</p>
+              <p className="text-2xl font-semibold text-primary">{userProjected.toFixed(1)} pts</p>
             </div>
 
             <div className="text-center space-y-2">
-              <p className="font-semibold text-lg">{mockOpponent.name}</p>
-              <p className="text-muted-foreground text-sm">{mockOpponent.record.wins}-{mockOpponent.record.losses}</p>
+              <p className="font-semibold text-lg">{opponentTeam.team_name}</p>
+              <p className="text-muted-foreground text-sm">{opponentRecord}</p>
               <div className="flex items-center justify-center gap-2">
-                <TrendingDown className="h-5 w-5 text-red-500" />
-                <p className="text-4xl font-bold text-red-500">{opponentWinProb}%</p>
+                {opponentProjected > userProjected ? (
+                  <TrendingUp className="h-5 w-5 text-green-500" />
+                ) : (
+                  <TrendingDown className="h-5 w-5 text-red-500" />
+                )}
+                <p className={`text-4xl font-bold ${opponentProjected > userProjected ? 'text-green-500' : 'text-red-500'}`}>
+                  {opponentWinProb}%
+                </p>
               </div>
-              <p className="text-2xl font-semibold text-muted-foreground">{opponentProjected} pts</p>
+              <p className="text-2xl font-semibold text-muted-foreground">{opponentProjected.toFixed(1)} pts</p>
             </div>
           </div>
 
           <div className="space-y-2">
             <div className="flex justify-between text-sm text-muted-foreground">
               <span>Win Probability</span>
-              <span>Favored by {Math.abs(userProjected - opponentProjected).toFixed(1)} points</span>
+              <span>
+                {userProjected > opponentProjected ? 'Favored' : 'Underdog'} by {Math.abs(userProjected - opponentProjected).toFixed(1)} points
+              </span>
             </div>
             <Progress value={userWinProb} className="h-3" />
           </div>
@@ -86,30 +180,27 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {[
-              { position: 'QB', you: 24.5, opp: 26.3 },
-              { position: 'RB', you: 41.1, opp: 35.2 },
-              { position: 'WR', you: 38.6, opp: 33.5 },
-              { position: 'TE', you: 14.2, opp: 11.3 },
-              { position: 'K', you: 9.5, opp: 8.7 },
-              { position: 'DEF', you: 11.2, opp: 9.8 },
-            ].map(pos => {
-              const advantage = pos.you - pos.opp;
+            {Object.keys(userPositions).map(position => {
+              const you = userPositions[position];
+              const opp = oppPositions[position];
+              const advantage = you - opp;
               const isAdvantage = advantage > 0;
+              const maxVal = Math.max(you, opp) || 1;
+              const progressValue = (you / (you + opp)) * 100 || 50;
               
               return (
-                <div key={pos.position} className="flex items-center gap-4">
-                  <Badge className="w-16 justify-center">{pos.position}</Badge>
+                <div key={position} className="flex items-center gap-4">
+                  <Badge className="w-16 justify-center">{position}</Badge>
                   <div className="flex-1 flex items-center gap-3">
                     <div className="text-right w-16">
-                      <p className="font-semibold">{pos.you.toFixed(1)}</p>
+                      <p className="font-semibold">{you.toFixed(1)}</p>
                     </div>
                     <Progress 
-                      value={50 + (advantage / 10) * 10} 
+                      value={progressValue} 
                       className="h-2 flex-1"
                     />
                     <div className="text-left w-16">
-                      <p className="font-semibold text-muted-foreground">{pos.opp.toFixed(1)}</p>
+                      <p className="font-semibold text-muted-foreground">{opp.toFixed(1)}</p>
                     </div>
                   </div>
                   <div className={`text-sm font-semibold w-16 text-right ${isAdvantage ? 'text-green-500' : 'text-red-500'}`}>
@@ -123,22 +214,24 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
       </Card>
 
       {/* Opponent's Top Players */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Opponent's Top Projected Players</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {mockOpponent.topPlayers.map(player => (
-              <PlayerCard
-                key={player.id}
-                player={player}
-                readOnly
-              />
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {opponentTopPlayers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Opponent's Top Projected Players</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {opponentTopPlayers.map(player => (
+                <PlayerCard
+                  key={player.id}
+                  player={player}
+                  readOnly
+                />
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
