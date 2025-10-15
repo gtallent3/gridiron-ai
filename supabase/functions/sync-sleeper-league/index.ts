@@ -304,38 +304,6 @@ serve(async (req) => {
         console.error('Error fetching projections:', err);
       }
 
-      // Fallback 3: per-player projections endpoint if still empty
-      if (projectionMap.size === 0 && allPlayerIds.length > 0) {
-        try {
-          const batchSize = 25;
-          for (let i = 0; i < allPlayerIds.length; i += batchSize) {
-            const batch = allPlayerIds.slice(i, i + batchSize);
-            const results = await Promise.all(batch.map(async (pid: string) => {
-              try {
-                const url = `https://api.sleeper.app/projections/nfl/player/${pid}?season=${currentYear}&season_type=regular&week=${currentWeek}`;
-                const resp = await fetch(url);
-                if (!resp.ok) return null;
-                const data: any = await resp.json();
-                const stats = data?.stats || data || {};
-                const pts = stats[projField] ?? stats.pts_ppr ?? stats.pts_half_ppr ?? stats.pts_std ?? 0;
-                return { id: pid, pts: Number(pts) || 0 };
-              } catch (_) {
-                return null;
-              }
-            }));
-
-            for (const r of results) {
-              if (r && typeof r.pts === 'number') {
-                projectionMap.set(r.id, r.pts);
-              }
-            }
-          }
-          console.log(`Loaded (per-player) ${projectionMap.size} projections`);
-        } catch (err) {
-          console.error('Per-player projections fallback failed:', err);
-        }
-      }
-
       // Upsert ALL teams in the league so "Other Teams" can be displayed
       for (const r of rosters) {
         const owner = leagueUsers.find((u: any) => u.user_id === r.owner_id);
