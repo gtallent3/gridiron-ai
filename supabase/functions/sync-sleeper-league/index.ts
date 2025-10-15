@@ -164,18 +164,25 @@ serve(async (req) => {
         continue;
       }
 
+      // Fetch Sleeper players data (cached on Sleeper's side, updated daily)
+      const playersResp = await fetch('https://api.sleeper.app/v1/players/nfl');
+      const sleeperPlayers: Record<string, any> = playersResp.ok ? await playersResp.json() : {};
+
       // Build normalized players map for this league's rosters
-      const allPlayerIds = Array.from(new Set(
-        rosters.flatMap((r: any) => (r.players || []).map((id: any) => id?.toString()))
+      const allPlayerIds: string[] = Array.from(new Set(
+        rosters.flatMap((r: any) => (r.players || []).map((id: any) => id?.toString()).filter(Boolean))
       ));
 
-      let normalizedMap = new Map<string, { player_name: string; position: string; team: string }>();
+      const normalizedMap = new Map<string, { player_name: string; position: string; team: string }>();
+      
+      // First, try to get from normalized_players table
       if (allPlayerIds.length > 0) {
         const { data: normPlayers } = await supabase
           .from('normalized_players')
           .select('sleeper_id, player_name, position, team')
           .in('sleeper_id', allPlayerIds);
-        if (normPlayers) {
+        
+        if (normPlayers && normPlayers.length > 0) {
           for (const p of normPlayers) {
             normalizedMap.set(p.sleeper_id, {
               player_name: p.player_name,
@@ -183,6 +190,42 @@ serve(async (req) => {
               team: p.team,
             });
           }
+        }
+      }
+
+      // For any missing players, get from Sleeper API and store in normalized_players
+      const missingPlayerIds = allPlayerIds.filter((id: string) => !normalizedMap.has(id));
+      if (missingPlayerIds.length > 0 && sleeperPlayers) {
+        const playersToInsert = [];
+        
+        for (const playerId of missingPlayerIds) {
+          const player = sleeperPlayers[playerId];
+          if (player) {
+            const playerName = `${player.first_name || ''} ${player.last_name || ''}`.trim() || player.full_name || 'Unknown Player';
+            const position = player.position || 'FLEX';
+            const team = player.team || 'FA';
+            
+            normalizedMap.set(playerId, {
+              player_name: playerName,
+              position: position,
+              team: team,
+            });
+            
+            playersToInsert.push({
+              player_id: playerId,
+              sleeper_id: playerId,
+              player_name: playerName,
+              position: position,
+              team: team,
+            });
+          }
+        }
+        
+        // Batch insert new players
+        if (playersToInsert.length > 0) {
+          await supabase
+            .from('normalized_players')
+            .upsert(playersToInsert, { onConflict: 'sleeper_id', ignoreDuplicates: true });
         }
       }
 
