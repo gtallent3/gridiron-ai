@@ -63,10 +63,14 @@ export default function LeagueDashboard() {
       setLeague(leagueData);
 
       // Fetch user's team for this league
+      // Note: For Sleeper, we sync all teams but we need to identify which one is the user's
+      // For now, we'll just take the first team as a temporary solution
+      // TODO: Add a proper user_id or owner mapping to identify the correct team
       const { data: teamData, error: teamError } = await supabase
         .from('user_teams')
         .select('*')
         .eq('league_id', leagueId)
+        .limit(1)
         .maybeSingle();
 
       if (teamError) throw teamError;
