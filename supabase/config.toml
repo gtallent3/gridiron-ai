@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.sync-sleeper-league]
 verify_jwt = true
+
+[functions.sync-espn-league]
+verify_jwt = true
