@@ -55,9 +55,23 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
     fetchWinProbability();
   }, [league.id, league.opponent_team_id, userTeam?.total_projected]);
 
-  // Get projected points from starting lineup only (matches total_projected in database)
-  const projectedPoints = userTeam?.total_projected || 0;
-  
+  // Compute projected points from the starting lineup using the same rules as RosterView
+  const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+  const projectedPoints = (() => {
+    const roster = userTeam?.roster;
+    if (!Array.isArray(roster)) return 0;
+
+    if (league.platform === 'sleeper') {
+      return roster
+        .filter((p: any) => p.starter !== false)
+        .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
+    }
+
+    return roster
+      .filter((p: any) => STARTER_SLOTS.includes(p.slot))
+      .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
+  })();
+
   // Get actual team record from userTeam data
   const record = {
     wins: userTeam?.wins || 0,
