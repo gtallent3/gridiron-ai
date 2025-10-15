@@ -246,39 +246,61 @@ serve(async (req) => {
       const projType = scoringType === 'ppr' ? 'ppr' : (scoringType === 'half_ppr' ? 'half_ppr' : 'std');
       const projField = projType === 'ppr' ? 'pts_ppr' : (projType === 'half_ppr' ? 'pts_half_ppr' : 'pts_std');
 
-      // Fetch projections for the current week
+      // Fetch projections for the current week with robust fallbacks
       const projectionMap = new Map<string, number>();
       try {
-        const projUrl = `https://api.sleeper.app/v1/projections/nfl/${currentYear}/${currentWeek}?season_type=regular&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF`;
-        console.log('Fetching projections from:', projUrl);
-        
-        const projResp = await fetch(projUrl);
+        // Attempt 1: Default projections endpoint (array expected)
+        const baseProjUrl = `https://api.sleeper.app/v1/projections/nfl/${currentYear}/${currentWeek}`;
+        console.log('Fetching projections (base):', baseProjUrl);
+        let projResp = await fetch(baseProjUrl);
         if (projResp.ok) {
-          const projections = await projResp.json();
-          console.log('Projections response sample:', projections?.slice?.(0, 3));
-          
-          // Sleeper projections API returns an object with player_id as keys
-          if (typeof projections === 'object' && !Array.isArray(projections)) {
-            for (const [playerId, stats] of Object.entries(projections)) {
-              if (stats && typeof stats === 'object') {
-                const pts = (stats as any)[projField] || (stats as any).pts_ppr || (stats as any).pts_half_ppr || (stats as any).pts_std || 0;
-                if (pts > 0) projectionMap.set(playerId, pts);
-              }
-            }
-          } else if (Array.isArray(projections)) {
-            // Fallback: handle if it's an array
+          const projections: any = await projResp.json();
+          if (Array.isArray(projections)) {
             for (const p of projections) {
               const id = (p.player_id || '').toString();
-              const pts = p[projField] || p.pts_ppr || p.pts_half_ppr || p.pts_std || 0;
-              if (id && pts > 0) projectionMap.set(id, pts);
+              const stats = (p.stats || p);
+              const pts = stats[projField] ?? stats.pts_ppr ?? stats.pts_half_ppr ?? stats.pts_std ?? 0;
+              if (id) projectionMap.set(id, Number(pts) || 0);
             }
+            console.log(`Loaded (base) ${projectionMap.size} projections`);
+          } else if (projections && typeof projections === 'object') {
+            // Sometimes returns object keyed by player_id
+            for (const [playerId, stats] of Object.entries(projections as Record<string, any>)) {
+              const s = stats as any;
+              const pts = s[projField] ?? s.pts_ppr ?? s.pts_half_ppr ?? s.pts_std ?? 0;
+              projectionMap.set(playerId, Number(pts) || 0);
+            }
+            console.log(`Loaded (base-object) ${projectionMap.size} projections`);
           }
-          
-          console.log(`Loaded ${projectionMap.size} player projections for week ${currentWeek}`);
-        } else {
-          console.error('Failed to fetch projections:', projResp.status, projResp.statusText);
         }
-      } catch (err) { 
+
+        // Attempt 2: If empty, try projections with scoring type query
+        if (projectionMap.size === 0) {
+          const typedProjUrl = `https://api.sleeper.app/v1/projections/nfl/${currentYear}/${currentWeek}?type=${projType}`;
+          console.log('Fetching projections (typed):', typedProjUrl);
+          projResp = await fetch(typedProjUrl);
+          if (projResp.ok) {
+            const projections2: any = await projResp.json();
+            if (Array.isArray(projections2)) {
+              for (const p of projections2) {
+                const id = (p.player_id || '').toString();
+                const stats = (p.stats || p);
+                const pts = stats[projField] ?? stats.pts_ppr ?? stats.pts_half_ppr ?? stats.pts_std ?? 0;
+                if (id) projectionMap.set(id, Number(pts) || 0);
+              }
+            } else if (projections2 && typeof projections2 === 'object') {
+              for (const [playerId, stats] of Object.entries(projections2 as Record<string, any>)) {
+                const s = stats as any;
+                const pts = s[projField] ?? s.pts_ppr ?? s.pts_half_ppr ?? s.pts_std ?? 0;
+                projectionMap.set(playerId, Number(pts) || 0);
+              }
+            }
+            console.log(`Loaded (typed) ${projectionMap.size} projections`);
+          } else {
+            console.error('Typed projections fetch failed:', projResp.status, projResp.statusText);
+          }
+        }
+      } catch (err) {
         console.error('Error fetching projections:', err);
       }
 
