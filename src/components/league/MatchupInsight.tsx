@@ -97,6 +97,21 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
       projected: p.projected,
     }));
 
+  // Map ESPN position IDs to position strings
+  const getPositionString = (position: any): string => {
+    if (typeof position === 'string') {
+      return position.toUpperCase();
+    }
+    
+    // ESPN position ID mapping
+    const espnPositionMap: Record<number, string> = {
+      0: 'QB', 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 
+      5: 'K', 16: 'DEF', 17: 'K', 23: 'FLEX'
+    };
+    
+    return espnPositionMap[position] || 'FLEX';
+  };
+
   // Calculate positional breakdowns
   const getPositionalProjections = (roster: any[]) => {
     const positions: Record<string, number> = {
@@ -104,7 +119,7 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
     };
     
     roster.forEach((p: any) => {
-      const pos = p.position?.toUpperCase();
+      const pos = getPositionString(p.position);
       if (positions.hasOwnProperty(pos)) {
         positions[pos] += p.projected || 0;
       }
