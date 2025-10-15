@@ -192,11 +192,9 @@ serve(async (req) => {
           };
         });
 
-        // Calculate total projected points for starters only (specific starting slots)
-        // ESPN starting slots: 0=QB, 2=RB, 4=RB, 6=WR, 16=DEF, 17=K, 23=FLEX
-        const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+        // Calculate total projected points for starters (slots 0-8 are starting positions in ESPN)
         const totalProjected = roster
-          .filter((p: any) => STARTER_SLOTS.includes(p.slot))
+          .filter((p: any) => p.slot !== undefined && p.slot < 20) // Active roster slots
           .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
 
         // Get team record
