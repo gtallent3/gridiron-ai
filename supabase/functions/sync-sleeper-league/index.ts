@@ -236,8 +236,11 @@ serve(async (req) => {
         if (stateResp.ok) {
           const state = await stateResp.json();
           currentWeek = state?.week || currentWeek;
+          console.log('Current NFL week:', currentWeek);
         }
-      } catch (_) { /* ignore */ }
+      } catch (err) { 
+        console.error('Error fetching NFL state:', err);
+      }
 
       // Choose projection scoring type based on league settings
       const projType = scoringType === 'ppr' ? 'ppr' : (scoringType === 'half_ppr' ? 'half_ppr' : 'std');
@@ -246,16 +249,38 @@ serve(async (req) => {
       // Fetch projections for the current week
       const projectionMap = new Map<string, number>();
       try {
-        const projResp = await fetch(`https://api.sleeper.app/v1/projections/nfl/${currentYear}/${currentWeek}?type=${projType}`);
+        const projUrl = `https://api.sleeper.app/v1/projections/nfl/${currentYear}/${currentWeek}?season_type=regular&position[]=QB&position[]=RB&position[]=WR&position[]=TE&position[]=K&position[]=DEF`;
+        console.log('Fetching projections from:', projUrl);
+        
+        const projResp = await fetch(projUrl);
         if (projResp.ok) {
           const projections = await projResp.json();
-          for (const p of projections) {
-            const id = (p.player_id || p.player?.player_id || '').toString();
-            const pts = typeof p[projField] === 'number' ? p[projField] : 0;
-            if (id) projectionMap.set(id, pts);
+          console.log('Projections response sample:', projections?.slice?.(0, 3));
+          
+          // Sleeper projections API returns an object with player_id as keys
+          if (typeof projections === 'object' && !Array.isArray(projections)) {
+            for (const [playerId, stats] of Object.entries(projections)) {
+              if (stats && typeof stats === 'object') {
+                const pts = (stats as any)[projField] || (stats as any).pts_ppr || (stats as any).pts_half_ppr || (stats as any).pts_std || 0;
+                if (pts > 0) projectionMap.set(playerId, pts);
+              }
+            }
+          } else if (Array.isArray(projections)) {
+            // Fallback: handle if it's an array
+            for (const p of projections) {
+              const id = (p.player_id || '').toString();
+              const pts = p[projField] || p.pts_ppr || p.pts_half_ppr || p.pts_std || 0;
+              if (id && pts > 0) projectionMap.set(id, pts);
+            }
           }
+          
+          console.log(`Loaded ${projectionMap.size} player projections for week ${currentWeek}`);
+        } else {
+          console.error('Failed to fetch projections:', projResp.status, projResp.statusText);
         }
-      } catch (_) { /* ignore */ }
+      } catch (err) { 
+        console.error('Error fetching projections:', err);
+      }
 
       // Upsert ALL teams in the league so "Other Teams" can be displayed
       for (const r of rosters) {
