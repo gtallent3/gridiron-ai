@@ -59,7 +59,7 @@ serve(async (req) => {
     
     if (!userResponse.ok) {
       return new Response(
-        JSON.stringify({ error: 'Unable to find user' }),
+        JSON.stringify({ error: 'Unable to process request' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -74,7 +74,7 @@ serve(async (req) => {
     
     if (!leaguesResponse.ok) {
       return new Response(
-        JSON.stringify({ error: 'Unable to fetch leagues' }),
+        JSON.stringify({ error: 'Unable to process request. Please try again.' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }

@@ -49,6 +49,29 @@ serve(async (req) => {
       throw new Error('Missing required credentials');
     }
 
+    // Validate ESPN credentials format and length to prevent injection attacks
+    if (typeof espn_s2 !== 'string' || espn_s2.length > 500 || espn_s2.length < 10) {
+      throw new Error('Invalid credentials format');
+    }
+    
+    if (typeof swid !== 'string' || swid.length > 100 || swid.length < 10) {
+      throw new Error('Invalid credentials format');
+    }
+    
+    // Validate credentials contain only safe characters (alphanumeric, hyphens, underscores, percent, braces)
+    if (!/^[a-zA-Z0-9\-_%]+$/.test(espn_s2)) {
+      throw new Error('Invalid credentials format');
+    }
+    
+    if (!/^[a-zA-Z0-9\-{}]+$/.test(swid)) {
+      throw new Error('Invalid credentials format');
+    }
+
+    // Validate league ID format
+    if (typeof leagueId !== 'string' || !/^[0-9]+$/.test(leagueId) || leagueId.length > 20) {
+      throw new Error('Invalid credentials format');
+    }
+
     // Store credentials securely in Vault
     const { error: storeError } = await supabase.rpc('store_league_credentials', {
       p_user_id: user.id,
@@ -58,8 +81,8 @@ serve(async (req) => {
     });
 
     if (storeError) {
-      console.error('Failed to store credentials in Vault:', storeError);
-      throw new Error('Unable to securely store credentials');
+      console.error('[ERR_CRED_001] Credential storage failed:', storeError.message);
+      throw new Error('Unable to save credentials');
     }
 
     // Get current NFL season
