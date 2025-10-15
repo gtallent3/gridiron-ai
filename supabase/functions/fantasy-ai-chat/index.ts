@@ -11,7 +11,31 @@ serve(async (req) => {
   }
 
   try {
+    // Extract and validate JWT to identify user
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Parse JWT to extract user ID for logging and monitoring
+    let userId: string | null = null;
+    try {
+      const jwt = authHeader.replace('Bearer ', '');
+      const [, payload] = jwt.split('.');
+      const decodedPayload = JSON.parse(atob(payload));
+      userId = decodedPayload.sub || null;
+    } catch (e) {
+      console.error("Failed to parse JWT:", e);
+      // Continue without user ID - JWT verification is handled by Supabase
+    }
+
     const { messages } = await req.json();
+    
+    // Log request for monitoring and abuse prevention
+    console.log(`AI chat request from user: ${userId || 'unknown'}, message count: ${messages?.length || 0}`);
     
     // Validate message structure and length
     const MAX_MESSAGE_LENGTH = 2000;
