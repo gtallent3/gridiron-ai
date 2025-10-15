@@ -49,6 +49,19 @@ serve(async (req) => {
       throw new Error('Missing required credentials');
     }
 
+    // Store credentials securely in Vault
+    const { error: storeError } = await supabase.rpc('store_league_credentials', {
+      p_user_id: user.id,
+      p_platform: 'espn',
+      p_league_id: leagueId,
+      p_credentials: { espn_s2, swid }
+    });
+
+    if (storeError) {
+      console.error('Failed to store credentials in Vault:', storeError);
+      throw new Error('Unable to securely store credentials');
+    }
+
     // Get current NFL season
     const now = new Date();
     const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
@@ -215,12 +228,14 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('League sync error:', error.message || 'Unknown error');
+    // Sanitize error logs - never log credentials
+    const sanitizedMessage = error.message?.replace(/espn_s2=[^;]+/g, 'espn_s2=***').replace(/SWID=[^;]+/g, 'SWID=***');
+    console.error('League sync error:', sanitizedMessage || 'Unknown error');
     
     // Return generic error messages without internal details
     let userMessage = 'Unable to sync your league. Please try again.';
     
-    if (error.message?.includes('authenticate') || error.message?.includes('credentials')) {
+    if (error.message?.includes('authenticate') || error.message?.includes('credentials') || error.message?.includes('store credentials')) {
       userMessage = 'Unable to authenticate. Please verify your credentials and try again.';
     } else if (error.message?.includes('team')) {
       userMessage = 'Unable to find your team. Please verify you are a member of this league.';

@@ -68,6 +68,36 @@ export type Database = {
         }
         Relationships: []
       }
+      league_credentials: {
+        Row: {
+          created_at: string | null
+          id: string
+          league_id: string
+          platform: string
+          updated_at: string | null
+          user_id: string
+          vault_secret_name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          league_id: string
+          platform: string
+          updated_at?: string | null
+          user_id: string
+          vault_secret_name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          league_id?: string
+          platform?: string
+          updated_at?: string | null
+          user_id?: string
+          vault_secret_name?: string
+        }
+        Relationships: []
+      }
       normalized_players: {
         Row: {
           created_at: string | null
@@ -165,9 +195,22 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_league_credentials: {
+        Args: { p_league_id: string; p_platform: string; p_user_id: string }
+        Returns: Json
+      }
       get_oauth_token: {
         Args: { p_league_id: string; p_platform: string; p_user_id: string }
         Returns: Json
+      }
+      store_league_credentials: {
+        Args: {
+          p_credentials: Json
+          p_league_id: string
+          p_platform: string
+          p_user_id: string
+        }
+        Returns: string
       }
       store_oauth_token: {
         Args: {

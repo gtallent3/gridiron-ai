@@ -207,9 +207,15 @@ export default function ConnectLeague() {
                   </div>
                   ESPN
                 </CardTitle>
-                <CardDescription>Connect via cookies</CardDescription>
+                <CardDescription>Connect via cookies - credentials are encrypted and stored securely</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                  <p className="text-sm text-amber-800">
+                    ⚠️ <strong>Security Notice:</strong> ESPN cookies provide full access to your ESPN account. 
+                    We encrypt and store them securely, but only connect leagues you trust.
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="espn-s2">espn_s2 Cookie</Label>
                   <Input
