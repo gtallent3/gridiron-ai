@@ -70,8 +70,12 @@ serve(async (req) => {
     
     const sleeperUser = await userResponse.json();
 
-    // Get user's leagues for current season
-    const leaguesResponse = await fetch(`https://api.sleeper.app/v1/user/${sleeperUser.user_id}/leagues/nfl/2024`);
+    // Get user's leagues for current season (NFL season typically starts in September)
+    const now = new Date();
+    const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+    console.log(`Fetching leagues for season: ${currentYear}`);
+    
+    const leaguesResponse = await fetch(`https://api.sleeper.app/v1/user/${sleeperUser.user_id}/leagues/nfl/${currentYear}`);
     
     if (!leaguesResponse.ok) {
       console.error('Failed to fetch leagues:', leaguesResponse.status);
