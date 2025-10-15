@@ -1,0 +1,85 @@
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
+import { Trophy, TrendingUp } from "lucide-react";
+
+type League = {
+  id: string;
+  platform: string;
+  league_name: string;
+  league_size: number;
+  scoring_type: string;
+};
+
+type Team = {
+  team_name: string;
+  roster: any;
+} | null;
+
+type LeagueHeaderProps = {
+  league: League;
+  userTeam: Team;
+};
+
+export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
+  // Mock data - will be replaced with real data
+  const record = { wins: 5, losses: 2 };
+  const projectedPoints = 127.4;
+  const winProbability = 56;
+
+  return (
+    <Card className="border-2 border-primary/50 bg-gradient-to-r from-primary/5 to-accent/5">
+      <CardContent className="p-6">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold">{league.league_name}</h1>
+              <Badge variant="outline" className="uppercase">
+                {league.platform}
+              </Badge>
+            </div>
+            {userTeam && (
+              <p className="text-xl text-muted-foreground">
+                {userTeam.team_name}
+              </p>
+            )}
+            <div className="flex items-center gap-4 text-sm">
+              <div className="flex items-center gap-2">
+                <Trophy className="h-4 w-4 text-primary" />
+                <span className="font-semibold">
+                  {record.wins}-{record.losses}
+                </span>
+              </div>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-muted-foreground">
+                {league.league_size} Teams
+              </span>
+              <span className="text-muted-foreground">•</span>
+              <span className="text-muted-foreground capitalize">
+                {league.scoring_type.replace('_', ' ')}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <Card className="bg-background/50">
+              <CardContent className="p-4 text-center min-w-[140px]">
+                <p className="text-sm text-muted-foreground mb-1">Projected Points</p>
+                <p className="text-3xl font-bold text-primary">{projectedPoints}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-background/50">
+              <CardContent className="p-4 text-center min-w-[140px]">
+                <p className="text-sm text-muted-foreground mb-1">Win Probability</p>
+                <div className="flex items-center justify-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-green-500" />
+                  <p className="text-3xl font-bold text-green-500">{winProbability}%</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
