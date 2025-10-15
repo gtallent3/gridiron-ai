@@ -121,43 +121,41 @@ serve(async (req) => {
       throw new Error('Unable to save league data');
     }
 
-    // Get roster for the user's team with projections
-    const roster = userTeam.roster?.entries?.map((entry: any) => {
-      const player = entry.playerPoolEntry?.player;
-      
-      // Get current week projection
-      let projected = 0;
-      if (player?.stats) {
-        const projectionStat = player.stats.find((stat: any) => 
-          stat.statSourceId === 1 && stat.scoringPeriodId === leagueData.scoringPeriodId
-        );
-        projected = projectionStat?.appliedTotal || 0;
-      }
+    // Sync ALL teams in the league (not just the user's team)
+    for (const team of leagueData.teams || []) {
+      const roster = team.roster?.entries?.map((entry: any) => {
+        const player = entry.playerPoolEntry?.player;
+        
+        // Get current week projection
+        let projected = 0;
+        if (player?.stats) {
+          const projectionStat = player.stats.find((stat: any) => 
+            stat.statSourceId === 1 && stat.scoringPeriodId === leagueData.scoringPeriodId
+          );
+          projected = projectionStat?.appliedTotal || 0;
+        }
 
-      return {
-        player_id: entry.playerId?.toString(),
-        player_name: player?.fullName,
-        position: player?.defaultPositionId,
-        slot: entry.lineupSlotId,
-        team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null,
-        projected: projected,
-      };
-    }) || [];
+        return {
+          player_id: entry.playerId?.toString(),
+          player_name: player?.fullName,
+          position: player?.defaultPositionId,
+          slot: entry.lineupSlotId,
+          team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null,
+          projected: projected,
+        };
+      }) || [];
 
-    // Upsert team data
-    const { error: teamError } = await supabase
-      .from('user_teams')
-      .upsert({
-        league_id: leagueRecord.id,
-        team_id: userTeam.id.toString(),
-        team_name: userTeam.name || `${userTeam.location} ${userTeam.nickname}`,
-        roster: roster,
-      }, {
-        onConflict: 'league_id,team_id',
-      });
-
-    if (teamError) {
-      throw new Error('Unable to save team data');
+      // Upsert each team
+      await supabase
+        .from('user_teams')
+        .upsert({
+          league_id: leagueRecord.id,
+          team_id: team.id.toString(),
+          team_name: team.name || `${team.location} ${team.nickname}`,
+          roster: roster,
+        }, {
+          onConflict: 'league_id,team_id',
+        });
     }
 
     return new Response(
