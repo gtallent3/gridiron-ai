@@ -21,9 +21,9 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser(token);
 
     if (userError || !user) {
-      console.error('Authentication error:', userError);
+      console.error('Authentication failed');
       return new Response(
-        JSON.stringify({ error: 'Authentication required. Please sign in.' }),
+        JSON.stringify({ error: 'Authentication required' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -33,7 +33,7 @@ serve(async (req) => {
     // Validate username format and length
     if (!rawUsername || typeof rawUsername !== 'string') {
       return new Response(
-        JSON.stringify({ error: 'Username is required.' }),
+        JSON.stringify({ error: 'Invalid request' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -42,28 +42,28 @@ serve(async (req) => {
     
     if (username.length < 3 || username.length > 25) {
       return new Response(
-        JSON.stringify({ error: 'Username must be between 3 and 25 characters.' }),
+        JSON.stringify({ error: 'Invalid username length' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
     if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
       return new Response(
-        JSON.stringify({ error: 'Invalid username format.' }),
+        JSON.stringify({ error: 'Invalid username format' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Fetching Sleeper user: ${username}`);
+    console.log('Processing user lookup request');
 
     // Get user from Sleeper API (encode username for URL safety)
     const encodedUsername = encodeURIComponent(username);
     const userResponse = await fetch(`https://api.sleeper.app/v1/user/${encodedUsername}`);
     
     if (!userResponse.ok) {
-      console.error('Sleeper API error:', userResponse.status, await userResponse.text());
+      console.error('External API error:', userResponse.status);
       return new Response(
-        JSON.stringify({ error: 'Unable to find user. Please check the username and try again.' }),
+        JSON.stringify({ error: 'Unable to find user' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -78,9 +78,9 @@ serve(async (req) => {
     const leaguesResponse = await fetch(`https://api.sleeper.app/v1/user/${sleeperUser.user_id}/leagues/nfl/${currentYear}`);
     
     if (!leaguesResponse.ok) {
-      console.error('Failed to fetch leagues:', leaguesResponse.status);
+      console.error('External API error fetching leagues:', leaguesResponse.status);
       return new Response(
-        JSON.stringify({ error: 'Unable to fetch leagues. Please try again later.' }),
+        JSON.stringify({ error: 'Unable to fetch leagues' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -121,14 +121,14 @@ serve(async (req) => {
         .single();
 
       if (leagueError) {
-        console.error('Error upserting league:', leagueError);
+        console.error('Database error during league sync');
         continue;
       }
 
       // Get rosters for this league
       const rostersResponse = await fetch(`https://api.sleeper.app/v1/league/${league.league_id}/rosters`);
       if (!rostersResponse.ok) {
-        console.error('Failed to fetch rosters for league:', league.league_id);
+        console.error('External API error fetching rosters');
         continue;
       }
       const rosters = await rostersResponse.json();
@@ -180,9 +180,9 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error syncing Sleeper leagues:', error);
+    console.error('League sync error:', error);
     return new Response(
-      JSON.stringify({ error: 'Unable to sync leagues. Please try again later.' }),
+      JSON.stringify({ error: 'Unable to sync leagues' }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

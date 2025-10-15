@@ -18,47 +18,38 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const authHeader = req.headers.get('Authorization');
-    console.log('Auth header present:', !!authHeader);
     
     if (!authHeader) {
-      console.error('No authorization header found in request');
-      throw new Error('No authorization header');
+      console.error('Missing authorization header');
+      throw new Error('Authentication required');
     }
 
     const token = authHeader.replace('Bearer ', '');
-    console.log('Token format check:', token.substring(0, 10) + '...' + token.substring(token.length - 10));
-    
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
-      console.error('Auth error details:', {
-        hasError: !!authError,
-        errorName: authError?.name,
-        errorMessage: authError?.message,
-        errorStatus: authError?.status,
-        hasUser: !!user
-      });
-      throw new Error('Unauthorized');
+      console.error('Authentication failed');
+      throw new Error('Authentication required');
     }
 
-    console.log('Auth successful for user:', user.id);
+    console.log('User authenticated successfully');
 
     const { espn_s2, swid, leagueId } = await req.json();
 
     if (!espn_s2 || !swid || !leagueId) {
-      throw new Error('Missing required ESPN credentials: espn_s2, SWID, and leagueId are required');
+      throw new Error('Missing required credentials');
     }
 
-    console.log(`Fetching ESPN league ${leagueId} for user ${user.id}`);
+    console.log('Processing league sync request');
 
     // Get current NFL season
     const now = new Date();
     const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
-    // Fetch league data from ESPN API (include mMembers for owner details)
+    // Fetch league data from ESPN API
     const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentYear}/segments/0/leagues/${leagueId}?view=mSettings&view=mTeam&view=mRoster&view=mMembers`;
     
-    console.log('Fetching ESPN league data...');
+    console.log('Fetching league data from external API');
     const leagueResponse = await fetch(leagueUrl, {
       headers: {
         'Cookie': `espn_s2=${espn_s2}; SWID=${swid}`,
@@ -66,15 +57,15 @@ serve(async (req) => {
     });
 
     if (!leagueResponse.ok) {
-      console.error('ESPN API error:', leagueResponse.status);
+      console.error('External API error:', leagueResponse.status);
       if (leagueResponse.status === 401) {
-        throw new Error('Invalid ESPN cookies. Please check your espn_s2 and SWID values.');
+        throw new Error('Unable to authenticate with the provided credentials');
       }
-      throw new Error(`Failed to fetch ESPN league data: ${leagueResponse.status}`);
+      throw new Error('Unable to fetch league data');
     }
 
     const leagueData = await leagueResponse.json();
-    console.log(`League found: ${leagueData.settings.name}`);
+    console.log('League data retrieved successfully');
 
     // Determine scoring type
     let scoringType = 'standard';
@@ -91,34 +82,28 @@ serve(async (req) => {
     };
 
     const normalizedSwid = normalizeId(swid);
-    console.log('Normalized SWID for matching:', normalizedSwid.substring(0, 8) + '...');
+    console.log('Matching team ownership');
 
     // Find the user's team with robust owner matching
     const userTeam = leagueData.teams?.find((team: any) => {
       const owners = (team.owners || []).map(normalizeId);
       const primaryOwner = normalizeId(team.primaryOwner || '');
       
-      // Check if SWID matches any owner or the primary owner
       const isMatch = owners.includes(normalizedSwid) || (primaryOwner && primaryOwner === normalizedSwid);
       
       if (isMatch) {
-        console.log(`Found user team: ${team.name || team.location + ' ' + team.nickname} (ID: ${team.id})`);
+        console.log('Team ownership verified');
       }
       
       return isMatch;
     });
 
     if (!userTeam) {
-      // Log team owner details for debugging (without exposing full IDs)
-      console.log('Could not find matching team. League teams summary:');
-      leagueData.teams?.slice(0, 3).forEach((team: any, idx: number) => {
-        console.log(`  Team ${idx + 1}: ${team.name || team.location + ' ' + team.nickname}, owners count: ${team.owners?.length || 0}, primaryOwner exists: ${!!team.primaryOwner}`);
-      });
-      
-      throw new Error('Could not find your team in this league. Make sure the SWID cookie belongs to an account that is a member of this league.');
+      console.log('Team ownership verification failed');
+      throw new Error('Unable to find your team in this league');
     }
 
-    console.log(`Found user team: ${userTeam.name || userTeam.location + ' ' + userTeam.nickname}`);
+    console.log('Team identified successfully');
 
     // Upsert league data
     const { data: leagueRecord, error: leagueError } = await supabase
@@ -139,8 +124,8 @@ serve(async (req) => {
       .single();
 
     if (leagueError) {
-      console.error('League insert error:', leagueError);
-      throw leagueError;
+      console.error('Database error during league sync');
+      throw new Error('Unable to save league data');
     }
 
     console.log('League data stored successfully');
@@ -166,8 +151,8 @@ serve(async (req) => {
       });
 
     if (teamError) {
-      console.error('Team insert error:', teamError);
-      throw teamError;
+      console.error('Database error during team sync');
+      throw new Error('Unable to save team data');
     }
 
     console.log('Team data stored successfully');
@@ -184,9 +169,21 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('Error in sync-espn-league:', error);
+    console.error('League sync error:', error.message || 'Unknown error');
+    
+    // Return generic error messages without internal details
+    let userMessage = 'Unable to sync your league. Please try again.';
+    
+    if (error.message?.includes('authenticate') || error.message?.includes('credentials')) {
+      userMessage = 'Unable to authenticate. Please verify your credentials and try again.';
+    } else if (error.message?.includes('team')) {
+      userMessage = 'Unable to find your team. Please verify you are a member of this league.';
+    } else if (error.message?.includes('Database') || error.message?.includes('save')) {
+      userMessage = 'Unable to save league data. Please try again.';
+    }
+    
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: userMessage }),
       { 
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

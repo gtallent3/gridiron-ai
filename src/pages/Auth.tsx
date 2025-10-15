@@ -7,6 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
+import { z } from "zod";
+
+const authSchema = z.object({
+  email: z.string().trim().email("Please enter a valid email address").max(255, "Email is too long"),
+  password: z.string().min(6, "Password must be at least 6 characters").max(72, "Password is too long"),
+});
 
 export default function Auth() {
   const [email, setEmail] = useState("");
@@ -38,10 +44,26 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
+      // Validate inputs with zod schema
+      const validationResult = authSchema.safeParse({ email, password });
+      
+      if (!validationResult.success) {
+        const firstError = validationResult.error.errors[0];
+        toast({
+          title: "Validation Error",
+          description: firstError.message,
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const { email: validEmail, password: validPassword } = validationResult.data;
+
       if (isSignUp) {
         const { error } = await supabase.auth.signUp({
-          email,
-          password,
+          email: validEmail,
+          password: validPassword,
           options: {
             emailRedirectTo: `${window.location.origin}/`,
           },
@@ -56,8 +78,8 @@ export default function Auth() {
         setIsSignUp(false);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+          email: validEmail,
+          password: validPassword,
         });
 
         if (error) throw error;
@@ -70,7 +92,7 @@ export default function Auth() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Authentication failed. Please try again.",
         variant: "destructive",
       });
     } finally {

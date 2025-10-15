@@ -50,7 +50,7 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     
     if (!LOVABLE_API_KEY) {
-      console.error("LOVABLE_API_KEY is not configured");
+      console.error("AI service configuration error");
       return new Response(
         JSON.stringify({ error: "Service temporarily unavailable. Please try again later." }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -109,8 +109,7 @@ Current 2024 NFL Context:
         );
       }
       
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("AI service error:", response.status);
       return new Response(
         JSON.stringify({ error: "Unable to process your request. Please try again." }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

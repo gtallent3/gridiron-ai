@@ -7,6 +7,17 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
+import { z } from "zod";
+
+const sleeperSchema = z.object({
+  username: z.string().trim().min(3, "Username must be at least 3 characters").max(25, "Username is too long").regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, hyphens, and underscores"),
+});
+
+const espnSchema = z.object({
+  leagueId: z.string().trim().min(1, "League ID is required").max(50, "League ID is too long").regex(/^\d+$/, "League ID must be numeric"),
+  espn_s2: z.string().trim().min(10, "ESPN S2 cookie is required").max(1000, "ESPN S2 cookie is too long"),
+  swid: z.string().trim().min(5, "SWID cookie is required").max(100, "SWID cookie is too long"),
+});
 
 export default function ConnectLeague() {
   const [sleeperUsername, setSleeperUsername] = useState("");
@@ -40,10 +51,14 @@ export default function ConnectLeague() {
   }
 
   const handleSleeperConnect = async () => {
-    if (!sleeperUsername.trim()) {
+    // Validate input with zod schema
+    const validationResult = sleeperSchema.safeParse({ username: sleeperUsername });
+    
+    if (!validationResult.success) {
+      const firstError = validationResult.error.errors[0];
       toast({
-        title: "Username required",
-        description: "Please enter your Sleeper username",
+        title: "Validation Error",
+        description: firstError.message,
         variant: "destructive",
       });
       return;
@@ -52,7 +67,7 @@ export default function ConnectLeague() {
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('sync-sleeper-league', {
-        body: { username: sleeperUsername },
+        body: { username: validationResult.data.username },
       });
 
       if (error) throw error;
@@ -62,13 +77,11 @@ export default function ConnectLeague() {
         description: data.message || "League synced successfully",
       });
 
-      // Navigate to dashboard after a short delay
       setTimeout(() => navigate('/'), 1500);
     } catch (error: any) {
-      console.error('Error connecting Sleeper:', error);
       toast({
         title: "Connection failed",
-        description: error.message || "Failed to connect to Sleeper",
+        description: "Unable to connect your Sleeper account. Please verify your username and try again.",
         variant: "destructive",
       });
     } finally {
@@ -77,10 +90,18 @@ export default function ConnectLeague() {
   };
 
   const handleEspnConnect = async () => {
-    if (!espnCredentials.espn_s2.trim() || !espnCredentials.swid.trim() || !espnCredentials.leagueId.trim()) {
+    // Validate inputs with zod schema
+    const validationResult = espnSchema.safeParse({
+      leagueId: espnCredentials.leagueId,
+      espn_s2: espnCredentials.espn_s2,
+      swid: espnCredentials.swid,
+    });
+    
+    if (!validationResult.success) {
+      const firstError = validationResult.error.errors[0];
       toast({
-        title: "Credentials required",
-        description: "Please enter your ESPN espn_s2, SWID cookies, and League ID",
+        title: "Validation Error",
+        description: firstError.message,
         variant: "destructive",
       });
       return;
@@ -95,10 +116,8 @@ export default function ConnectLeague() {
         throw new Error('Your session has expired. Please log out and log back in.');
       }
 
-      console.log('Session valid, invoking ESPN sync function...');
-
       const { data, error } = await supabase.functions.invoke('sync-espn-league', {
-        body: espnCredentials,
+        body: validationResult.data,
       });
 
       if (error) throw error;
@@ -110,26 +129,9 @@ export default function ConnectLeague() {
 
       setTimeout(() => navigate('/'), 1500);
     } catch (error: any) {
-      console.error('Error connecting ESPN:', error);
-      
-      // Try to extract the actual error message from the backend response
-      let errorMessage = "Failed to connect to ESPN";
-      
-      if (error.message && error.message.includes("non-2xx")) {
-        // Edge function returned an error - try to get the error from data
-        errorMessage = "Could not connect to ESPN. Please verify your cookies and league membership.";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      // If the error context contains an error field, use that
-      if (error.context?.error) {
-        errorMessage = error.context.error;
-      }
-      
       toast({
         title: "Connection failed",
-        description: errorMessage,
+        description: "Unable to connect your ESPN league. Please verify your credentials and try again.",
         variant: "destructive",
       });
     } finally {
