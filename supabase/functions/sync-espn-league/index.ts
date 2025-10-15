@@ -7,6 +7,18 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// ESPN Pro Team ID to abbreviation mapping
+const getTeamAbbreviation = (teamId: number): string => {
+  const teams: Record<number, string> = {
+    1: 'ATL', 2: 'BUF', 3: 'CHI', 4: 'CIN', 5: 'CLE', 6: 'DAL', 7: 'DEN', 8: 'DET',
+    9: 'GB', 10: 'TEN', 11: 'IND', 12: 'KC', 13: 'LV', 14: 'LAR', 15: 'MIA', 16: 'MIN',
+    17: 'NE', 18: 'NO', 19: 'NYG', 20: 'NYJ', 21: 'PHI', 22: 'ARI', 23: 'PIT', 24: 'LAC',
+    25: 'SF', 26: 'SEA', 27: 'TB', 28: 'WSH', 29: 'CAR', 30: 'JAX', 33: 'BAL', 34: 'HOU'
+  };
+  return teams[teamId] || 'FA';
+};
+
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -41,8 +53,8 @@ serve(async (req) => {
     const now = new Date();
     const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
-    // Fetch league data from ESPN API
-    const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentYear}/segments/0/leagues/${leagueId}?view=mSettings&view=mTeam&view=mRoster&view=mMembers`;
+    // Fetch league data from ESPN API with projections
+    const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentYear}/segments/0/leagues/${leagueId}?view=mSettings&view=mTeam&view=mRoster&view=mMembers&view=kona_player_info`;
     
     const leagueResponse = await fetch(leagueUrl, {
       headers: {
@@ -109,13 +121,28 @@ serve(async (req) => {
       throw new Error('Unable to save league data');
     }
 
-    // Get roster for the user's team
-    const roster = userTeam.roster?.entries?.map((entry: any) => ({
-      player_id: entry.playerId?.toString(),
-      player_name: entry.playerPoolEntry?.player?.fullName,
-      position: entry.playerPoolEntry?.player?.defaultPositionId,
-      slot: entry.lineupSlotId,
-    })) || [];
+    // Get roster for the user's team with projections
+    const roster = userTeam.roster?.entries?.map((entry: any) => {
+      const player = entry.playerPoolEntry?.player;
+      
+      // Get current week projection
+      let projected = 0;
+      if (player?.stats) {
+        const projectionStat = player.stats.find((stat: any) => 
+          stat.statSourceId === 1 && stat.scoringPeriodId === leagueData.scoringPeriodId
+        );
+        projected = projectionStat?.appliedTotal || 0;
+      }
+
+      return {
+        player_id: entry.playerId?.toString(),
+        player_name: player?.fullName,
+        position: player?.defaultPositionId,
+        slot: entry.lineupSlotId,
+        team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null,
+        projected: projected,
+      };
+    }) || [];
 
     // Upsert team data
     const { error: teamError } = await supabase

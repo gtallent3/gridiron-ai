@@ -55,7 +55,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         // For Sleeper (different format)
         if (league.platform === 'sleeper') {
           positionName = player.position || 'FLEX';
-          isStarter = player.starter !== false; // Sleeper uses starter boolean
+          isStarter = player.starter !== false;
           isBench = player.starter === false;
         }
 
@@ -64,7 +64,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           name: playerName,
           position: positionName,
           team: player.team || 'NFL',
-          projected: 0, // Will be updated when we fetch projections
+          projected: player.projected || 0, // Use stored projection
           status: isStarter ? 'starter' : 'bench',
         };
 
