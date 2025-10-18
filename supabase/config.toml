@@ -11,3 +11,6 @@ verify_jwt = true
 
 [functions.evaluate-trade]
 verify_jwt = true
+
+[functions.evaluate-trade-v2]
+verify_jwt = true

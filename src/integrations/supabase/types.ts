@@ -140,6 +140,208 @@ export type Database = {
         }
         Relationships: []
       }
+      player_valuations: {
+        Row: {
+          confidence_score: number | null
+          created_at: string | null
+          id: string
+          injury_risk: number | null
+          last_updated_at: string | null
+          next_3_weeks_projection: number
+          player_id: string
+          player_name: string
+          player_value: number
+          playoff_schedule_difficulty: number | null
+          position: Database["public"]["Enums"]["player_position"]
+          role_stability: number | null
+          ros_projection: number
+          schedule_difficulty: number | null
+          season: number
+          sentiment_score: number | null
+          team: string | null
+          updated_at: string | null
+          usage_trend: number | null
+          volatility_flag: boolean | null
+          week: number
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          injury_risk?: number | null
+          last_updated_at?: string | null
+          next_3_weeks_projection?: number
+          player_id: string
+          player_name: string
+          player_value?: number
+          playoff_schedule_difficulty?: number | null
+          position: Database["public"]["Enums"]["player_position"]
+          role_stability?: number | null
+          ros_projection?: number
+          schedule_difficulty?: number | null
+          season: number
+          sentiment_score?: number | null
+          team?: string | null
+          updated_at?: string | null
+          usage_trend?: number | null
+          volatility_flag?: boolean | null
+          week: number
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          injury_risk?: number | null
+          last_updated_at?: string | null
+          next_3_weeks_projection?: number
+          player_id?: string
+          player_name?: string
+          player_value?: number
+          playoff_schedule_difficulty?: number | null
+          position?: Database["public"]["Enums"]["player_position"]
+          role_stability?: number | null
+          ros_projection?: number
+          schedule_difficulty?: number | null
+          season?: number
+          sentiment_score?: number | null
+          team?: string | null
+          updated_at?: string | null
+          usage_trend?: number | null
+          volatility_flag?: boolean | null
+          week?: number
+        }
+        Relationships: []
+      }
+      team_strategies: {
+        Row: {
+          created_at: string | null
+          id: string
+          league_id: string
+          losses: number | null
+          must_win_mode: boolean | null
+          playoff_odds: number | null
+          playoff_position: number | null
+          qb_strength: number | null
+          rb_strength: number | null
+          risk_profile: Database["public"]["Enums"]["risk_profile"] | null
+          te_strength: number | null
+          team_id: string
+          ties: number | null
+          updated_at: string | null
+          wins: number | null
+          wr_strength: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          league_id: string
+          losses?: number | null
+          must_win_mode?: boolean | null
+          playoff_odds?: number | null
+          playoff_position?: number | null
+          qb_strength?: number | null
+          rb_strength?: number | null
+          risk_profile?: Database["public"]["Enums"]["risk_profile"] | null
+          te_strength?: number | null
+          team_id: string
+          ties?: number | null
+          updated_at?: string | null
+          wins?: number | null
+          wr_strength?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          league_id?: string
+          losses?: number | null
+          must_win_mode?: boolean | null
+          playoff_odds?: number | null
+          playoff_position?: number | null
+          qb_strength?: number | null
+          rb_strength?: number | null
+          risk_profile?: Database["public"]["Enums"]["risk_profile"] | null
+          te_strength?: number | null
+          team_id?: string
+          ties?: number | null
+          updated_at?: string | null
+          wins?: number | null
+          wr_strength?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_strategies_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "connected_leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trade_evaluations: {
+        Row: {
+          best_player_bonus_applied: boolean | null
+          confidence: number
+          created_at: string | null
+          grade: string
+          id: string
+          key_factors: Json | null
+          league_id: string
+          my_players: Json
+          my_team_id: string
+          next_3_weeks_delta: number
+          ros_points_delta: number
+          summary: string | null
+          their_players: Json
+          their_team_id: string
+          user_id: string
+          verdict: string
+        }
+        Insert: {
+          best_player_bonus_applied?: boolean | null
+          confidence: number
+          created_at?: string | null
+          grade: string
+          id?: string
+          key_factors?: Json | null
+          league_id: string
+          my_players: Json
+          my_team_id: string
+          next_3_weeks_delta: number
+          ros_points_delta: number
+          summary?: string | null
+          their_players: Json
+          their_team_id: string
+          user_id: string
+          verdict: string
+        }
+        Update: {
+          best_player_bonus_applied?: boolean | null
+          confidence?: number
+          created_at?: string | null
+          grade?: string
+          id?: string
+          key_factors?: Json | null
+          league_id?: string
+          my_players?: Json
+          my_team_id?: string
+          next_3_weeks_delta?: number
+          ros_points_delta?: number
+          summary?: string | null
+          their_players?: Json
+          their_team_id?: string
+          user_id?: string
+          verdict?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "trade_evaluations_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "connected_leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_teams: {
         Row: {
           created_at: string | null
@@ -224,6 +426,8 @@ export type Database = {
     }
     Enums: {
       league_platform: "espn" | "yahoo" | "sleeper"
+      player_position: "QB" | "RB" | "WR" | "TE" | "K" | "DEF"
+      risk_profile: "aggressive" | "balanced" | "conservative"
       scoring_type: "standard" | "ppr" | "half_ppr" | "custom"
     }
     CompositeTypes: {
@@ -353,6 +557,8 @@ export const Constants = {
   public: {
     Enums: {
       league_platform: ["espn", "yahoo", "sleeper"],
+      player_position: ["QB", "RB", "WR", "TE", "K", "DEF"],
+      risk_profile: ["aggressive", "balanced", "conservative"],
       scoring_type: ["standard", "ppr", "half_ppr", "custom"],
     },
   },

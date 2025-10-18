@@ -138,16 +138,19 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
       const myPlayers = myRoster.filter(p => mySelectedPlayers.includes(p.id));
       const theirPlayers = theirRoster.filter(p => theirSelectedPlayers.includes(p.id));
 
-      const { data, error } = await supabase.functions.invoke('evaluate-trade', {
+      const { data, error } = await supabase.functions.invoke('evaluate-trade-v2', {
         body: {
+          leagueId: league.id,
           myTeam: {
+            team_id: userTeam?.team_id || '',
             roster: myRoster,
-            tradingAway: myPlayers,
           },
           theirTeam: {
+            team_id: selectedTeam?.team_id || '',
             roster: theirRoster,
-            tradingAway: theirPlayers,
           },
+          myPlayers,
+          theirPlayers,
           scoringType: league.scoring_type,
         }
       });
@@ -158,7 +161,7 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
       
       toast({
         title: "Trade Evaluated",
-        description: "AI analysis complete",
+        description: "AI analysis complete with Best Player Bonus",
       });
     } catch (error: any) {
       console.error('Error evaluating trade:', error);
