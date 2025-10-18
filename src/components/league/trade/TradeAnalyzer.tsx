@@ -48,8 +48,6 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [tradeResult, setTradeResult] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [mustWinMode, setMustWinMode] = useState(false);
-  const [riskProfile, setRiskProfile] = useState('balanced');
 
   // Position mapping for ESPN
   const POSITION_MAP: Record<number, string> = {
@@ -183,60 +181,6 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
     setTradeResult(null);
   };
 
-  const handleSeedPlayerData = async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('seed-player-valuations', {
-        body: {}
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "Player Data Seeded",
-        description: `Seeded ${data.count} players for Week ${data.week}`,
-      });
-    } catch (error: any) {
-      console.error('Error seeding player data:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to seed player data",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleUpdateStrategy = async (mustWinMode: boolean, riskProfile: string) => {
-    try {
-      const { error } = await supabase
-        .from('team_strategies')
-        .upsert([{
-          league_id: league.id,
-          team_id: userTeam?.team_id || '',
-          wins: userTeam?.wins || 0,
-          losses: userTeam?.losses || 0,
-          ties: userTeam?.ties || 0,
-          must_win_mode: mustWinMode,
-          risk_profile: riskProfile as any,
-        }], {
-          onConflict: 'league_id,team_id'
-        });
-
-      if (error) throw error;
-
-      toast({
-        title: "Strategy Updated",
-        description: `Set to ${riskProfile} mode${mustWinMode ? ' (Must-Win)' : ''}`,
-      });
-    } catch (error: any) {
-      console.error('Error updating strategy:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update strategy",
-        variant: "destructive",
-      });
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -274,15 +218,6 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
             </div>
             
             <div className="flex items-center gap-3 flex-wrap">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSeedPlayerData}
-                className="text-xs"
-              >
-                Seed Player Data
-              </Button>
-              
               <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
                 <SelectTrigger className="w-[250px]">
                   <SelectValue placeholder="Select opponent team" />
@@ -293,36 +228,6 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
                       {team.team_name} ({team.wins || 0}-{team.losses || 0})
                     </SelectItem>
                   ))}
-                </SelectContent>
-              </Select>
-
-              <Button
-                variant={mustWinMode ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  const newMode = !mustWinMode;
-                  setMustWinMode(newMode);
-                  handleUpdateStrategy(newMode, riskProfile);
-                }}
-                className="text-xs"
-              >
-                Must-Win
-              </Button>
-              
-              <Select 
-                value={riskProfile} 
-                onValueChange={(value) => {
-                  setRiskProfile(value);
-                  handleUpdateStrategy(mustWinMode, value);
-                }}
-              >
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="conservative">Conservative</SelectItem>
-                  <SelectItem value="balanced">Balanced</SelectItem>
-                  <SelectItem value="aggressive">Aggressive</SelectItem>
                 </SelectContent>
               </Select>
 
