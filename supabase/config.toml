@@ -14,3 +14,12 @@ verify_jwt = true
 
 [functions.evaluate-trade-v2]
 verify_jwt = true
+
+[functions.sync-player-valuations]
+verify_jwt = false
+
+[functions.find-trades]
+verify_jwt = true
+
+[functions.improve-position]
+verify_jwt = true

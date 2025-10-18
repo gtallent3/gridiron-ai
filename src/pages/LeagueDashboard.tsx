@@ -11,6 +11,8 @@ import { WaiverWire } from "@/components/league/WaiverWire";
 import { OtherTeams } from "@/components/league/OtherTeams";
 import { LeagueHeader } from "@/components/league/LeagueHeader";
 import { TradeAnalyzer } from "@/components/league/trade/TradeAnalyzer";
+import { TradeFinder } from "@/components/league/trade/TradeFinder";
+import { PositionImprover } from "@/components/league/trade/PositionImprover";
 
 type League = {
   id: string;
@@ -35,6 +37,7 @@ export default function LeagueDashboard() {
   const [loading, setLoading] = useState(true);
   const [league, setLeague] = useState<League | null>(null);
   const [userTeam, setUserTeam] = useState<Team | null>(null);
+  const [allTeams, setAllTeams] = useState<Team[]>([]);
 
   useEffect(() => {
     const checkAuthAndFetchData = async () => {
@@ -77,6 +80,15 @@ export default function LeagueDashboard() {
       } else {
         setUserTeam(null);
       }
+
+      // Fetch all teams in the league
+      const { data: allTeamsData, error: teamsError } = await supabase
+        .from('user_teams')
+        .select('*')
+        .eq('league_id', leagueId);
+
+      if (teamsError) throw teamsError;
+      setAllTeams(allTeamsData || []);
 
     } catch (error: any) {
       console.error('Error fetching league data:', error);
@@ -154,10 +166,25 @@ export default function LeagueDashboard() {
           </TabsContent>
 
           <TabsContent value="trade" className="mt-6">
-            <TradeAnalyzer 
-              league={league}
-              userTeam={userTeam}
-            />
+            <Tabs defaultValue="analyzer" className="space-y-6">
+              <TabsList className="grid w-full grid-cols-3 max-w-2xl mx-auto">
+                <TabsTrigger value="analyzer">Grade Trade</TabsTrigger>
+                <TabsTrigger value="finder">Find Trades</TabsTrigger>
+                <TabsTrigger value="improve">Improve Position</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="analyzer">
+                <TradeAnalyzer league={league} userTeam={userTeam} />
+              </TabsContent>
+
+              <TabsContent value="finder">
+                <TradeFinder league={league} userTeam={userTeam!} allTeams={allTeams} />
+              </TabsContent>
+
+              <TabsContent value="improve">
+                <PositionImprover league={league} userTeam={userTeam!} allTeams={allTeams} />
+              </TabsContent>
+            </Tabs>
           </TabsContent>
 
           <TabsContent value="waiver" className="mt-6">
