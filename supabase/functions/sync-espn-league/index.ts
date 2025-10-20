@@ -371,30 +371,66 @@ serve(async (req) => {
           };
         });
 
+        // Enrich roster with our valuations (schedule, injuries, form) when available
+        const names = roster.map((p: any) => p.player_name).filter(Boolean);
+        let latestWeek = leagueData.scoringPeriodId;
+        const { data: latestWeekRow } = await supabase
+          .from('player_valuations')
+          .select('week')
+          .eq('season', currentYear)
+          .order('week', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (latestWeekRow?.week) latestWeek = latestWeekRow.week;
+
+        const { data: vals } = await supabase
+          .from('player_valuations')
+          .select('player_name, ppg_projection, ros_projection, is_bye_week, injury_status, injury_duration_weeks, next_3_weeks_projection, schedule_difficulty')
+          .eq('season', currentYear)
+          .eq('week', latestWeek)
+          .in('player_name', names);
+        const vMap = new Map((vals || []).map(v => [v.player_name, v]));
+
+        const enrichedRoster = roster.map((p: any) => {
+          const v = vMap.get(p.player_name);
+          const ros = v && Number(v.ros_projection) > 0 ? Number(v.ros_projection) : p.ros_projection;
+          const ppg = v && Number(v.ppg_projection) > 0 ? Number(v.ppg_projection) : p.ppg_projection;
+          return {
+            ...p,
+            ros_projection: ros,
+            ppg_projection: ppg,
+            is_bye_week: v?.is_bye_week ?? p.is_bye_week,
+            injury_status: v?.injury_status ?? p.injury_status,
+            injury_duration_weeks: v?.injury_duration_weeks ?? p.injury_duration_weeks,
+            schedule_difficulty: v?.schedule_difficulty ?? p.schedule_difficulty,
+            next_3_weeks_projection: v?.next_3_weeks_projection ?? p.next_3_weeks_projection,
+          };
+        });
+
         // Calculate total projected points for starters only (same slots used in RosterView)
         const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
-        const totalProjected = roster
+        const totalProjected = enrichedRoster
           .filter((p: any) => STARTER_SLOTS.includes(p.slot))
           .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
 
         // Get team record
         const record = team.record?.overall || { wins: 0, losses: 0, ties: 0 };
 
-      await supabase
-        .from('user_teams')
-        .upsert({
-          league_id: leagueRecord.id,
-          team_id: team.id.toString(),
-          team_name: team.name || `${team.location} ${team.nickname}`,
-          roster: roster,
-          wins: record.wins || 0,
-          losses: record.losses || 0,
-          ties: record.ties || 0,
-          total_projected: totalProjected,
-        }, {
-          onConflict: 'league_id,team_id',
-        });
-    }
+        await supabase
+          .from('user_teams')
+          .upsert({
+            league_id: leagueRecord.id,
+            team_id: team.id.toString(),
+            team_name: team.name || `${team.location} ${team.nickname}`,
+            roster: enrichedRoster,
+            wins: record.wins || 0,
+            losses: record.losses || 0,
+            ties: record.ties || 0,
+            total_projected: totalProjected,
+          }, {
+            onConflict: 'league_id,team_id',
+          });
+      }
 
     return new Response(
       JSON.stringify({
