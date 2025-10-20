@@ -312,22 +312,46 @@ serve(async (req) => {
 
     // Get or create normalized player entries for all Sleeper IDs
     const sleeperIds = valuations.map(v => v.player_id);
+    
+    // First, try to find existing normalized players by sleeper_id OR by player_name
+    const playerNames = valuations.map(v => v.player_name);
     const { data: normPlayers } = await supabase
       .from('normalized_players')
-      .select('sleeper_id, player_id')
-      .in('sleeper_id', sleeperIds);
+      .select('sleeper_id, player_id, player_name')
+      .or(`sleeper_id.in.(${sleeperIds.join(',')}),player_name.in.(${playerNames.map(n => `"${n}"`).join(',')})`);
 
     const normalizedIdMap = new Map<string, string>();
+    const existingSleeperIds = new Set<string>();
+    
     if (normPlayers) {
-      for (const p of normPlayers) {
-        if (p.sleeper_id) {
-          normalizedIdMap.set(p.sleeper_id, p.player_id);
+      // Build map: prioritize entries with sleeper_id match
+      const sleeperMatches = normPlayers.filter(p => p.sleeper_id && sleeperIds.includes(p.sleeper_id));
+      const nameMatches = normPlayers.filter(p => !p.sleeper_id || !sleeperIds.includes(p.sleeper_id));
+      
+      // Process sleeper ID matches first (these are authoritative)
+      for (const p of sleeperMatches) {
+        normalizedIdMap.set(p.sleeper_id!, p.player_id);
+        existingSleeperIds.add(p.sleeper_id!);
+      }
+      
+      // For name matches without sleeper_id, update them with the sleeper_id
+      for (const p of nameMatches) {
+        const valuation = valuations.find(v => v.player_name === p.player_name);
+        if (valuation) {
+          // Update this normalized_player to include the sleeper_id
+          await supabase
+            .from('normalized_players')
+            .update({ sleeper_id: valuation.player_id })
+            .eq('player_id', p.player_id);
+          
+          normalizedIdMap.set(valuation.player_id, p.player_id);
+          existingSleeperIds.add(valuation.player_id);
         }
       }
     }
 
     // Create missing normalized entries
-    const missingSleeperIds = sleeperIds.filter(id => !normalizedIdMap.has(id));
+    const missingSleeperIds = sleeperIds.filter(id => !existingSleeperIds.has(id));
     if (missingSleeperIds.length > 0) {
       const playersToInsert = missingSleeperIds.map(sleeperId => {
         const valuation = valuations.find(v => v.player_id === sleeperId);
@@ -340,13 +364,18 @@ serve(async (req) => {
         };
       });
 
-      await supabase
+      const { data: inserted } = await supabase
         .from('normalized_players')
-        .upsert(playersToInsert, { onConflict: 'sleeper_id', ignoreDuplicates: true });
+        .upsert(playersToInsert, { onConflict: 'sleeper_id', ignoreDuplicates: false })
+        .select();
 
-      // Update the map
-      for (const p of playersToInsert) {
-        normalizedIdMap.set(p.sleeper_id, p.player_id);
+      // Update the map with newly inserted players
+      if (inserted) {
+        for (const p of inserted) {
+          if (p.sleeper_id) {
+            normalizedIdMap.set(p.sleeper_id, p.player_id);
+          }
+        }
       }
     }
 
@@ -355,6 +384,17 @@ serve(async (req) => {
       ...v,
       player_id: normalizedIdMap.get(v.player_id) || v.player_id,
     }));
+    
+    // Delete old duplicate entries before upserting (cleanup)
+    for (const v of normalizedValuations) {
+      await supabase
+        .from('player_valuations')
+        .delete()
+        .eq('season', v.season)
+        .eq('week', v.week)
+        .neq('player_id', v.player_id)
+        .ilike('player_name', v.player_name);
+    }
 
     // Upsert valuations
     const { error } = await supabase
