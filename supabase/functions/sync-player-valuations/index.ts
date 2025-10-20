@@ -33,38 +33,25 @@ serve(async (req) => {
     const trendingIds = new Set(trending.map((t: any) => t.player_id));
     const trendingCountMap = new Map(trending.map((t: any) => [t.player_id, t.count || 1]));
 
-    // Fetch team bye weeks for the current season
-    const byeWeeks = new Map<string, number>();
-    try {
-      const scheduleRes = await fetch(`https://api.sleeper.app/v1/schedule/nfl/regular/${currentSeason}`);
-      const schedule = await scheduleRes.json();
-      
-      // Map teams to their bye weeks
-      const teamsByWeek = new Map<number, Set<string>>();
-      schedule.forEach((game: any) => {
-        const week = game.week;
-        if (!teamsByWeek.has(week)) teamsByWeek.set(week, new Set());
-        if (game.home) teamsByWeek.get(week)!.add(game.home);
-        if (game.away) teamsByWeek.get(week)!.add(game.away);
-      });
-      
-      // Detect bye weeks (teams not playing in a given week)
-      const allTeams = new Set<string>();
-      Object.values(sleeperPlayers).forEach((p: any) => {
-        if (p.team) allTeams.add(p.team);
-      });
-      
-      for (let week = 1; week <= 18; week++) {
-        const playingTeams = teamsByWeek.get(week) || new Set();
-        allTeams.forEach(team => {
-          if (!playingTeams.has(team)) {
-            byeWeeks.set(`${team}_${week}`, week);
-          }
-        });
-      }
-    } catch (err) {
-      console.warn('Could not fetch bye week data:', err);
-    }
+    // 2024-2025 NFL Bye Week Schedule
+    const byeWeekSchedule = new Map<string, number>([
+      // Week 5
+      ['DET', 5], ['LAC', 5], ['PHI', 5], ['TEN', 5],
+      // Week 6
+      ['KC', 6], ['LAR', 6], ['MIA', 6], ['MIN', 6],
+      // Week 7
+      ['BUF', 7], ['CHI', 7], ['HOU', 7], ['JAX', 7],
+      // Week 9
+      ['CLE', 9], ['GB', 9], ['LV', 9], ['PIT', 9], ['SF', 9], ['SEA', 9],
+      // Week 10
+      ['ARI', 10], ['CAR', 10], ['NYG', 10], ['TB', 10],
+      // Week 11
+      ['ATL', 11], ['IND', 11], ['NE', 11], ['NO', 11],
+      // Week 12
+      ['BAL', 12], ['CIN', 12], ['DAL', 12], ['DEN', 12], ['NYJ', 12], ['WAS', 12],
+    ]);
+    
+    console.log(`Loaded bye week schedule for ${byeWeekSchedule.size} teams`);
 
     // Fetch player stats for current season
     const statsPromises = [];
@@ -222,37 +209,40 @@ serve(async (req) => {
           roleStability = 0.6;
         }
         
-        // Bye week detection
-        const isByeWeek = byeWeeks.has(`${p.team}_${targetWeek}`);
+        // Bye week detection - check if team has a bye this week
+        const teamByeWeek = byeWeekSchedule.get(p.team);
+        const isByeWeek = teamByeWeek === targetWeek;
         
-        // Injury risk and duration estimation
+        // Injury risk and duration estimation - use current week data for all weeks
         let injuryRisk = 0.05;
         let injuryDuration = 0; // weeks
         let injuryMultiplier = 1.0;
+        let currentInjuryStatus = p.injury_status || null;
         
-        if (targetWeek === currentWeek) {
-          if (p.injury_status === 'Out') {
-            injuryRisk = 0.9;
-            injuryDuration = 1; // Short-term, 1 week
-            injuryMultiplier = 0.9; // 10% penalty
-            rosProjection *= injuryMultiplier;
-          } else if (p.injury_status === 'Doubtful') {
-            injuryRisk = 0.7;
-            injuryDuration = 1;
-            injuryMultiplier = 0.9;
-            rosProjection *= injuryMultiplier;
-          } else if (p.injury_status === 'Questionable') {
-            injuryRisk = 0.4;
-            injuryDuration = 1;
-            injuryMultiplier = 0.95; // 5% penalty
-            rosProjection *= injuryMultiplier;
-          } else if (p.injury_status === 'IR' || p.injury_status === 'PUP') {
-            injuryRisk = 1.0;
-            injuryDuration = 4; // Long-term, 4+ weeks
-            injuryMultiplier = 0.3; // 70% penalty
-            rosProjection *= injuryMultiplier;
-          }
+        // Apply injury status from current data (Sleeper keeps this updated)
+        if (currentInjuryStatus === 'Out') {
+          injuryRisk = 0.9;
+          injuryDuration = 1; // Short-term, 1 week
+          injuryMultiplier = 0.9; // 10% penalty
+          rosProjection *= injuryMultiplier;
+        } else if (currentInjuryStatus === 'Doubtful' || currentInjuryStatus === 'D') {
+          injuryRisk = 0.7;
+          injuryDuration = 1;
+          injuryMultiplier = 0.9;
+          rosProjection *= injuryMultiplier;
+        } else if (currentInjuryStatus === 'Questionable' || currentInjuryStatus === 'Q') {
+          injuryRisk = 0.4;
+          injuryDuration = 1;
+          injuryMultiplier = 0.95; // 5% penalty
+          rosProjection *= injuryMultiplier;
+        } else if (currentInjuryStatus === 'IR' || currentInjuryStatus === 'PUP') {
+          injuryRisk = 1.0;
+          injuryDuration = 4; // Long-term, 4+ weeks
+          injuryMultiplier = 0.3; // 70% penalty
+          rosProjection *= injuryMultiplier;
         }
+        
+        console.log(`Week ${targetWeek} - ${p.first_name} ${p.last_name}: Team=${p.team}, Bye=${isByeWeek}, Injury=${currentInjuryStatus}`);
         
         // Final player value
         const playerValue = rosProjection * 
@@ -304,7 +294,7 @@ serve(async (req) => {
           playoff_schedule_difficulty: Math.round(playoffDiff * 100) / 100,
           last_updated_at: now.toISOString(),
           is_bye_week: isByeWeek,
-          injury_status: p.injury_status || null,
+          injury_status: currentInjuryStatus,
           injury_duration_weeks: injuryDuration,
         });
       }
