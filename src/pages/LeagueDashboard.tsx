@@ -74,32 +74,38 @@ export default function LeagueDashboard() {
         
         if (rosterArray.length === 0) return rosterArray;
         
-        // Get all player IDs from roster
-        const playerIds = rosterArray.map((p: any) => p.player_id).filter(Boolean);
+        // Get all player names from roster (normalize them for matching)
+        const playerNames = rosterArray
+          .map((p: any) => p.player_name)
+          .filter(Boolean);
         
-        if (playerIds.length === 0) return rosterArray;
+        if (playerNames.length === 0) return rosterArray;
         
-        // Fetch player valuations for current week (7 for now)
+        // Fetch player valuations for current week, matching by name
         const currentWeek = leagueData.current_week || 7;
         const { data: valuations } = await supabase
           .from('player_valuations')
-          .select('player_id, is_bye_week, injury_status, injury_duration_weeks')
-          .in('player_id', playerIds)
+          .select('player_name, is_bye_week, injury_status, injury_duration_weeks, team, position')
           .eq('week', currentWeek)
           .eq('season', 2025);
         
-        // Create a map for quick lookup
+        // Create a map for quick lookup by normalized player name
         const valuationsMap = new Map(
-          (valuations || []).map(v => [v.player_id, v])
+          (valuations || []).map(v => [v.player_name?.toLowerCase().trim(), v])
         );
         
-        // Enrich roster with valuation data
-        return rosterArray.map((player: any) => ({
-          ...player,
-          is_bye_week: valuationsMap.get(player.player_id)?.is_bye_week || false,
-          injury_status: valuationsMap.get(player.player_id)?.injury_status || null,
-          injury_duration_weeks: valuationsMap.get(player.player_id)?.injury_duration_weeks || 0,
-        }));
+        // Enrich roster with valuation data by matching player names
+        return rosterArray.map((player: any) => {
+          const normalizedName = player.player_name?.toLowerCase().trim();
+          const valuation = valuationsMap.get(normalizedName);
+          
+          return {
+            ...player,
+            is_bye_week: valuation?.is_bye_week || false,
+            injury_status: valuation?.injury_status || null,
+            injury_duration_weeks: valuation?.injury_duration_weeks || 0,
+          };
+        });
       };
 
       // Fetch user's team for this league using the user_team_id from league data
