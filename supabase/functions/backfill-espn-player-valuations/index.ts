@@ -92,11 +92,10 @@ serve(async (req) => {
     const leagueData = await leagueResponse.json();
     const scoringItems = leagueData.settings?.scoringSettings?.scoringItems || {};
 
-    // Fetch ALL players with stats for the target week
-    // Use kona_playercard view to get comprehensive player data including all stats
-    const statsUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leaguedefaults/3?scoringPeriodId=${week}&view=kona_player_info`;
+    // Fetch league-specific player info with applied totals for the target week
+    const statsUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${leagueId}?scoringPeriodId=${week}&view=kona_player_info`;
     
-    console.log(`Fetching stats for week ${week}...`);
+    console.log(`Fetching league player stats for week ${week}...`);
     
     const statsResponse = await fetch(statsUrl, {
       headers: { 'Cookie': `espn_s2=${espn_s2}; SWID=${swid}` }
@@ -109,7 +108,7 @@ serve(async (req) => {
     const statsData = await statsResponse.json();
     const players = statsData.players || [];
 
-    console.log(`Fetched ${players.length} players from ESPN API for week ${week}`);
+    console.log(`Fetched ${players.length} players from ESPN for week ${week}`);
 
     const valuations: any[] = [];
 
@@ -144,49 +143,44 @@ serve(async (req) => {
         'PHYSICALLY_UNABLE_TO_PERFORM': 'PUP'
       };
 
-      // Find actual stats for this specific week (statSourceId: 0 = actual, 1 = projected)
-      const weekStats = player.stats?.find((s: any) => 
-        s.scoringPeriodId === week && 
-        s.statSourceId === 0 && 
-        s.stats
-      );
+      // Find actual stats for this specific week (statSourceId: 0 = actual)
+      const weekStats = player.stats?.find((s: any) => s.scoringPeriodId === week && s.statSourceId === 0);
       
-      // Skip if no actual stats for this week
-      if (!weekStats || !weekStats.stats || Object.keys(weekStats.stats).length === 0) {
-        continue;
-      }
-
-      // Calculate actual points using league's scoring settings
+      // Determine bye vs played and use ESPN-applied points when available
+      let isByeWeek = false;
       let actualPoints = 0;
-      const rawStats = weekStats.stats;
-      
-      console.log(`${fullName} (${positionName}) week ${week} raw stats:`, Object.keys(rawStats).length, 'stats');
-      
-      for (const [statId, statValue] of Object.entries(rawStats)) {
-        const scoringItem = scoringItems[statId];
-        if (scoringItem && typeof scoringItem.points === 'number' && typeof statValue === 'number') {
-          const points = scoringItem.points * statValue;
-          actualPoints += points;
-          
-          // Log significant scoring plays for debugging
-          if (Math.abs(points) > 1) {
-            console.log(`  Stat ${statId}: ${statValue} × ${scoringItem.points} = ${points.toFixed(2)}`);
+
+      if (!weekStats) {
+        // No stat line at all for this period -> likely bye or inactive
+        isByeWeek = true;
+        actualPoints = 0;
+      } else if (typeof weekStats.appliedTotal === 'number') {
+        // ESPN already computed points using league settings - this is the correct approach!
+        actualPoints = Number(weekStats.appliedTotal);
+        console.log(`${fullName}: Using ESPN applied total ${actualPoints} points for week ${week}`);
+      } else if (weekStats.stats && Object.keys(weekStats.stats).length > 0) {
+        // Fallback: compute from raw stats and league scoring
+        const rawStats = weekStats.stats;
+        console.log(`${fullName} (${positionName}) week ${week} raw stats:`, Object.keys(rawStats).length, 'stats');
+        for (const [statId, statValue] of Object.entries(rawStats)) {
+          const scoringItem = scoringItems[statId as keyof typeof scoringItems];
+          if (scoringItem && typeof (scoringItem as any).points === 'number' && typeof statValue === 'number') {
+            const points = (scoringItem as any).points * statValue;
+            actualPoints += points;
+            if (Math.abs(points) > 1) {
+              console.log(`  Stat ${statId}: ${statValue} × ${(scoringItem as any).points} = ${points.toFixed(2)}`);
+            }
           }
         }
+      } else {
+        // Has a stat line but empty stats -> treat as zero
+        actualPoints = 0;
       }
 
-      // Round to 2 decimal places
+      // Round to 2 decimals for storage consistency
       actualPoints = Math.round(actualPoints * 100) / 100;
-      
-      // Only include players who scored points or have meaningful stats
-      if (actualPoints === 0) {
-        continue;
-      }
 
       console.log(`${fullName}: ${actualPoints} points in week ${week}`);
-
-      // Determine if this week is a bye week based on team schedule
-      const isByeWeek = false; // We'll determine this from schedule data if needed
 
       // For projections, use actual data as baseline
       const ppgProjection = actualPoints;
