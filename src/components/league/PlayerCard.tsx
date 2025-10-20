@@ -10,6 +10,7 @@ type Player = {
   position: string;
   team: string;
   projected: number;
+  actualPoints?: number;
   status?: string;
   changeImpact?: number; // For showing improvement/downgrade
   is_bye_week?: boolean;
@@ -22,9 +23,10 @@ type PlayerCardProps = {
   isSelected?: boolean;
   onSelect?: (playerId: string) => void;
   readOnly?: boolean;
+  showActual?: boolean;
 };
 
-export function PlayerCard({ player, isSelected, onSelect, readOnly }: PlayerCardProps) {
+export function PlayerCard({ player, isSelected, onSelect, readOnly, showActual }: PlayerCardProps) {
   const positionColors: Record<string, string> = {
     QB: "bg-red-500/10 text-red-500 border-red-500/20",
     RB: "bg-green-500/10 text-green-500 border-green-500/20",
@@ -102,18 +104,30 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly }: PlayerCar
         </div>
 
         <div className="pt-2 border-t border-border/50">
-          <p className="text-xs text-muted-foreground">Projected</p>
+          <p className="text-xs text-muted-foreground">
+            {showActual ? 'Actual Points' : 'Projected'}
+          </p>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <p className="text-lg font-bold cursor-help">
-                  {player.projected > 0 
-                    ? player.projected.toFixed(1) 
-                    : player.is_bye_week 
-                      ? '0 (Bye Week)' 
-                      : player.injury_status 
-                        ? '0 (Injured)'
-                        : 'N/A'}
+                  {showActual ? (
+                    player.actualPoints !== undefined 
+                      ? player.actualPoints.toFixed(1)
+                      : player.is_bye_week 
+                        ? '0 (Bye Week)' 
+                        : player.injury_status 
+                          ? '0 (Injured)'
+                          : 'N/A'
+                  ) : (
+                    player.projected > 0 
+                      ? player.projected.toFixed(1) 
+                      : player.is_bye_week 
+                        ? '0 (Bye Week)' 
+                        : player.injury_status 
+                          ? '0 (Injured)'
+                          : 'N/A'
+                  )}
                 </p>
               </TooltipTrigger>
               {(player.is_bye_week || player.injury_status) && (

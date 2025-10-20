@@ -3,10 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlayerCard } from "./PlayerCard";
 import { StartSitRecommendations } from "./StartSitRecommendations";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 type League = {
   id: string;
   platform: string;
+  current_week?: number;
 };
 
 type Team = {
@@ -36,39 +41,64 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [starters, setStarters] = useState<any[]>([]);
   const [bench, setBench] = useState<any[]>([]);
+  const [selectedWeek, setSelectedWeek] = useState<number>(league.current_week || 7);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (userTeam?.roster && Array.isArray(userTeam.roster)) {
+  // Fetch historical stats for selected week
+  const fetchWeeklyStats = async (week: number) => {
+    if (!userTeam?.roster || !Array.isArray(userTeam.roster)) return;
+    
+    setLoading(true);
+    try {
+      const playerNames = userTeam.roster
+        .map((p: any) => p.player_name)
+        .filter(Boolean);
+
+      if (playerNames.length === 0) return;
+
+      // Fetch player stats for the selected week
+      const { data: weeklyStats } = await supabase
+        .from('player_valuations')
+        .select('player_name, player_value, ppg_projection, team, position, is_bye_week, injury_status')
+        .eq('week', week)
+        .eq('season', 2025);
+
+      const statsMap = new Map(
+        (weeklyStats || []).map(s => [s.player_name?.toLowerCase().trim(), s])
+      );
+
+      // Enrich roster with weekly stats
       const starterPlayers: any[] = [];
       const benchPlayers: any[] = [];
 
       userTeam.roster.forEach((player: any) => {
-        // Handle both ESPN and Sleeper formats
         const playerId = player.player_id || player.playerId;
         const playerName = player.player_name || player.playerName || player.name || 'Unknown Player';
         
-        // For ESPN
         let positionName = POSITION_MAP[player.position] || 'FLEX';
         let isStarter = STARTER_SLOTS.includes(player.slot);
         let isBench = player.slot === BENCH_SLOT;
         
-        // For Sleeper (different format)
         if (league.platform === 'sleeper') {
           positionName = player.position || 'FLEX';
           isStarter = player.starter !== false;
           isBench = player.starter === false;
         }
 
+        const normalizedName = playerName.toLowerCase().trim();
+        const weekStats = statsMap.get(normalizedName);
+
         const playerData = {
           id: playerId,
           name: playerName,
           position: positionName,
-          team: player.team || 'NFL',
-          projected: player.projected || 0, // Use stored projection
+          team: weekStats?.team || player.team || 'NFL',
+          projected: weekStats?.ppg_projection || player.projected || 0,
+          actualPoints: weekStats?.player_value || 0,
           status: isStarter ? 'starter' : 'bench',
-          is_bye_week: player.is_bye_week || false,
-          injury_status: player.injury_status || null,
-          injury_duration_weeks: player.injury_duration_weeks || 0,
+          is_bye_week: weekStats?.is_bye_week || false,
+          injury_status: weekStats?.injury_status || null,
+          week: week,
         };
 
         if (isStarter) {
@@ -80,8 +110,22 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
       setStarters(starterPlayers);
       setBench(benchPlayers);
+    } finally {
+      setLoading(false);
     }
-  }, [userTeam, league.platform]);
+  };
+
+  useEffect(() => {
+    fetchWeeklyStats(selectedWeek);
+  }, [selectedWeek, userTeam, league.platform]);
+
+  const handleWeekChange = (direction: 'prev' | 'next') => {
+    setSelectedWeek(prev => {
+      if (direction === 'prev' && prev > 1) return prev - 1;
+      if (direction === 'next' && prev < 18) return prev + 1;
+      return prev;
+    });
+  };
 
   const handlePlayerSelect = (playerId: string) => {
     setSelectedPlayers(prev => 
@@ -109,6 +153,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   };
 
   const totalProjected = starters.reduce((sum, p) => sum + p.projected, 0);
+  const totalActual = starters.reduce((sum, p) => sum + (p.actualPoints || 0), 0);
+  const currentWeek = league.current_week || 7;
+  const isHistoricalWeek = selectedWeek < currentWeek;
 
   if (!userTeam) {
     return (
@@ -122,24 +169,92 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
   return (
     <div className="space-y-6">
-      <StartSitRecommendations 
-        starters={starters}
-        bench={bench}
-        onSubstitution={handleSubstitution}
-      />
+      {/* Week Navigation */}
+      <Card>
+        <CardContent className="py-4">
+          <div className="flex items-center justify-between">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleWeekChange('prev')}
+              disabled={selectedWeek <= 1 || loading}
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Previous Week
+            </Button>
+            
+            <div className="flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Viewing Week</p>
+                <Select 
+                  value={String(selectedWeek)} 
+                  onValueChange={(v) => setSelectedWeek(Number(v))}
+                  disabled={loading}
+                >
+                  <SelectTrigger className="w-24">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.from({ length: currentWeek }, (_, i) => i + 1).map(w => (
+                      <SelectItem key={w} value={String(w)}>
+                        Week {w}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {isHistoricalWeek && (
+                <div className="text-sm px-3 py-1 bg-secondary rounded-md">
+                  Historical Data
+                </div>
+              )}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handleWeekChange('next')}
+              disabled={selectedWeek >= currentWeek || loading}
+            >
+              Next Week
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {!isHistoricalWeek && (
+        <StartSitRecommendations 
+          starters={starters}
+          bench={bench}
+          onSubstitution={handleSubstitution}
+        />
+      )}
 
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Starting Lineup</CardTitle>
             <div className="text-right">
-              <p className="text-sm text-muted-foreground">Total Projected</p>
-              <p className="text-2xl font-bold text-primary">{totalProjected.toFixed(1)}</p>
+              {isHistoricalWeek ? (
+                <>
+                  <p className="text-sm text-muted-foreground">Actual Points Scored</p>
+                  <p className="text-2xl font-bold text-primary">{totalActual.toFixed(1)}</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">Total Projected</p>
+                  <p className="text-2xl font-bold text-primary">{totalProjected.toFixed(1)}</p>
+                </>
+              )}
             </div>
           </div>
         </CardHeader>
         <CardContent>
-          {starters.length === 0 ? (
+          {loading ? (
+            <p className="text-center py-8 text-muted-foreground">Loading...</p>
+          ) : starters.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No starters found</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -149,6 +264,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                   player={player}
                   isSelected={selectedPlayers.includes(player.id)}
                   onSelect={handlePlayerSelect}
+                  showActual={isHistoricalWeek}
                 />
               ))}
             </div>
@@ -163,7 +279,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           <CardTitle>Bench</CardTitle>
         </CardHeader>
         <CardContent>
-          {bench.length === 0 ? (
+          {loading ? (
+            <p className="text-center py-8 text-muted-foreground">Loading...</p>
+          ) : bench.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No bench players found</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -173,6 +291,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                   player={player}
                   isSelected={selectedPlayers.includes(player.id)}
                   onSelect={handlePlayerSelect}
+                  showActual={isHistoricalWeek}
                 />
               ))}
             </div>
