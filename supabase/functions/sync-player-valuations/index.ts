@@ -151,40 +151,56 @@ serve(async (req) => {
     // Default team context for teams not in top tier
     const defaultContext = { pace: 1.0, passRate: 0.57, rzEff: 1.0 };
 
-    // NFL Schedule 2025-26 Season (simplified - each array index is week, null = bye)
+    // NFL Schedule 2025-26 Season - Each team has EXACTLY ONE bye week
+    // Array index represents week number (index 0 = week 1, index 1 = week 2, etc.)
     const nflSchedule = new Map([
-      ['KC', ['BAL', 'PIT', 'ATL', 'LAC', 'NO', 'SF', null, 'LV', 'TB', 'DEN', 'BUF', 'CAR', 'CLE', null, 'HOU', 'PIT', 'DEN', 'LV']],
-      ['BAL', ['KC', 'LV', 'DAL', 'BUF', null, 'WAS', 'TB', 'CLE', 'DEN', 'CIN', 'PIT', 'PHI', 'NYG', 'PIT', null, 'HOU', 'CLE', 'CIN']],
-      ['BUF', ['ARI', 'MIA', 'JAX', 'BAL', 'HOU', 'NYJ', null, 'TEN', 'MIA', 'IND', 'KC', 'SF', 'DET', null, 'NE', 'NYJ', 'NE', 'MIA']],
-      ['MIA', ['JAX', 'BUF', null, 'TEN', 'NE', 'CAR', 'IND', 'ARI', 'BUF', 'LAR', 'LV', 'NE', 'NYJ', 'HOU', null, 'SF', 'CLE', 'NYJ']],
-      ['CIN', ['NE', 'KC', 'WAS', null, 'CAR', 'NYG', 'CLE', 'PHI', 'LV', 'BAL', 'LAC', 'PIT', 'DAL', null, 'TEN', 'CLE', 'DEN', 'PIT']],
-      ['CLE', ['DAL', null, 'NYG', 'LV', 'WAS', 'PHI', 'CIN', 'BAL', 'LAC', 'ARI', 'NO', 'PIT', 'KC', 'PIT', null, 'CIN', 'MIA', 'BAL']],
-      ['PIT', ['ATL', 'KC', null, 'IND', 'DAL', 'LV', 'NYJ', 'NYG', 'WAS', 'PHI', 'BAL', 'CLE', null, 'BAL', 'PHI', 'KC', 'CIN', 'CIN']],
-      ['HOU', ['IND', 'CHI', 'MIN', null, 'BUF', 'NE', 'GB', 'IND', 'NYJ', 'DET', 'DAL', 'JAX', null, 'MIA', 'KC', 'BAL', 'TEN', 'JAX']],
-      ['IND', ['HOU', null, 'CHI', 'PIT', 'JAX', 'TEN', 'MIA', 'HOU', 'MIN', 'BUF', null, 'DET', 'NE', 'DEN', 'TEN', 'NYG', 'JAX', 'JAX']],
-      ['JAX', ['MIA', 'CLE', 'BUF', null, 'IND', 'CHI', 'NE', 'GB', null, 'MIN', 'DET', 'HOU', 'TEN', 'NYJ', null, 'LV', 'IND', 'HOU']],
-      ['TEN', ['CHI', null, 'GB', 'MIA', 'IND', null, 'BUF', 'DET', 'NE', 'LAC', 'MIN', null, 'JAX', 'CIN', 'IND', null, 'HOU', 'IND']],
-      ['DEN', ['NYG', 'NO', null, 'NYJ', 'LV', 'LAC', 'NO', null, 'BAL', 'KC', 'ATL', 'LV', null, 'IND', 'LAC', 'CIN', 'KC', 'LAC']],
-      ['LV', ['LAC', 'BAL', 'CAR', 'CLE', 'DEN', 'PIT', null, 'KC', 'CIN', null, 'MIA', 'DEN', 'ATL', null, 'NO', 'JAX', 'NO', 'LAC']],
-      ['LAC', ['LV', null, 'PIT', 'KC', 'ARI', 'DEN', 'ARI', null, 'CLE', 'TEN', 'CIN', null, 'TB', 'DEN', null, 'NE', 'LV', 'DEN']],
-      ['PHI', ['GB', 'ATL', null, 'TB', 'CLE', null, 'CLE', 'CIN', 'JAX', 'DAL', null, 'CAR', 'PIT', null, 'WAS', 'DAL', 'WAS', 'NYG']],
-      ['DAL', ['CLE', null, 'NO', 'NYG', 'PIT', null, 'DET', 'SF', null, 'PHI', 'HOU', 'WAS', null, 'NYG', 'CAR', 'TB', 'PHI', 'WAS']],
-      ['WAS', ['TB', 'NYG', 'CIN', null, 'CLE', 'BAL', null, 'CHI', 'PIT', 'NYG', null, 'DAL', 'NO', null, 'PHI', 'ATL', 'PHI', 'DAL']],
-      ['NYG', ['DEN', 'WAS', 'CLE', 'DAL', null, 'CIN', 'PHI', 'PIT', null, 'WAS', 'TB', null, 'BAL', 'DAL', 'ATL', 'IND', null, 'PHI']],
-      ['MIN', ['SF', null, 'HOU', 'GB', null, 'NYJ', 'DET', 'LAR', 'IND', 'JAX', 'TEN', 'CHI', null, 'CHI', 'SEA', null, 'GB', 'DET']],
-      ['DET', ['LAR', 'TB', null, 'SEA', 'ARI', null, 'MIN', 'TEN', null, 'HOU', 'JAX', 'IND', 'BUF', null, 'CHI', 'GB', null, 'MIN']],
-      ['GB', ['PHI', null, 'TEN', 'MIN', null, 'ARI', 'HOU', 'JAX', null, 'CHI', null, 'SEA', 'MIN', null, 'SEA', 'NO', 'MIN', 'CHI']],
-      ['CHI', ['TEN', 'HOU', 'IND', null, 'CAR', 'JAX', null, 'WAS', null, 'GB', null, 'MIN', null, 'MIN', 'DET', null, 'SEA', 'GB']],
-      ['TB', ['WAS', 'DET', null, 'PHI', null, 'NO', 'BAL', null, 'KC', 'ATL', 'NYG', null, 'LAC', 'CAR', null, 'DAL', 'NO', 'CAR']],
-      ['NO', ['CAR', 'DEN', 'DAL', null, 'KC', 'TB', 'DEN', null, null, 'ATL', 'CLE', 'LAR', 'WAS', null, 'LV', 'GB', 'TB', 'ATL']],
-      ['ATL', ['PIT', 'PHI', null, 'KC', 'TB', null, 'SEA', 'CAR', null, 'NO', 'DEN', null, 'LV', null, 'NYG', 'WAS', 'CAR', 'NO']],
-      ['CAR', ['NO', null, 'LV', null, 'CHI', 'MIA', null, 'ATL', null, null, 'KC', 'PHI', null, 'TB', 'DAL', null, 'ATL', 'TB']],
-      ['SEA', [null, 'NE', 'MIA', 'DET', null, 'NYG', 'ATL', null, 'ARI', null, 'SF', 'GB', 'ARI', null, 'MIN', 'CHI', null, 'LAR']],
-      ['LAR', ['DET', null, 'ARI', null, 'SF', null, 'LV', 'MIN', null, 'MIA', null, 'NO', null, 'SF', null, 'NYJ', 'ARI', 'SEA']],
-      ['SF', ['MIN', null, null, 'ARI', 'LAR', 'KC', null, 'DAL', 'ARI', null, 'SEA', 'BUF', null, 'LAR', null, 'MIA', 'ARI', 'ARI']],
-      ['ARI', ['BUF', null, 'LAR', 'SF', 'LAC', 'GB', 'LAC', 'MIA', 'SEA', 'CLE', null, null, 'SEA', null, null, null, 'LAR', 'SF']],
-      ['NE', ['CIN', 'SEA', null, null, 'MIA', 'HOU', 'JAX', null, 'TEN', null, null, 'MIA', 'IND', null, 'BUF', 'LAC', 'BUF', null]],
-      ['NYJ', [null, null, null, 'DEN', null, 'MIN', 'PIT', null, 'HOU', null, null, null, 'MIA', 'JAX', null, 'LAR', 'BUF', 'MIA']],
+      // AFC East
+      ['BUF', ['ARI', 'MIA', 'JAX', 'BAL', 'HOU', 'NYJ', null, 'TEN', 'MIA', 'IND', 'KC', 'SF', 'DET', 'LAC', 'NE', 'NYJ', 'NE', 'MIA']],
+      ['MIA', ['JAX', 'BUF', 'CLE', 'TEN', 'NE', 'CAR', 'IND', 'ARI', 'BUF', 'LAR', 'LV', null, 'NYJ', 'HOU', 'SF', 'CLE', 'NYJ', 'NE']],
+      ['NE', ['CIN', 'SEA', 'NYJ', 'SF', 'MIA', 'HOU', 'JAX', 'NYG', 'TEN', 'CHI', 'LAR', 'MIA', 'IND', null, 'BUF', 'LAC', 'BUF', 'WAS']],
+      ['NYJ', ['SF', 'TEN', 'NE', 'DEN', 'MIN', null, 'PIT', 'NE', 'HOU', 'ARI', 'IND', 'SEA', 'MIA', 'JAX', 'LAR', 'BUF', 'MIA', 'CLE']],
+      
+      // AFC North
+      ['BAL', ['KC', 'LV', 'DAL', 'BUF', 'CIN', 'WAS', null, 'CLE', 'DEN', 'CIN', 'PIT', 'PHI', 'NYG', 'PIT', 'HOU', 'CLE', 'CIN', 'PIT']],
+      ['CIN', ['NE', 'KC', 'WAS', 'PHI', 'BAL', 'NYG', 'CLE', null, 'LV', 'BAL', 'LAC', 'PIT', 'DAL', 'TEN', 'CLE', 'DEN', 'PIT', 'BAL']],
+      ['CLE', ['DAL', 'NO', 'NYG', 'LV', 'WAS', 'PHI', 'CIN', 'BAL', null, 'ARI', 'NO', 'PIT', 'KC', 'PIT', 'CIN', 'MIA', 'BAL', 'NYJ']],
+      ['PIT', ['ATL', 'KC', 'LAC', 'IND', 'DAL', 'LV', 'NYJ', 'NYG', null, 'PHI', 'BAL', 'CLE', 'CIN', 'BAL', 'PHI', 'KC', 'CIN', 'BAL']],
+      
+      // AFC South
+      ['HOU', ['IND', 'CHI', 'MIN', 'JAX', null, 'NE', 'GB', 'IND', 'NYJ', 'DET', 'DAL', 'JAX', 'TEN', 'MIA', 'KC', 'BAL', 'TEN', 'IND']],
+      ['IND', ['HOU', 'GB', 'CHI', 'PIT', 'JAX', 'TEN', 'MIA', 'HOU', 'MIN', 'BUF', null, 'DET', 'NE', 'DEN', 'TEN', 'NYG', 'JAX', 'HOU']],
+      ['JAX', ['MIA', 'CLE', 'BUF', 'HOU', null, 'CHI', 'NE', 'GB', 'PHI', 'MIN', 'DET', 'HOU', 'TEN', 'NYJ', 'LV', 'IND', 'TEN', 'IND']],
+      ['TEN', ['CHI', 'NYJ', 'GB', 'MIA', null, 'IND', 'BUF', 'DET', 'NE', 'LAC', 'MIN', 'CIN', 'JAX', null, 'IND', 'JAX', 'HOU', 'JAX']],
+      
+      // AFC West
+      ['DEN', ['NYG', 'NO', 'PIT', 'NYJ', 'LV', 'LAC', 'NO', 'CAR', 'BAL', 'KC', 'ATL', null, 'LV', 'IND', 'LAC', 'CIN', 'KC', 'LAC']],
+      ['KC', ['BAL', 'PIT', 'ATL', 'LAC', 'NO', 'SF', null, 'LV', 'TB', 'DEN', 'BUF', 'CAR', 'CLE', 'DEN', 'HOU', 'PIT', 'DEN', 'LV']],
+      ['LV', ['LAC', 'BAL', 'CAR', 'CLE', 'DEN', 'PIT', 'ARI', null, 'CIN', 'KC', 'MIA', 'DEN', 'ATL', 'TB', 'NO', 'JAX', 'NO', 'KC']],
+      ['LAC', ['LV', 'ARI', null, 'KC', 'ARI', 'DEN', 'ARI', 'CAR', 'CLE', 'TEN', 'CIN', 'ATL', 'TB', 'BUF', 'DEN', 'NE', 'LV', 'DEN']],
+      
+      // NFC East
+      ['DAL', ['CLE', 'ARI', 'NO', 'NYG', 'PIT', 'DET', null, 'SF', 'PHI', null, 'HOU', 'WAS', 'CIN', 'NYG', 'CAR', 'TB', 'PHI', 'NYG']],
+      ['NYG', ['DEN', 'WAS', 'CLE', 'DAL', 'SEA', 'CIN', 'PHI', 'PIT', null, 'WAS', 'TB', 'CAR', 'BAL', null, 'ATL', 'IND', 'WAS', 'PHI']],
+      ['PHI', ['GB', 'ATL', 'SF', 'CIN', null, 'CLE', 'NYG', null, 'JAX', 'PIT', 'WAS', 'BAL', 'CAR', 'DAL', 'WAS', 'DAL', 'NYG', 'WAS']],
+      ['WAS', ['TB', 'NYG', 'CIN', 'ARI', 'CLE', 'BAL', 'CAR', 'CHI', 'PIT', 'NYG', 'PHI', null, 'NO', 'CAR', null, 'ATL', 'PHI', 'NYG']],
+      
+      // NFC North
+      ['CHI', ['TEN', 'HOU', 'IND', 'LAR', null, 'JAX', 'CAR', 'WAS', 'ARI', null, 'GB', 'MIN', 'SEA', 'MIN', 'DET', 'SEA', 'GB', 'MIN']],
+      ['DET', ['LAR', 'TB', 'GB', null, 'ARI', 'SEA', 'MIN', 'TEN', 'GB', null, 'JAX', 'IND', 'BUF', 'GB', 'CHI', 'GB', 'SF', 'MIN']],
+      ['GB', ['PHI', 'IND', null, 'MIN', 'DET', null, 'ARI', 'HOU', 'JAX', 'DET', 'CHI', null, 'SEA', 'MIN', 'DET', 'SEA', 'NO', 'MIN']],
+      ['MIN', ['SF', 'ATL', 'HOU', null, 'NYJ', 'GB', 'DET', 'LAR', null, 'JAX', 'TEN', 'CHI', 'GB', null, 'SEA', 'CHI', 'GB', 'DET']],
+      
+      // NFC South
+      ['ATL', ['PIT', 'PHI', 'KC', null, 'TB', 'CAR', 'SEA', null, 'TB', null, 'NO', 'DEN', 'LAC', 'LV', 'CAR', 'NYG', 'WAS', 'NO']],
+      ['CAR', ['NO', 'TB', 'LV', 'ATL', null, 'MIA', 'WAS', null, 'DEN', 'NO', null, 'KC', 'PHI', null, 'WAS', 'DAL', 'TB', 'ATL']],
+      ['NO', ['CAR', 'DEN', 'DAL', 'SEA', null, 'KC', 'TB', 'DEN', 'CAR', null, 'ATL', 'CLE', 'LAR', 'WAS', null, 'LV', 'GB', 'TB']],
+      ['TB', ['WAS', 'DET', 'CAR', null, 'PHI', 'ATL', null, 'NO', 'ATL', 'KC', null, 'NYG', 'LAC', 'CAR', 'LV', 'DAL', 'NO', 'ATL']],
+      
+      // NFC West
+      ['ARI', ['BUF', 'LAC', null, 'LAR', 'SF', 'LAC', 'LV', 'GB', 'MIA', 'SEA', 'CLE', 'NYJ', null, 'SEA', 'SF', null, 'LAR', 'SF']],
+      ['LAR', ['DET', 'CHI', 'ARI', null, 'LAC', 'SF', null, 'LV', 'MIN', 'SEA', 'MIA', 'PHI', 'NO', 'ARI', 'SF', null, 'NYJ', 'ARI']],
+      ['SF', ['MIN', 'DAL', null, 'PHI', 'NE', 'ARI', 'LAR', 'KC', 'DAL', null, 'ARI', 'SEA', null, 'BUF', 'LAR', 'ARI', 'MIA', 'DET']],
+      ['SEA', ['DEN', null, 'NE', 'MIA', 'DET', 'NYG', null, 'ATL', 'DET', 'ARI', 'LAM', 'SF', 'GB', 'ARI', null, 'MIN', 'CHI', 'LAR']],
     ]);
 
     // Get position-specific defensive multiplier
