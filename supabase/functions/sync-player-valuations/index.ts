@@ -4,12 +4,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS'
 };
 
 // Weekly CRON job to update player valuations with real data
 serve(async (req) => {
+  console.log(`Request method: ${req.method}`);
+  
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      status: 200,
+      headers: corsHeaders 
+    });
   }
 
   try {
