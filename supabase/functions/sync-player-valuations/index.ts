@@ -122,13 +122,13 @@ serve(async (req) => {
     // Default team context for teams not in top tier
     const defaultContext = { pace: 1.0, passRate: 0.57, rzEff: 1.0 };
 
-    // Process top ~200 fantasy relevant players
+    // Process top 600 fantasy relevant players (captures all roster-worthy players)
     const playerEntries = Object.entries(sleeperPlayers).filter(([_, player]: [string, any]) => {
       return player.fantasy_positions && 
              player.fantasy_positions.length > 0 &&
              ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(player.fantasy_positions[0]) &&
              player.team;
-    }).slice(0, 200);
+    }).slice(0, 600);
 
     const valuations: any[] = [];
 
