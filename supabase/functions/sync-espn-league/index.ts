@@ -7,6 +7,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Comprehensive credential sanitization for logs
+const sanitizeError = (err: any): string => {
+  let fullError = '';
+  
+  // Combine message and stack trace
+  if (err?.message) fullError += err.message;
+  if (err?.stack) fullError += '\n' + err.stack;
+  if (!fullError) fullError = String(err);
+  
+  return fullError
+    // Redact ESPN credentials
+    .replace(/espn_s2[=:][^;\\s&]+/gi, 'espn_s2=***')
+    .replace(/SWID[=:][^;\\s&}]+/gi, 'SWID=***')
+    // Redact Cookie headers entirely
+    .replace(/Cookie:\s*[^\n]+/gi, 'Cookie: [REDACTED]')
+    .replace(/['"]Cookie['"]\s*:\s*[^\n,}]+/gi, '"Cookie": "[REDACTED]"')
+    // Redact long base64-like strings that could be tokens
+    .replace(/[A-Z0-9+/%]{100,}/g, '[REDACTED]')
+    // Redact URL-encoded credentials
+    .replace(/espn_s2%[0-9A-F]{2}[^\\s&]*/gi, 'espn_s2=***')
+    .replace(/SWID%[0-9A-F]{2}[^\\s&}]*/gi, 'SWID=***');
+};
+
 // ESPN Pro Team ID to abbreviation mapping
 const getTeamAbbreviation = (teamId: number): string => {
   const teams: Record<number, string> = {
@@ -53,6 +76,9 @@ serve(async (req) => {
     }
 
     const { espn_s2, swid, leagueId } = await req.json();
+
+    // Log request without credentials
+    console.log('Sync request for league:', leagueId?.substring(0, 6) + '***');
 
     if (!espn_s2 || !swid || !leagueId) {
       throw new Error('Missing required credentials');
@@ -350,9 +376,8 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    // Sanitize error logs - never log credentials
-    const sanitizedMessage = error.message?.replace(/espn_s2=[^;]+/g, 'espn_s2=***').replace(/SWID=[^;]+/g, 'SWID=***');
-    console.error('League sync error:', sanitizedMessage || 'Unknown error');
+    // Comprehensive error sanitization
+    console.error('League sync error:', sanitizeError(error));
     
     // Return generic error messages without internal details
     let userMessage = 'Unable to sync your league. Please try again.';

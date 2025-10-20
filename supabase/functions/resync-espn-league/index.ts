@@ -7,6 +7,29 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Comprehensive credential sanitization for logs
+const sanitizeError = (err: any): string => {
+  let fullError = '';
+  
+  // Combine message and stack trace
+  if (err?.message) fullError += err.message;
+  if (err?.stack) fullError += '\n' + err.stack;
+  if (!fullError) fullError = String(err);
+  
+  return fullError
+    // Redact ESPN credentials
+    .replace(/espn_s2[=:][^;\\s&]+/gi, 'espn_s2=***')
+    .replace(/SWID[=:][^;\\s&}]+/gi, 'SWID=***')
+    // Redact Cookie headers entirely
+    .replace(/Cookie:\s*[^\n]+/gi, 'Cookie: [REDACTED]')
+    .replace(/['"]Cookie['"]\s*:\s*[^\n,}]+/gi, '"Cookie": "[REDACTED]"')
+    // Redact long base64-like strings that could be tokens
+    .replace(/[A-Z0-9+/%]{100,}/g, '[REDACTED]')
+    // Redact URL-encoded credentials
+    .replace(/espn_s2%[0-9A-F]{2}[^\\s&]*/gi, 'espn_s2=***')
+    .replace(/SWID%[0-9A-F]{2}[^\\s&}]*/gi, 'SWID=***');
+};
+
 const getTeamAbbreviation = (teamId: number): string => {
   const teams: Record<number, string> = {
     1: 'ATL', 2: 'BUF', 3: 'CHI', 4: 'CIN', 5: 'CLE', 6: 'DAL', 7: 'DEN', 8: 'DET',
@@ -52,9 +75,10 @@ serve(async (req) => {
       throw new Error('Authentication required');
     }
 
-    console.log('User authenticated:', user.id);
-
     const { leagueId } = await req.json();
+    
+    // Log request without sensitive data
+    console.log('Resync request for league ID:', leagueId?.substring(0, 6) + '***');
 
     if (!leagueId) {
       throw new Error('League ID is required');
@@ -84,7 +108,7 @@ serve(async (req) => {
     });
 
     if (credError || !credentials) {
-      console.error('Failed to retrieve credentials:', credError?.message || 'No credentials found');
+      console.error('Failed to retrieve credentials');
       throw new Error('Unable to retrieve stored credentials. Please reconnect your league.');
     }
 
@@ -331,7 +355,8 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
-    console.error('Resync error:', error.message || 'Unknown error');
+    // Comprehensive error sanitization
+    console.error('Resync error:', sanitizeError(error));
     
     let userMessage = 'Unable to resync your league. Please try again.';
     
