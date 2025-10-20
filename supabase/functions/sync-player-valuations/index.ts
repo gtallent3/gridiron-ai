@@ -122,13 +122,26 @@ serve(async (req) => {
     // Default team context for teams not in top tier
     const defaultContext = { pace: 1.0, passRate: 0.57, rzEff: 1.0 };
 
-    // Process top 600 fantasy relevant players (captures all roster-worthy players)
+    // Filter for active players only (exclude retired)
     const playerEntries = Object.entries(sleeperPlayers).filter(([_, player]: [string, any]) => {
-      return player.fantasy_positions && 
+      const isFantasyRelevant = player.fantasy_positions && 
              player.fantasy_positions.length > 0 &&
-             ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(player.fantasy_positions[0]) &&
-             player.team;
-    }).slice(0, 600);
+             ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(player.fantasy_positions[0]);
+      
+      const hasTeam = player.team && player.team !== null;
+      
+      // Filter out retired players - check active status and exclude old statuses
+      const isActive = player.active === true || 
+                      (player.status === 'Active' || 
+                       player.status === 'Injured Reserve' || 
+                       player.status === 'Practice Squad' ||
+                       player.status === null || 
+                       player.status === undefined);
+      
+      const notRetired = player.status !== 'Retired';
+      
+      return isFantasyRelevant && hasTeam && isActive && notRetired;
+    });
 
     const valuations: any[] = [];
 
