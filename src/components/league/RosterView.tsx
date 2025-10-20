@@ -50,26 +50,28 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
     
     setLoading(true);
     try {
-      const playerNames = userTeam.roster
-        .map((p: any) => p.player_name)
-        .filter(Boolean);
+      // For historical weeks, fetch directly from ESPN
+      const { data: weekScores, error } = await supabase.functions.invoke('get-espn-week-scores', {
+        body: { week, leagueId: league.id }
+      });
 
-      if (playerNames.length === 0) return;
+      if (error) throw error;
 
-      // Fetch player stats for the selected week
-      const { data: weeklyStats } = await supabase
-        .from('player_valuations')
-        .select('player_name, player_value, ppg_projection, team, position, is_bye_week, injury_status')
-        .eq('week', week)
-        .eq('season', 2025);
+      if (!weekScores?.players) {
+        console.error('No player data returned from ESPN');
+        return;
+      }
 
-      const statsMap = new Map(
-        (weeklyStats || []).map(s => [s.player_name?.toLowerCase().trim(), s])
+      const scoresMap = new Map(
+        weekScores.players.map((p: any) => [p.player_id, p])
       );
 
-      // Enrich roster with weekly stats
       const starterPlayers: any[] = [];
       const benchPlayers: any[] = [];
+
+      // Slot types for starters vs bench
+      const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+      const BENCH_SLOT = 20;
 
       userTeam.roster.forEach((player: any) => {
         const playerId = player.player_id || player.playerId;
@@ -85,19 +87,19 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           isBench = player.starter === false;
         }
 
-        const normalizedName = playerName.toLowerCase().trim();
-        const weekStats = statsMap.get(normalizedName);
+        // Get ESPN scores for this player
+        const espnScore = scoresMap.get(playerId) as any;
 
         const playerData = {
           id: playerId,
           name: playerName,
           position: positionName,
-          team: weekStats?.team || player.team || 'NFL',
-          projected: weekStats?.ppg_projection || player.projected || 0,
-          actualPoints: weekStats?.player_value || 0,
+          team: espnScore?.team || player.team || 'NFL',
+          projected: espnScore?.projected_points || 0,
+          actualPoints: espnScore?.actual_points || 0,
           status: isStarter ? 'starter' : 'bench',
-          is_bye_week: weekStats?.is_bye_week || false,
-          injury_status: weekStats?.injury_status || null,
+          is_bye_week: espnScore?.is_bye_week || false,
+          injury_status: espnScore?.injury_status || null,
           week: week,
         };
 
@@ -110,6 +112,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
       setStarters(starterPlayers);
       setBench(benchPlayers);
+    } catch (err) {
+      console.error('Error fetching week scores:', err);
     } finally {
       setLoading(false);
     }
