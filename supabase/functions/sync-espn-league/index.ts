@@ -26,8 +26,8 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     const authHeader = req.headers.get('Authorization');
     
@@ -37,7 +37,16 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    // Create user-authenticated client for RPC calls
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
+    // Create service role client for other operations
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { data: { user }, error: authError } = await supabaseUser.auth.getUser(token);
 
     if (authError || !user) {
       throw new Error('Authentication required');
@@ -72,8 +81,8 @@ serve(async (req) => {
       throw new Error('Invalid credentials format');
     }
 
-    // Store credentials securely in Vault
-    const { error: storeError } = await supabase.rpc('store_league_credentials', {
+    // Store credentials securely in Vault using user-authenticated client
+    const { error: storeError } = await supabaseUser.rpc('store_league_credentials', {
       p_user_id: user.id,
       p_platform: 'espn',
       p_league_id: leagueId,
