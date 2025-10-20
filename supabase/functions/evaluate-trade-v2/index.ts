@@ -57,10 +57,13 @@ serve(async (req) => {
       scoringType,
     });
 
-    // Get current week/season
+    // Get current week/season and calculate weeks remaining
     const now = new Date();
-    const currentWeek = Math.min(Math.floor((now.getTime() - new Date(now.getFullYear(), 8, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1, 18);
+    const seasonStart = new Date(now.getFullYear(), 8, 5); // September 5
+    const weeksSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    const currentWeek = Math.min(Math.max(weeksSinceStart + 1, 1), 18);
     const currentSeason = now.getFullYear();
+    const weeksRemaining = Math.max(18 - currentWeek, 1);
 
     // Get all player IDs from both sides and validate format
     const VALID_PLAYER_ID = /^[a-zA-Z0-9_-]+$/;
@@ -109,6 +112,7 @@ serve(async (req) => {
     const normalizedPlayerIds = allPlayerIds.map(id => playerIdMap.get(id) || id);
 
     // Fetch player valuations from database using normalized IDs
+    // We need ppg_projection to calculate consistent ROS values
     const { data: valuations } = await supabase
       .from('player_valuations')
       .select('*')
@@ -140,9 +144,10 @@ serve(async (req) => {
       
       if (!valuation) {
         // Fallback to projected points
+        const fallbackPPG = player.projected || 0;
         return {
-          rosValue: (player.projected || 0) * POSITION_WEIGHTS[player.position as keyof typeof POSITION_WEIGHTS] || 1,
-          next3Value: (player.projected || 0) * 0.3,
+          rosValue: fallbackPPG * weeksRemaining * (POSITION_WEIGHTS[player.position as keyof typeof POSITION_WEIGHTS] || 1),
+          next3Value: fallbackPPG * 3,
           scheduleAdj: 0,
           sentimentAdj: 0,
           volatility: false,
@@ -153,7 +158,10 @@ serve(async (req) => {
       }
 
       const posWeight = POSITION_WEIGHTS[valuation.position as keyof typeof POSITION_WEIGHTS] || 1;
-      let rosValue = Number(valuation.player_value) * posWeight;
+      
+      // Use PPG × weeks remaining for consistent ROS value calculation
+      const ppg = Number(valuation.ppg_projection || 0);
+      let rosValue = ppg * weeksRemaining * posWeight;
       let next3Value = Number(valuation.next_3_weeks_projection);
 
       // Bye week and injury handling

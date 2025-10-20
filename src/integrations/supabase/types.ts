@@ -156,6 +156,7 @@ export type Database = {
           player_value: number
           playoff_schedule_difficulty: number | null
           position: Database["public"]["Enums"]["player_position"]
+          ppg_projection: number
           role_stability: number | null
           ros_projection: number
           schedule_difficulty: number | null
@@ -182,6 +183,7 @@ export type Database = {
           player_value?: number
           playoff_schedule_difficulty?: number | null
           position: Database["public"]["Enums"]["player_position"]
+          ppg_projection?: number
           role_stability?: number | null
           ros_projection?: number
           schedule_difficulty?: number | null
@@ -208,6 +210,7 @@ export type Database = {
           player_value?: number
           playoff_schedule_difficulty?: number | null
           position?: Database["public"]["Enums"]["player_position"]
+          ppg_projection?: number
           role_stability?: number | null
           ros_projection?: number
           schedule_difficulty?: number | null

@@ -157,16 +157,22 @@ serve(async (req) => {
         : 0;
       const standardDev = Math.sqrt(variance);
       
-      // Base ROS projection on actual performance
-      let rosProjection = 0;
+      // Calculate PPG projection (consistent week-to-week basis)
+      let ppgProjection = 0;
       if (gamesPlayedUpToTarget >= 3) {
-        rosProjection = (avgPointsPerGame * 0.6 + recentAvg * 0.4) * weeksRemaining;
+        // Weight recent performance slightly higher
+        ppgProjection = avgPointsPerGame * 0.6 + recentAvg * 0.4;
       } else if (gamesPlayedUpToTarget > 0) {
-        rosProjection = avgPointsPerGame * 0.8 * weeksRemaining;
+        // Less confidence with fewer games
+        ppgProjection = avgPointsPerGame * 0.8;
       } else {
+        // Baseline projections for players with no data
         const baselines = { QB: 18, RB: 12, WR: 11, TE: 8, K: 7, DEF: 8 };
-        rosProjection = (baselines[position as keyof typeof baselines] || 10) * weeksRemaining;
+        ppgProjection = baselines[position as keyof typeof baselines] || 10;
       }
+      
+      // Base ROS projection = PPG × weeks remaining
+      let rosProjection = ppgProjection * weeksRemaining;
       
       // Team context adjustments
       const context = teamContext.get(p.team) || defaultContext;
@@ -297,6 +303,7 @@ serve(async (req) => {
         week: targetWeek,
         player_value: Math.round(playerValue * 10) / 10,
         ros_projection: Math.round(rosProjection * 10) / 10,
+        ppg_projection: Math.round(ppgProjection * 10) / 10,
         next_3_weeks_projection: Math.round(next3WeeksProjection * 10) / 10,
         schedule_difficulty: Math.round(scheduleDifficulty * 100) / 100,
         sentiment_score: Math.round(sentimentScore * 100) / 100,
