@@ -31,12 +31,23 @@ export async function enrichRosterWithValuations(
   // Determine defaults dynamically if not provided
   const now = new Date();
   const seasonYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-  const seasonStart = new Date(seasonYear, 8, 1); // Sept 1 of season year
-  const weeksSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
-  const currentWeek = Math.min(Math.max(weeksSinceStart + 1, 1), 18);
-
-  const week = opts?.week ?? currentWeek;
   const season = opts?.season ?? seasonYear;
+
+  let week = opts?.week;
+  
+  // If week not specified, find the latest week with data in player_valuations
+  if (!week) {
+    const { data: latestWeek } = await supabase
+      .from('player_valuations')
+      .select('week')
+      .eq('season', season)
+      .order('week', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    week = latestWeek?.week ?? 1;
+    console.log(`[enrichRoster] Using latest available week: ${week} for season ${season}`);
+  }
 
   // Collect names present in roster
   const names = rosterArray
