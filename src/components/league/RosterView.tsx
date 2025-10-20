@@ -74,8 +74,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
       const BENCH_SLOT = 20;
 
       userTeam.roster.forEach((player: any) => {
-        const playerId = player.player_id || player.playerId;
-        const playerName = player.player_name || player.playerName || player.name || 'Unknown Player';
+        const playerIdRaw = player.player_id ?? player.playerId ?? player.id;
+        const playerId = String(playerIdRaw ?? '');
+        const playerName = (player.player_name || player.playerName || player.name || 'Unknown Player') as string;
         
         let positionName = POSITION_MAP[player.position] || 'FLEX';
         let isStarter = STARTER_SLOTS.includes(player.slot);
@@ -87,19 +88,24 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           isBench = player.starter === false;
         }
 
-        // Get ESPN scores for this player
-        const espnScore = scoresMap.get(playerId) as any;
+        // Get ESPN scores for this player (normalize to string id)
+        let espnScore = scoresMap.get(playerId) as any;
+        // Fallback: try name match if ID mapping fails
+        if (!espnScore && playerName) {
+          const lower = playerName.toLowerCase();
+          espnScore = (weekScores.players as any[]).find((p: any) => p.player_name?.toLowerCase() === lower);
+        }
 
         const playerData = {
-          id: playerId,
+          id: playerId || playerName, // ensure stable id for UI selection
           name: playerName,
           position: positionName,
           team: espnScore?.team || player.team || 'NFL',
-          projected: espnScore?.projected_points || 0,
-          actualPoints: espnScore?.actual_points || 0,
+          projected: espnScore?.projected_points ?? 0,
+          actualPoints: espnScore?.actual_points ?? 0,
           status: isStarter ? 'starter' : 'bench',
-          is_bye_week: espnScore?.is_bye_week || false,
-          injury_status: espnScore?.injury_status || null,
+          is_bye_week: espnScore?.is_bye_week ?? false,
+          injury_status: espnScore?.injury_status ?? null,
           week: week,
         };
 
