@@ -319,13 +319,36 @@ serve(async (req) => {
           const espnId = entry.playerId?.toString();
           const normalizedPlayer = espnId ? normalizedMap.get(espnId) : null;
           
-          // Get current week projection (kona)
+          // Get current week projection and calculate ROS from ESPN's weekly projections
           let projected = 0;
+          let rosProjection = 0;
+          let ppgProjection = 0;
+          
           if (player?.stats) {
-            const projectionStat = player.stats.find((stat: any) => 
+            // Current week projection
+            const currentWeekStat = player.stats.find((stat: any) => 
               stat.statSourceId === 1 && stat.scoringPeriodId === leagueData.scoringPeriodId
             );
-            projected = projectionStat?.appliedTotal || 0;
+            projected = currentWeekStat?.appliedTotal || 0;
+            
+            // Calculate ROS projection by summing all remaining weeks' ESPN projections
+            const weeksRemaining = Math.max(18 - leagueData.scoringPeriodId, 1);
+            const remainingWeekProjections = player.stats
+              .filter((stat: any) => 
+                stat.statSourceId === 1 && 
+                stat.scoringPeriodId >= leagueData.scoringPeriodId && 
+                stat.scoringPeriodId <= 18
+              )
+              .map((stat: any) => stat.appliedTotal || 0);
+            
+            if (remainingWeekProjections.length > 0) {
+              rosProjection = remainingWeekProjections.reduce((sum: number, pts: number) => sum + pts, 0);
+              ppgProjection = rosProjection / weeksRemaining;
+            } else if (projected > 0) {
+              // Fallback: use current week projection * weeks remaining
+              ppgProjection = projected;
+              rosProjection = projected * weeksRemaining;
+            }
           }
 
           return {
@@ -335,6 +358,8 @@ serve(async (req) => {
             position: normalizedPlayer?.position || player?.defaultPositionId,
             team: normalizedPlayer?.team || (player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
             projected,
+            ros_projection: rosProjection,
+            ppg_projection: ppgProjection,
             slot: entry.lineupSlotId,
           };
         });

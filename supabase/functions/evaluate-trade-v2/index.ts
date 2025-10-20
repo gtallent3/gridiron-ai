@@ -143,10 +143,11 @@ serve(async (req) => {
       const valuation = valuationMap.get(normalizedId);
       
       if (!valuation) {
-        // Fallback to projected points
-        const fallbackPPG = player.projected || 0;
+        // Fallback: Use ESPN-provided projections if available, otherwise use basic projected
+        const fallbackPPG = player.ppg_projection || player.projected || 0;
+        const fallbackROS = player.ros_projection || (fallbackPPG * weeksRemaining);
         return {
-          rosValue: fallbackPPG * weeksRemaining * (POSITION_WEIGHTS[player.position as keyof typeof POSITION_WEIGHTS] || 1),
+          rosValue: fallbackROS * (POSITION_WEIGHTS[player.position as keyof typeof POSITION_WEIGHTS] || 1),
           next3Value: fallbackPPG * 3,
           scheduleAdj: 0,
           sentimentAdj: 0,
