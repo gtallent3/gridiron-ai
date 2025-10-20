@@ -25,29 +25,28 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     const authHeader = req.headers.get('Authorization');
     
     if (!authHeader) {
+      console.error('Missing authorization header');
       throw new Error('Authentication required');
     }
 
     const token = authHeader.replace('Bearer ', '');
     
-    // Create user-authenticated client
-    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } }
-    });
-    
     // Create service role client
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    const { data: { user }, error: authError } = await supabaseUser.auth.getUser(token);
+    
+    // Verify user with their token
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
     if (authError || !user) {
+      console.error('Auth error:', authError);
       throw new Error('Authentication required');
     }
+
+    console.log('User authenticated:', user.id);
 
     const { leagueId } = await req.json();
 
@@ -71,17 +70,19 @@ serve(async (req) => {
       throw new Error('This function only supports ESPN leagues');
     }
 
-    // Retrieve stored credentials using user-authenticated client
-    const { data: credentials, error: credError } = await supabaseUser.rpc('get_league_credentials', {
+    // Retrieve stored credentials - call RPC as the authenticated user
+    const { data: credentials, error: credError } = await supabase.rpc('get_league_credentials', {
       p_user_id: user.id,
       p_platform: 'espn',
       p_league_id: leagueData.league_id
     });
 
     if (credError || !credentials) {
-      console.error('Failed to retrieve credentials:', credError);
+      console.error('Failed to retrieve credentials:', credError?.message || 'No credentials found');
       throw new Error('Unable to retrieve stored credentials. Please reconnect your league.');
     }
+
+    console.log('Credentials retrieved successfully');
 
     const { espn_s2, swid } = credentials;
 
