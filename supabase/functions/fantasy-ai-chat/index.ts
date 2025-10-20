@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,6 +12,11 @@ serve(async (req) => {
   }
 
   try {
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
     // Extract and validate JWT to identify user
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
@@ -20,7 +26,7 @@ serve(async (req) => {
       );
     }
 
-    // Parse JWT to extract user ID for logging and monitoring
+    // Parse JWT to extract user ID
     let userId: string | null = null;
     try {
       const jwt = authHeader.replace('Bearer ', '');
@@ -29,7 +35,6 @@ serve(async (req) => {
       userId = decodedPayload.sub || null;
     } catch (e) {
       console.error("Failed to parse JWT:", e);
-      // Continue without user ID - JWT verification is handled by Supabase
     }
 
     const { messages, leagueContext, leagueId, teamRoster } = await req.json();
@@ -81,8 +86,65 @@ serve(async (req) => {
       );
     }
 
-    // Build enhanced system prompt with league context
-    let systemPrompt = `You are a fast, concise Fantasy Football AI assistant. Provide SHORT, ACCURATE answers.
+    // Fetch current NFL data and league details
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    const currentSeason = currentMonth >= 9 ? currentYear : currentYear - 1;
+    
+    // Determine current week (rough estimate)
+    const seasonStart = new Date(currentSeason, 8, 1); // Sept 1
+    const weeksDiff = Math.floor((currentDate.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    const currentWeek = Math.max(1, Math.min(18, weeksDiff + 1));
+
+    // Fetch league details if leagueId provided
+    let leagueData = null;
+    let teamRosterData = null;
+    if (leagueId && userId) {
+      const { data: league } = await supabase
+        .from('connected_leagues')
+        .select('*')
+        .eq('id', leagueId)
+        .eq('user_id', userId)
+        .single();
+      
+      if (league) {
+        leagueData = league;
+        
+        // Fetch user's team roster
+        if (league.user_team_id) {
+          const { data: team } = await supabase
+            .from('user_teams')
+            .select('*')
+            .eq('league_id', leagueId)
+            .eq('team_id', league.user_team_id)
+            .single();
+          
+          if (team) {
+            teamRosterData = team.roster;
+          }
+        }
+      }
+    }
+
+    // Fetch top player valuations for current context
+    const { data: topPlayers } = await supabase
+      .from('player_valuations')
+      .select('player_name, position, team, ros_projection, next_3_weeks_projection, injury_status, is_bye_week')
+      .eq('season', currentSeason)
+      .eq('week', currentWeek)
+      .order('ros_projection', { ascending: false })
+      .limit(100);
+
+    // Build enhanced system prompt with real-time context
+    const currentDateStr = currentDate.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+
+    let systemPrompt = `You are a fast, concise Fantasy Football AI assistant. TODAY IS ${currentDateStr}. Current NFL Season: ${currentSeason}, Week ${currentWeek}.
 
 CRITICAL RESPONSE RULES:
 - Give ONE-LINE verdicts for start/sit and trade questions
@@ -90,13 +152,13 @@ CRITICAL RESPONSE RULES:
 - For trades: "Accept — +X pts ROS advantage" or "Reject — [brief reason]"
 - NO long paragraphs, NO filler phrases like "Here's what I think"
 - Be direct, confident, neutral
-- Only ask follow-up if CRITICAL context is missing
+- NEVER ask for roster info — you already have it below
 
 ANALYSIS FACTORS:
 - Recent performance (last 3-4 games), matchups, target share, snap count
 - Injuries, bye weeks, opponent defense rankings
 - Weather for outdoor games (affects kickers/passing)
-- Playoff schedules for long-term trades
+- Playoff schedules (Weeks 15-17) for long-term trades
 
 EXAMPLE RESPONSES:
 ✓ "Start Gibbs — +3.4 pts projection over Stevenson."
@@ -104,17 +166,65 @@ EXAMPLE RESPONSES:
 ✓ "Reject — losing your only top-tier RB."
 ✗ "I think you should consider starting Gibbs because he has been performing well..."`;
 
-    // Add league-specific context if provided
-    if (leagueContext) {
-      systemPrompt += `\n\nLEAGUE CONTEXT: ${leagueContext}`;
+    // Add league-specific context
+    if (leagueData) {
+      systemPrompt += `\n\n=== YOUR LEAGUE ===
+League: ${leagueData.league_name}
+Size: ${leagueData.league_size} teams
+Scoring: ${leagueData.scoring_type}
+Current Week: ${leagueData.current_week || currentWeek}`;
+
+      if (leagueData.scoring_settings) {
+        const settings = leagueData.scoring_settings;
+        systemPrompt += `\nScoring Details: ${JSON.stringify(settings).substring(0, 200)}`;
+      }
     }
     
-    if (teamRoster) {
-      const rosterSummary = typeof teamRoster === 'object' ? 
-        `Roster: ${teamRoster.starters?.length || 0} starters, ${teamRoster.bench?.length || 0} bench` :
-        'Roster data available';
-      systemPrompt += `\n${rosterSummary}`;
+    // Add roster details
+    if (teamRosterData) {
+      systemPrompt += `\n\n=== YOUR ROSTER ===`;
+      
+      if (Array.isArray(teamRosterData)) {
+        systemPrompt += `\nTotal Players: ${teamRosterData.length}`;
+        const positions = teamRosterData.reduce((acc: any, p: any) => {
+          acc[p.position] = (acc[p.position] || 0) + 1;
+          return acc;
+        }, {});
+        systemPrompt += `\nPositions: ${JSON.stringify(positions)}`;
+        
+        // List key players
+        const starters = teamRosterData.slice(0, 9);
+        systemPrompt += `\nKey Players: ${starters.map((p: any) => `${p.name} (${p.position})`).join(', ')}`;
+      } else if (teamRosterData.starters && teamRosterData.bench) {
+        systemPrompt += `\nStarters (${teamRosterData.starters.length}): ${teamRosterData.starters.map((p: any) => `${p.name} (${p.position})`).join(', ')}`;
+        systemPrompt += `\nBench (${teamRosterData.bench.length}): ${teamRosterData.bench.map((p: any) => `${p.name} (${p.position})`).join(', ')}`;
+      }
     }
+
+    // Add current player insights
+    if (topPlayers && topPlayers.length > 0) {
+      systemPrompt += `\n\n=== CURRENT WEEK ${currentWeek} TOP PLAYERS (ROS Projection) ===`;
+      const topByPosition: any = {};
+      
+      for (const player of topPlayers) {
+        if (!topByPosition[player.position] || topByPosition[player.position].length < 5) {
+          if (!topByPosition[player.position]) topByPosition[player.position] = [];
+          
+          const injuryNote = player.injury_status ? ` [${player.injury_status}]` : '';
+          const byeNote = player.is_bye_week ? ' [BYE]' : '';
+          
+          topByPosition[player.position].push(
+            `${player.player_name} (${player.team}): ${player.ros_projection.toFixed(1)} ROS, ${player.next_3_weeks_projection.toFixed(1)} next 3wks${injuryNote}${byeNote}`
+          );
+        }
+      }
+      
+      for (const [pos, players] of Object.entries(topByPosition)) {
+        systemPrompt += `\n${pos}: ${(players as string[]).join(' | ')}`;
+      }
+    }
+
+    systemPrompt += `\n\nUSE THIS DATA to provide accurate, context-aware advice. You have all the info you need — never ask for roster details.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

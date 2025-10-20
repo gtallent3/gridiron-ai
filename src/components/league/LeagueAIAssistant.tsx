@@ -156,9 +156,7 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
               role: msg.role,
               content: msg.content,
             })),
-            leagueContext,
             leagueId: league.id,
-            teamRoster: userTeam?.roster,
           }),
         }
       );
