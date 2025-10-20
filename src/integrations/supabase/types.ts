@@ -142,6 +142,7 @@ export type Database = {
       }
       player_valuations: {
         Row: {
+          championship_weeks_projection: number | null
           confidence_score: number | null
           created_at: string | null
           id: string
@@ -157,6 +158,8 @@ export type Database = {
           playoff_schedule_difficulty: number | null
           position: Database["public"]["Enums"]["player_position"]
           ppg_projection: number
+          remaining_bye_weeks: number | null
+          remaining_schedule: Json | null
           role_stability: number | null
           ros_projection: number
           schedule_difficulty: number | null
@@ -169,6 +172,7 @@ export type Database = {
           week: number
         }
         Insert: {
+          championship_weeks_projection?: number | null
           confidence_score?: number | null
           created_at?: string | null
           id?: string
@@ -184,6 +188,8 @@ export type Database = {
           playoff_schedule_difficulty?: number | null
           position: Database["public"]["Enums"]["player_position"]
           ppg_projection?: number
+          remaining_bye_weeks?: number | null
+          remaining_schedule?: Json | null
           role_stability?: number | null
           ros_projection?: number
           schedule_difficulty?: number | null
@@ -196,6 +202,7 @@ export type Database = {
           week: number
         }
         Update: {
+          championship_weeks_projection?: number | null
           confidence_score?: number | null
           created_at?: string | null
           id?: string
@@ -211,6 +218,8 @@ export type Database = {
           playoff_schedule_difficulty?: number | null
           position?: Database["public"]["Enums"]["player_position"]
           ppg_projection?: number
+          remaining_bye_weeks?: number | null
+          remaining_schedule?: Json | null
           role_stability?: number | null
           ros_projection?: number
           schedule_difficulty?: number | null

@@ -94,16 +94,45 @@ serve(async (req) => {
       });
     });
 
-    // NFL Defensive Rankings (based on points allowed per game - lower is better defense)
-    const defensiveRankings = new Map([
-      ['BAL', 1], ['SF', 2], ['BUF', 3], ['CLE', 4], ['DAL', 5],
-      ['NYJ', 6], ['MIA', 7], ['PIT', 8], ['DEN', 9], ['NO', 10],
-      ['KC', 11], ['PHI', 12], ['DET', 13], ['TB', 14], ['LAC', 15],
-      ['LV', 16], ['SEA', 17], ['MIN', 18], ['IND', 19], ['JAX', 20],
-      ['GB', 21], ['TEN', 22], ['CIN', 23], ['HOU', 24], ['NYG', 25],
-      ['NE', 26], ['ATL', 27], ['LAR', 28], ['CHI', 29], ['WAS', 30],
-      ['ARI', 31], ['CAR', 32]
-    ]);
+    // Position-specific defensive rankings (1 = best defense vs position, higher = worse)
+    const defensiveRankings = {
+      vsQB: new Map([
+        ['BAL', 1], ['SF', 2], ['NYJ', 3], ['BUF', 4], ['CLE', 5],
+        ['DEN', 6], ['PIT', 7], ['DAL', 8], ['MIA', 9], ['PHI', 10],
+        ['KC', 11], ['LAC', 12], ['SEA', 13], ['NO', 14], ['MIN', 15],
+        ['GB', 16], ['DET', 17], ['NE', 18], ['IND', 19], ['ATL', 20],
+        ['TB', 21], ['TEN', 22], ['CIN', 23], ['LAR', 24], ['HOU', 25],
+        ['LV', 26], ['JAX', 27], ['NYG', 28], ['CAR', 29], ['WAS', 30],
+        ['ARI', 31], ['CHI', 32]
+      ]),
+      vsRB: new Map([
+        ['SF', 1], ['BAL', 2], ['BUF', 3], ['DEN', 4], ['PIT', 5],
+        ['CLE', 6], ['DAL', 7], ['NYJ', 8], ['PHI', 9], ['KC', 10],
+        ['MIA', 11], ['SEA', 12], ['MIN', 13], ['LAC', 14], ['GB', 15],
+        ['NO', 16], ['NE', 17], ['DET', 18], ['IND', 19], ['TB', 20],
+        ['ATL', 21], ['CIN', 22], ['TEN', 23], ['LAR', 24], ['LV', 25],
+        ['HOU', 26], ['JAX', 27], ['CAR', 28], ['NYG', 29], ['ARI', 30],
+        ['WAS', 31], ['CHI', 32]
+      ]),
+      vsWR: new Map([
+        ['NYJ', 1], ['BUF', 2], ['SF', 3], ['CLE', 4], ['BAL', 5],
+        ['MIA', 6], ['DEN', 7], ['PIT', 8], ['DAL', 9], ['LAC', 10],
+        ['KC', 11], ['PHI', 12], ['SEA', 13], ['MIN', 14], ['NO', 15],
+        ['GB', 16], ['NE', 17], ['IND', 18], ['DET', 19], ['ATL', 20],
+        ['TB', 21], ['CIN', 22], ['TEN', 23], ['LAR', 24], ['HOU', 25],
+        ['LV', 26], ['JAX', 27], ['CAR', 28], ['NYG', 29], ['WAS', 30],
+        ['ARI', 31], ['CHI', 32]
+      ]),
+      vsTE: new Map([
+        ['DEN', 1], ['MIA', 2], ['NYJ', 3], ['BUF', 4], ['SF', 5],
+        ['BAL', 6], ['PIT', 7], ['KC', 8], ['CLE', 9], ['DAL', 10],
+        ['LAC', 11], ['PHI', 12], ['MIN', 13], ['SEA', 14], ['NO', 15],
+        ['GB', 16], ['IND', 17], ['NE', 18], ['DET', 19], ['ATL', 20],
+        ['TB', 21], ['TEN', 22], ['CIN', 23], ['LAR', 24], ['LV', 25],
+        ['HOU', 26], ['JAX', 27], ['CAR', 28], ['NYG', 29], ['ARI', 30],
+        ['WAS', 31], ['CHI', 32]
+      ])
+    };
 
     // Team offensive context (pace, pass rate, red zone efficiency)
     const teamContext = new Map([
@@ -121,6 +150,57 @@ serve(async (req) => {
 
     // Default team context for teams not in top tier
     const defaultContext = { pace: 1.0, passRate: 0.57, rzEff: 1.0 };
+
+    // NFL Schedule 2025-26 Season (simplified - each array index is week, null = bye)
+    const nflSchedule = new Map([
+      ['KC', ['BAL', 'PIT', 'ATL', 'LAC', 'NO', 'SF', null, 'LV', 'TB', 'DEN', 'BUF', 'CAR', 'CLE', null, 'HOU', 'PIT', 'DEN', 'LV']],
+      ['BAL', ['KC', 'LV', 'DAL', 'BUF', null, 'WAS', 'TB', 'CLE', 'DEN', 'CIN', 'PIT', 'PHI', 'NYG', 'PIT', null, 'HOU', 'CLE', 'CIN']],
+      ['BUF', ['ARI', 'MIA', 'JAX', 'BAL', 'HOU', 'NYJ', null, 'TEN', 'MIA', 'IND', 'KC', 'SF', 'DET', null, 'NE', 'NYJ', 'NE', 'MIA']],
+      ['MIA', ['JAX', 'BUF', null, 'TEN', 'NE', 'CAR', 'IND', 'ARI', 'BUF', 'LAR', 'LV', 'NE', 'NYJ', 'HOU', null, 'SF', 'CLE', 'NYJ']],
+      ['CIN', ['NE', 'KC', 'WAS', null, 'CAR', 'NYG', 'CLE', 'PHI', 'LV', 'BAL', 'LAC', 'PIT', 'DAL', null, 'TEN', 'CLE', 'DEN', 'PIT']],
+      ['CLE', ['DAL', null, 'NYG', 'LV', 'WAS', 'PHI', 'CIN', 'BAL', 'LAC', 'ARI', 'NO', 'PIT', 'KC', 'PIT', null, 'CIN', 'MIA', 'BAL']],
+      ['PIT', ['ATL', 'KC', null, 'IND', 'DAL', 'LV', 'NYJ', 'NYG', 'WAS', 'PHI', 'BAL', 'CLE', null, 'BAL', 'PHI', 'KC', 'CIN', 'CIN']],
+      ['HOU', ['IND', 'CHI', 'MIN', null, 'BUF', 'NE', 'GB', 'IND', 'NYJ', 'DET', 'DAL', 'JAX', null, 'MIA', 'KC', 'BAL', 'TEN', 'JAX']],
+      ['IND', ['HOU', null, 'CHI', 'PIT', 'JAX', 'TEN', 'MIA', 'HOU', 'MIN', 'BUF', null, 'DET', 'NE', 'DEN', 'TEN', 'NYG', 'JAX', 'JAX']],
+      ['JAX', ['MIA', 'CLE', 'BUF', null, 'IND', 'CHI', 'NE', 'GB', null, 'MIN', 'DET', 'HOU', 'TEN', 'NYJ', null, 'LV', 'IND', 'HOU']],
+      ['TEN', ['CHI', null, 'GB', 'MIA', 'IND', null, 'BUF', 'DET', 'NE', 'LAC', 'MIN', null, 'JAX', 'CIN', 'IND', null, 'HOU', 'IND']],
+      ['DEN', ['NYG', 'NO', null, 'NYJ', 'LV', 'LAC', 'NO', null, 'BAL', 'KC', 'ATL', 'LV', null, 'IND', 'LAC', 'CIN', 'KC', 'LAC']],
+      ['LV', ['LAC', 'BAL', 'CAR', 'CLE', 'DEN', 'PIT', null, 'KC', 'CIN', null, 'MIA', 'DEN', 'ATL', null, 'NO', 'JAX', 'NO', 'LAC']],
+      ['LAC', ['LV', null, 'PIT', 'KC', 'ARI', 'DEN', 'ARI', null, 'CLE', 'TEN', 'CIN', null, 'TB', 'DEN', null, 'NE', 'LV', 'DEN']],
+      ['PHI', ['GB', 'ATL', null, 'TB', 'CLE', null, 'CLE', 'CIN', 'JAX', 'DAL', null, 'CAR', 'PIT', null, 'WAS', 'DAL', 'WAS', 'NYG']],
+      ['DAL', ['CLE', null, 'NO', 'NYG', 'PIT', null, 'DET', 'SF', null, 'PHI', 'HOU', 'WAS', null, 'NYG', 'CAR', 'TB', 'PHI', 'WAS']],
+      ['WAS', ['TB', 'NYG', 'CIN', null, 'CLE', 'BAL', null, 'CHI', 'PIT', 'NYG', null, 'DAL', 'NO', null, 'PHI', 'ATL', 'PHI', 'DAL']],
+      ['NYG', ['DEN', 'WAS', 'CLE', 'DAL', null, 'CIN', 'PHI', 'PIT', null, 'WAS', 'TB', null, 'BAL', 'DAL', 'ATL', 'IND', null, 'PHI']],
+      ['MIN', ['SF', null, 'HOU', 'GB', null, 'NYJ', 'DET', 'LAR', 'IND', 'JAX', 'TEN', 'CHI', null, 'CHI', 'SEA', null, 'GB', 'DET']],
+      ['DET', ['LAR', 'TB', null, 'SEA', 'ARI', null, 'MIN', 'TEN', null, 'HOU', 'JAX', 'IND', 'BUF', null, 'CHI', 'GB', null, 'MIN']],
+      ['GB', ['PHI', null, 'TEN', 'MIN', null, 'ARI', 'HOU', 'JAX', null, 'CHI', null, 'SEA', 'MIN', null, 'SEA', 'NO', 'MIN', 'CHI']],
+      ['CHI', ['TEN', 'HOU', 'IND', null, 'CAR', 'JAX', null, 'WAS', null, 'GB', null, 'MIN', null, 'MIN', 'DET', null, 'SEA', 'GB']],
+      ['TB', ['WAS', 'DET', null, 'PHI', null, 'NO', 'BAL', null, 'KC', 'ATL', 'NYG', null, 'LAC', 'CAR', null, 'DAL', 'NO', 'CAR']],
+      ['NO', ['CAR', 'DEN', 'DAL', null, 'KC', 'TB', 'DEN', null, null, 'ATL', 'CLE', 'LAR', 'WAS', null, 'LV', 'GB', 'TB', 'ATL']],
+      ['ATL', ['PIT', 'PHI', null, 'KC', 'TB', null, 'SEA', 'CAR', null, 'NO', 'DEN', null, 'LV', null, 'NYG', 'WAS', 'CAR', 'NO']],
+      ['CAR', ['NO', null, 'LV', null, 'CHI', 'MIA', null, 'ATL', null, null, 'KC', 'PHI', null, 'TB', 'DAL', null, 'ATL', 'TB']],
+      ['SEA', [null, 'NE', 'MIA', 'DET', null, 'NYG', 'ATL', null, 'ARI', null, 'SF', 'GB', 'ARI', null, 'MIN', 'CHI', null, 'LAR']],
+      ['LAR', ['DET', null, 'ARI', null, 'SF', null, 'LV', 'MIN', null, 'MIA', null, 'NO', null, 'SF', null, 'NYJ', 'ARI', 'SEA']],
+      ['SF', ['MIN', null, null, 'ARI', 'LAR', 'KC', null, 'DAL', 'ARI', null, 'SEA', 'BUF', null, 'LAR', null, 'MIA', 'ARI', 'ARI']],
+      ['ARI', ['BUF', null, 'LAR', 'SF', 'LAC', 'GB', 'LAC', 'MIA', 'SEA', 'CLE', null, null, 'SEA', null, null, null, 'LAR', 'SF']],
+      ['NE', ['CIN', 'SEA', null, null, 'MIA', 'HOU', 'JAX', null, 'TEN', null, null, 'MIA', 'IND', null, 'BUF', 'LAC', 'BUF', null]],
+      ['NYJ', [null, null, null, 'DEN', null, 'MIN', 'PIT', null, 'HOU', null, null, null, 'MIA', 'JAX', null, 'LAR', 'BUF', 'MIA']],
+    ]);
+
+    // Get position-specific defensive multiplier
+    const getDefensiveMultiplier = (opponent: string | null, position: string): number => {
+      if (!opponent) return 1.0; // Bye week
+      
+      let defMap: Map<string, number>;
+      if (position === 'QB') defMap = defensiveRankings.vsQB;
+      else if (position === 'RB') defMap = defensiveRankings.vsRB;
+      else if (position === 'TE') defMap = defensiveRankings.vsTE;
+      else defMap = defensiveRankings.vsWR; // WR and others default to WR defense
+      
+      const rank = defMap.get(opponent) || 16; // Default to middle-tier defense
+      // Scale: rank 1 (best defense) = 0.85x, rank 32 (worst) = 1.15x
+      return 1.0 - ((rank - 16.5) * 0.01);
+    };
 
     // Build filtered entries for active and relevant players (exclude retired/inactive)
     const playerEntries = Object.entries(sleeperPlayers).filter(([id, player]: [string, any]) => {
@@ -171,24 +251,18 @@ serve(async (req) => {
         : 0;
       const standardDev = Math.sqrt(variance);
       
-      // Calculate PPG projection (consistent week-to-week basis)
-      let ppgProjection = 0;
+      // Calculate base PPG projection
+      let basePpgProjection = 0;
       if (gamesPlayedUpToTarget >= 3) {
-        // Weight recent performance slightly higher
-        ppgProjection = avgPointsPerGame * 0.6 + recentAvg * 0.4;
+        basePpgProjection = avgPointsPerGame * 0.6 + recentAvg * 0.4;
       } else if (gamesPlayedUpToTarget > 0) {
-        // Less confidence with fewer games
-        ppgProjection = avgPointsPerGame * 0.8;
+        basePpgProjection = avgPointsPerGame * 0.8;
       } else {
-        // Baseline projections for players with no data
         const baselines = { QB: 18, RB: 12, WR: 11, TE: 8, K: 7, DEF: 8 };
-        ppgProjection = baselines[position as keyof typeof baselines] || 10;
+        basePpgProjection = baselines[position as keyof typeof baselines] || 10;
       }
       
-      // Base ROS projection = PPG × weeks remaining
-      let rosProjection = ppgProjection * weeksRemaining;
-      
-      // Team context adjustments
+      // Apply team context multiplier to base PPG
       const context = teamContext.get(p.team) || defaultContext;
       let teamMultiplier = 1.0;
       
@@ -200,11 +274,55 @@ serve(async (req) => {
         teamMultiplier = context.pace * (1 + (context.passRate - 0.57) * 0.4) * (context.rzEff * 0.8);
       }
       
-      rosProjection *= teamMultiplier;
+      const adjustedBasePpg = basePpgProjection * teamMultiplier;
       
-      // Calculate schedule difficulty
-      const teamRank = defensiveRankings.get(p.team) || 16;
-      const scheduleDifficulty = (teamRank - 16) / 32;
+      // Week-by-week ROS projection with matchup analysis
+      const teamSchedule = nflSchedule.get(p.team) || [];
+      let rosProjection = 0;
+      let championshipWeeksProjection = 0;
+      let remainingByeWeeks = 0;
+      let next3WeeksTotal = 0;
+      const weeklyProjections: any[] = [];
+      
+      for (let week = targetWeek; week <= 18; week++) {
+        const weekIndex = week - 1;
+        const opponent = teamSchedule[weekIndex];
+        
+        // Check if bye week
+        if (opponent === null || opponent === undefined) {
+          remainingByeWeeks++;
+          weeklyProjections.push({ week, opponent: null, projection: 0, isBye: true });
+          continue;
+        }
+        
+        // Calculate week projection with opponent adjustment
+        const defenseMultiplier = getDefensiveMultiplier(opponent, position);
+        
+        // Home/away adjustment (simplified: assume alternating, slight home advantage)
+        const homeAwayMultiplier = week % 2 === 0 ? 1.02 : 0.98;
+        
+        let weekProjection = adjustedBasePpg * defenseMultiplier * homeAwayMultiplier;
+        
+        // Playoff week bonus (weeks 15-17 for championship relevance)
+        if (week >= 15 && week <= 17) {
+          weekProjection *= 1.1; // 10% bonus for championship weeks
+          championshipWeeksProjection += weekProjection;
+        }
+        
+        rosProjection += weekProjection;
+        
+        // Track next 3 weeks
+        if (week < targetWeek + 3) {
+          next3WeeksTotal += weekProjection;
+        }
+        
+        weeklyProjections.push({ 
+          week, 
+          opponent, 
+          projection: Math.round(weekProjection * 10) / 10,
+          isBye: false 
+        });
+      }
       
       // Enhanced sentiment scoring
       let sentimentScore = 0;
@@ -247,51 +365,70 @@ serve(async (req) => {
       const teamByeWeek = byeWeekSchedule.get(p.team);
       const isByeWeek = teamByeWeek === targetWeek;
       
-      // Injury risk and duration estimation - use current week data for all weeks
+      // Injury risk and duration estimation
       let injuryRisk = 0.05;
-      let injuryDuration = 0; // weeks
+      let injuryDuration = 0;
       let injuryMultiplier = 1.0;
       let currentInjuryStatus = p.injury_status || null;
       
-      // Apply injury status from current data (Sleeper keeps this updated)
       if (currentInjuryStatus === 'Out') {
         injuryRisk = 0.9;
-        injuryDuration = 1; // Short-term, 1 week
-        injuryMultiplier = 0.9; // 10% penalty
-        rosProjection *= injuryMultiplier;
+        injuryDuration = 1;
+        injuryMultiplier = 0.9;
       } else if (currentInjuryStatus === 'Doubtful' || currentInjuryStatus === 'D') {
         injuryRisk = 0.7;
         injuryDuration = 1;
         injuryMultiplier = 0.9;
-        rosProjection *= injuryMultiplier;
       } else if (currentInjuryStatus === 'Questionable' || currentInjuryStatus === 'Q') {
         injuryRisk = 0.4;
         injuryDuration = 1;
-        injuryMultiplier = 0.95; // 5% penalty
-        rosProjection *= injuryMultiplier;
+        injuryMultiplier = 0.95;
       } else if (currentInjuryStatus === 'IR' || currentInjuryStatus === 'PUP') {
         injuryRisk = 1.0;
-        injuryDuration = 4; // Long-term, 4+ weeks
-        injuryMultiplier = 0.3; // 70% penalty
-        rosProjection *= injuryMultiplier;
+        injuryDuration = 4;
+        injuryMultiplier = 0.3;
       }
       
+      // Apply injury multiplier to projections
+      rosProjection *= injuryMultiplier;
+      championshipWeeksProjection *= injuryMultiplier;
+      next3WeeksTotal *= injuryMultiplier;
+      
+      // Apply overall adjustments for final player value
+      const next3WeeksProjection = next3WeeksTotal;
+      const sentimentMultiplier = (1 + Math.max(-0.3, Math.min(0.3, sentimentScore)));
+      const usageTrendMultiplier = (1 + usageTrend);
+      
+      const playerValue = rosProjection * sentimentMultiplier * usageTrendMultiplier;
+      
+      // Calculate schedule strength metrics
+      const playoffGames = weeklyProjections.filter(w => w.week >= 15 && w.week <= 17 && !w.isBye);
+      const playoffScheduleDifficulty = playoffGames.length > 0
+        ? playoffGames.reduce((sum, w) => {
+            const defMap = position === 'QB' ? defensiveRankings.vsQB :
+                          position === 'RB' ? defensiveRankings.vsRB :
+                          position === 'TE' ? defensiveRankings.vsTE :
+                          defensiveRankings.vsWR;
+            return sum + ((defMap.get(w.opponent!) || 16) / 32);
+          }, 0) / playoffGames.length
+        : 0.5;
+      
+      const allGames = weeklyProjections.filter(w => !w.isBye);
+      const scheduleDifficulty = allGames.length > 0
+        ? allGames.reduce((sum, w) => {
+            const defMap = position === 'QB' ? defensiveRankings.vsQB :
+                          position === 'RB' ? defensiveRankings.vsRB :
+                          position === 'TE' ? defensiveRankings.vsTE :
+                          defensiveRankings.vsWR;
+            return sum + ((defMap.get(w.opponent!) || 16) / 32);
+          }, 0) / allGames.length
+        : 0.5;
+      
+      // Calculate schedule-adjusted PPG
+      const availableWeeks = 18 - targetWeek - remainingByeWeeks;
+      const ppgProjection = availableWeeks > 0 ? rosProjection / availableWeeks : basePpgProjection;
+      
       console.log(`Week ${targetWeek} - ${p.first_name} ${p.last_name}: Team=${p.team}, Bye=${isByeWeek}, Injury=${currentInjuryStatus}`);
-      
-      // Final player value
-      const playerValue = rosProjection * 
-        (1 + sentimentScore) * 
-        (1 - scheduleDifficulty * 0.15) * 
-        (1 + usageTrend);
-      
-      // Next 3 weeks projection
-      const next3WeeksProjection = Math.min(
-        avgPointsPerGame > 0 ? recentAvg * 3 : rosProjection * 3 / weeksRemaining,
-        rosProjection
-      );
-      
-      // Playoff schedule difficulty
-      const playoffDiff = scheduleDifficulty * 1.2;
       
       // Volatility flag
       const isVolatile = injuryRisk > 0.3 || roleStability < 0.6 || standardDev > avgPointsPerGame * 0.6;
@@ -319,14 +456,17 @@ serve(async (req) => {
         ros_projection: Math.round(rosProjection * 10) / 10,
         ppg_projection: Math.round(ppgProjection * 10) / 10,
         next_3_weeks_projection: Math.round(next3WeeksProjection * 10) / 10,
+        championship_weeks_projection: Math.round(championshipWeeksProjection * 10) / 10,
+        remaining_bye_weeks: remainingByeWeeks,
+        remaining_schedule: weeklyProjections,
         schedule_difficulty: Math.round(scheduleDifficulty * 100) / 100,
+        playoff_schedule_difficulty: Math.round(playoffScheduleDifficulty * 100) / 100,
         sentiment_score: Math.round(sentimentScore * 100) / 100,
         usage_trend: Math.round(usageTrend * 100) / 100,
         role_stability: Math.round(roleStability * 100) / 100,
         injury_risk: Math.round(injuryRisk * 100) / 100,
         volatility_flag: isVolatile,
         confidence_score: confidence,
-        playoff_schedule_difficulty: Math.round(playoffDiff * 100) / 100,
         last_updated_at: now.toISOString(),
         is_bye_week: isByeWeek,
         injury_status: currentInjuryStatus,
