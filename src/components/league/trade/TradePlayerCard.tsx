@@ -42,9 +42,34 @@ export function TradePlayerCard({ player, isSelected, onToggle }: TradePlayerCar
     >
       <CardContent className="p-4 space-y-3">
         <div className="flex justify-between items-start">
-          <Badge className={cn("text-xs font-semibold", positionColors[player.position] || "")}>
-            {player.position}
-          </Badge>
+          <div className="flex gap-1.5 flex-wrap">
+            <Badge className={cn("text-xs font-semibold", positionColors[player.position] || "")}>
+              {player.position}
+            </Badge>
+            {player.is_bye_week && (
+              <Badge variant="secondary" className="text-xs font-semibold bg-gray-500/10 text-gray-500 border-gray-500/20">
+                BYE
+              </Badge>
+            )}
+            {player.injury_status && (
+              <Badge 
+                variant="secondary" 
+                className={cn(
+                  "text-xs font-semibold",
+                  player.injury_status === 'Out' || player.injury_status === 'IR' 
+                    ? "bg-red-500/10 text-red-500 border-red-500/20"
+                    : player.injury_status === 'Questionable' 
+                      ? "bg-yellow-500/10 text-yellow-500 border-yellow-500/20"
+                      : "bg-orange-500/10 text-orange-500 border-orange-500/20"
+                )}
+              >
+                {player.injury_status === 'Out' ? 'OUT' : 
+                 player.injury_status === 'IR' ? 'IR' : 
+                 player.injury_status === 'Questionable' ? 'Q' : 
+                 player.injury_status === 'Doubtful' ? 'D' : player.injury_status}
+              </Badge>
+            )}
+          </div>
           <Checkbox 
             checked={isSelected} 
             onCheckedChange={() => onToggle(player.id)}
