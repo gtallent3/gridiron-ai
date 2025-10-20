@@ -20,8 +20,11 @@ serve(async (req) => {
     console.log('Starting weekly player valuation sync...');
 
     const now = new Date();
-    const currentWeek = Math.min(Math.floor((now.getTime() - new Date(now.getFullYear(), 8, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1, 18);
-    const currentSeason = now.getFullYear();
+    // Calculate current week based on 2025 NFL season start (typically early September)
+    const seasonStart = new Date(2025, 8, 5); // September 5, 2025 (month is 0-indexed)
+    const weeksSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+    const currentWeek = Math.min(Math.max(weeksSinceStart + 1, 1), 18);
+    const currentSeason = 2025;
 
     // Fetch all required data in parallel
     const [sleeperPlayers, trending, nflState] = await Promise.all([
@@ -33,25 +36,29 @@ serve(async (req) => {
     const trendingIds = new Set(trending.map((t: any) => t.player_id));
     const trendingCountMap = new Map(trending.map((t: any) => [t.player_id, t.count || 1]));
 
-    // 2024-2025 NFL Bye Week Schedule
+    // 2025-26 NFL Bye Week Schedule
     const byeWeekSchedule = new Map<string, number>([
       // Week 5
-      ['DET', 5], ['LAC', 5], ['PHI', 5], ['TEN', 5],
+      ['ATL', 5], ['CHI', 5], ['GB', 5], ['PIT', 5],
       // Week 6
-      ['KC', 6], ['LAR', 6], ['MIA', 6], ['MIN', 6],
+      ['HOU', 6], ['MIN', 6],
       // Week 7
-      ['BUF', 7], ['CHI', 7], ['HOU', 7], ['JAX', 7],
+      ['BAL', 7], ['BUF', 7],
+      // Week 8
+      ['ARI', 8], ['DET', 8], ['JAX', 8], ['LV', 8], ['LAR', 8], ['SEA', 8],
       // Week 9
-      ['CLE', 9], ['GB', 9], ['LV', 9], ['PIT', 9], ['SF', 9], ['SEA', 9],
+      ['CLE', 9], ['NYJ', 9], ['PHI', 9], ['TB', 9],
       // Week 10
-      ['ARI', 10], ['CAR', 10], ['NYG', 10], ['TB', 10],
+      ['CIN', 10], ['DAL', 10], ['KC', 10], ['TEN', 10],
       // Week 11
-      ['ATL', 11], ['IND', 11], ['NE', 11], ['NO', 11],
+      ['IND', 11], ['NO', 11],
       // Week 12
-      ['BAL', 12], ['CIN', 12], ['DAL', 12], ['DEN', 12], ['NYJ', 12], ['WAS', 12],
+      ['DEN', 12], ['LAC', 12], ['MIA', 12], ['WAS', 12],
+      // Week 14
+      ['CAR', 14], ['NE', 14], ['NYG', 14], ['SF', 14],
     ]);
     
-    console.log(`Loaded bye week schedule for ${byeWeekSchedule.size} teams`);
+    console.log(`Loaded bye week schedule for ${byeWeekSchedule.size} teams for 2025-26 season`);
 
     // Fetch player stats for current season
     const statsPromises = [];
