@@ -62,14 +62,38 @@ serve(async (req) => {
     const currentWeek = Math.min(Math.floor((now.getTime() - new Date(now.getFullYear(), 8, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1, 18);
     const currentSeason = now.getFullYear();
 
-    // Get all player IDs from both sides
-    const allPlayerIds = [...myPlayers, ...theirPlayers].map(p => p.id || p.player_id);
+    // Get all player IDs from both sides and validate format
+    const VALID_PLAYER_ID = /^[a-zA-Z0-9_-]+$/;
+    const allPlayerIds = [...myPlayers, ...theirPlayers]
+      .map(p => p.id || p.player_id)
+      .filter(id => id && VALID_PLAYER_ID.test(id) && id.length < 100);
 
-    // Look up normalized player IDs (handle both ESPN and Sleeper IDs)
-    const { data: normalizedPlayers } = await supabase
+    if (allPlayerIds.length === 0) {
+      throw new Error('Invalid player IDs provided');
+    }
+
+    // Look up normalized player IDs using proper parameterized queries
+    const { data: byPlayerId } = await supabase
       .from('normalized_players')
       .select('player_id, espn_id, sleeper_id')
-      .or(`player_id.in.(${allPlayerIds.join(',')}),espn_id.in.(${allPlayerIds.join(',')}),sleeper_id.in.(${allPlayerIds.join(',')})`);
+      .in('player_id', allPlayerIds);
+
+    const { data: byEspnId } = await supabase
+      .from('normalized_players')
+      .select('player_id, espn_id, sleeper_id')
+      .in('espn_id', allPlayerIds);
+
+    const { data: bySleeperId } = await supabase
+      .from('normalized_players')
+      .select('player_id, espn_id, sleeper_id')
+      .in('sleeper_id', allPlayerIds);
+
+    // Combine results and deduplicate
+    const normalizedPlayers = [
+      ...(byPlayerId || []),
+      ...(byEspnId || []),
+      ...(bySleeperId || [])
+    ];
 
     // Build mapping from platform ID to normalized player_id
     const playerIdMap = new Map<string, string>();
