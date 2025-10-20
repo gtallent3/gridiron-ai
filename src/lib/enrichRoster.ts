@@ -28,8 +28,15 @@ export async function enrichRosterWithValuations(
   const rosterArray = Array.isArray(roster) ? roster : [];
   if (rosterArray.length === 0) return rosterArray as RosterPlayer[];
 
-  const week = opts?.week ?? 7;
-  const season = opts?.season ?? 2025;
+  // Determine defaults dynamically if not provided
+  const now = new Date();
+  const seasonYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+  const seasonStart = new Date(seasonYear, 8, 1); // Sept 1 of season year
+  const weeksSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
+  const currentWeek = Math.min(Math.max(weeksSinceStart + 1, 1), 18);
+
+  const week = opts?.week ?? currentWeek;
+  const season = opts?.season ?? seasonYear;
 
   // Collect names present in roster
   const names = rosterArray
@@ -41,7 +48,7 @@ export async function enrichRosterWithValuations(
   // Fetch valuations for those names
   const { data: valuations } = await supabase
     .from('player_valuations')
-    .select('player_name, is_bye_week, injury_status, injury_duration_weeks')
+    .select('player_name, is_bye_week, injury_status, injury_duration_weeks, ros_projection, ppg_projection, next_3_weeks_projection')
     .eq('week', week)
     .eq('season', season)
     .in('player_name', Array.from(new Set(names)));
@@ -56,6 +63,9 @@ export async function enrichRosterWithValuations(
       is_bye_week: v?.is_bye_week ?? p.is_bye_week ?? false,
       injury_status: v?.injury_status ?? p.injury_status ?? null,
       injury_duration_weeks: v?.injury_duration_weeks ?? p.injury_duration_weeks ?? 0,
+      ros_projection: v?.ros_projection ?? p.ros_projection ?? 0,
+      ppg_projection: v?.ppg_projection ?? p.ppg_projection ?? 0,
+      next_3_weeks_projection: v?.next_3_weeks_projection ?? p.next_3_weeks_projection ?? 0,
     };
   });
 }

@@ -56,6 +56,7 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [playerDataStatus, setPlayerDataStatus] = useState<{ count: number; lastUpdated: string | null } | null>(null);
+  const [enrichedUserRoster, setEnrichedUserRoster] = useState<any[] | null>(null);
 
   // Position mapping for ESPN
   const POSITION_MAP: Record<number, string> = {
@@ -118,6 +119,22 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
     }
   }, [selectedTeamId, allTeams]);
 
+  // Enrich user's roster with latest valuations for ROS/PPG
+  useEffect(() => {
+    (async () => {
+      try {
+        if (userTeam?.roster) {
+          const enriched = await enrichRosterWithValuations(Array.isArray(userTeam.roster) ? userTeam.roster : []);
+          setEnrichedUserRoster(enriched);
+        } else {
+          setEnrichedUserRoster(null);
+        }
+      } catch (e) {
+        setEnrichedUserRoster(null);
+      }
+    })();
+  }, [userTeam]);
+
   const fetchAllTeams = async () => {
     try {
       setLoading(true);
@@ -128,11 +145,11 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
 
       if (error) throw error;
 
-      // Filter out current user's team and enrich rosters with valuations
+      // Filter out current user's team and enrich rosters with valuations (dynamic week/season)
       const otherTeamsRaw = (data || []).filter(team => team.team_id !== userTeam?.team_id);
       const enriched = await Promise.all(otherTeamsRaw.map(async (team: any) => ({
         ...team,
-        roster: await enrichRosterWithValuations(Array.isArray(team.roster) ? team.roster : [], { week: 7, season: 2025 })
+        roster: await enrichRosterWithValuations(Array.isArray(team.roster) ? team.roster : [])
       })));
 
       setAllTeams(enriched as Team[]);
@@ -257,7 +274,7 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
     );
   }
 
-  const myRoster = normalizeRoster(userTeam.roster || []);
+  const myRoster = normalizeRoster((enrichedUserRoster || userTeam.roster || []));
   const theirRoster = selectedTeam ? normalizeRoster(selectedTeam.roster || []) : [];
   const userRecord = `${userTeam.wins || 0}-${userTeam.losses || 0}${userTeam.ties ? `-${userTeam.ties}` : ''}`;
   const otherRecord = selectedTeam ? `${selectedTeam.wins || 0}-${selectedTeam.losses || 0}${selectedTeam.ties ? `-${selectedTeam.ties}` : ''}` : '';
