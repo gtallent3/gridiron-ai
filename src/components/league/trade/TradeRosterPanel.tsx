@@ -11,6 +11,9 @@ type Player = {
   team: string;
   projected: number;
   status?: string;
+  is_bye_week?: boolean;
+  injury_status?: string | null;
+  injury_duration_weeks?: number;
 };
 
 type TradeRosterPanelProps = {

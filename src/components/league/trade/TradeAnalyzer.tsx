@@ -36,6 +36,9 @@ type Player = {
   team: string;
   projected: number;
   status?: string;
+  is_bye_week?: boolean;
+  injury_status?: string | null;
+  injury_duration_weeks?: number;
 };
 
 export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
@@ -161,6 +164,9 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
         team: player.team || 'NFL',
         projected: player.projected || 0,
         status: player.status,
+        is_bye_week: player.is_bye_week || false,
+        injury_status: player.injury_status || null,
+        injury_duration_weeks: player.injury_duration_weeks || 0,
       };
     }).filter(p => p.id); // Filter out invalid players
   };

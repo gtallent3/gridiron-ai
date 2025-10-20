@@ -66,6 +66,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           team: player.team || 'NFL',
           projected: player.projected || 0, // Use stored projection
           status: isStarter ? 'starter' : 'bench',
+          is_bye_week: player.is_bye_week || false,
+          injury_status: player.injury_status || null,
+          injury_duration_weeks: player.injury_duration_weeks || 0,
         };
 
         if (isStarter) {
