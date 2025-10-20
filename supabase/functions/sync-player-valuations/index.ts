@@ -229,130 +229,151 @@ serve(async (req) => {
 
     const valuations: any[] = [];
 
-    // Generate valuations only for the current week to keep the function fast and reliable
-    const targetWeek = currentWeek;
-    console.log(`Processing valuations for week ${targetWeek}...`);
+    // Process all weeks from 1 to current week (historical + current)
+    console.log(`Processing valuations for weeks 1-${currentWeek}...`);
     
     for (const [playerId, player] of playerEntries) {
       const p = player as any;
       const position = p.fantasy_positions[0];
       const stats = playerStats.get(playerId);
-      const weeksRemaining = Math.max(18 - targetWeek, 1);
       
-      // Calculate stats up to target week
-      const weeklyPointsUpToTarget = stats?.weeklyPoints.slice(0, targetWeek) || [];
-      const gamesPlayedUpToTarget = weeklyPointsUpToTarget.filter((pts: number) => pts > 0).length;
-      const totalPointsUpToTarget = weeklyPointsUpToTarget.reduce((sum: number, pts: number) => sum + pts, 0);
-      const avgPointsPerGame = gamesPlayedUpToTarget > 0 ? totalPointsUpToTarget / gamesPlayedUpToTarget : 0;
-      
-      const recentForm = weeklyPointsUpToTarget.slice(-3);
-      const recentAvg = recentForm.length > 0 ? recentForm.reduce((a: number, b: number) => a + b, 0) / recentForm.length : avgPointsPerGame;
-      
-      // Calculate variance for volatility
-      const variance = weeklyPointsUpToTarget.length > 0 
-        ? weeklyPointsUpToTarget.reduce((acc: number, pts: number) => acc + Math.pow(pts - avgPointsPerGame, 2), 0) / weeklyPointsUpToTarget.length
-        : 0;
-      const standardDev = Math.sqrt(variance);
-      
-      // Calculate base PPG projection
-      let basePpgProjection = 0;
-      if (gamesPlayedUpToTarget >= 3) {
-        basePpgProjection = avgPointsPerGame * 0.6 + recentAvg * 0.4;
-      } else if (gamesPlayedUpToTarget > 0) {
-        basePpgProjection = avgPointsPerGame * 0.8;
-      } else {
-        const baselines = { QB: 18, RB: 12, WR: 11, TE: 8, K: 7, DEF: 8 };
-        basePpgProjection = baselines[position as keyof typeof baselines] || 10;
-      }
-      
-      // Apply team context multiplier to base PPG
-      const context = teamContext.get(p.team) || defaultContext;
-      let teamMultiplier = 1.0;
-      
-      if (position === 'QB') {
-        teamMultiplier = context.pace * (1 + (context.passRate - 0.57) * 0.5);
-      } else if (position === 'RB') {
-        teamMultiplier = context.pace * (1 + (0.57 - context.passRate) * 0.3) * context.rzEff;
-      } else if (position === 'WR' || position === 'TE') {
-        teamMultiplier = context.pace * (1 + (context.passRate - 0.57) * 0.4) * (context.rzEff * 0.8);
-      }
-      
-      const adjustedBasePpg = basePpgProjection * teamMultiplier;
-      
-      // Week-by-week ROS projection with matchup analysis
-      const teamSchedule = nflSchedule.get(p.team) || [];
-      let rosProjection = 0;
-      let championshipWeeksProjection = 0;
-      let remainingByeWeeks = 0;
-      let next3WeeksTotal = 0;
-      const weeklyProjections: any[] = [];
-      
-      for (let week = targetWeek; week <= 18; week++) {
-        const weekIndex = week - 1;
-        const opponent = teamSchedule[weekIndex];
+      // Process each week from 1 to current week
+      for (let targetWeek = 1; targetWeek <= currentWeek; targetWeek++) {
+        const isHistoricalWeek = targetWeek < currentWeek;
+        const weeksRemaining = Math.max(18 - targetWeek, 1);
         
-        // Check if bye week
-        if (opponent === null || opponent === undefined) {
-          remainingByeWeeks++;
-          weeklyProjections.push({ week, opponent: null, projection: 0, isBye: true });
-          continue;
+        // Calculate stats up to target week
+        const weeklyPointsUpToTarget = stats?.weeklyPoints.slice(0, targetWeek) || [];
+        const gamesPlayedUpToTarget = weeklyPointsUpToTarget.filter((pts: number) => pts > 0).length;
+        const totalPointsUpToTarget = weeklyPointsUpToTarget.reduce((sum: number, pts: number) => sum + pts, 0);
+        const avgPointsPerGame = gamesPlayedUpToTarget > 0 ? totalPointsUpToTarget / gamesPlayedUpToTarget : 0;
+      
+        const recentForm = weeklyPointsUpToTarget.slice(-3);
+        const recentAvg = recentForm.length > 0 ? recentForm.reduce((a: number, b: number) => a + b, 0) / recentForm.length : avgPointsPerGame;
+        
+        // Calculate variance for volatility
+        const variance = weeklyPointsUpToTarget.length > 0 
+          ? weeklyPointsUpToTarget.reduce((acc: number, pts: number) => acc + Math.pow(pts - avgPointsPerGame, 2), 0) / weeklyPointsUpToTarget.length
+          : 0;
+        const standardDev = Math.sqrt(variance);
+        
+        // Calculate base PPG projection
+        let basePpgProjection = 0;
+        
+        if (isHistoricalWeek) {
+          // For historical weeks, use actual points scored that week
+          const actualPointsThisWeek = stats?.weeklyPoints[targetWeek - 1] || 0;
+          basePpgProjection = actualPointsThisWeek;
+        } else {
+          // For current week, use projection logic
+          if (gamesPlayedUpToTarget >= 3) {
+            basePpgProjection = avgPointsPerGame * 0.6 + recentAvg * 0.4;
+          } else if (gamesPlayedUpToTarget > 0) {
+            basePpgProjection = avgPointsPerGame * 0.8;
+          } else {
+            const baselines = { QB: 18, RB: 12, WR: 11, TE: 8, K: 7, DEF: 8 };
+            basePpgProjection = baselines[position as keyof typeof baselines] || 10;
+          }
+        }
+      
+        // Apply team context multiplier to base PPG (only for projections, not historical actuals)
+        const context = teamContext.get(p.team) || defaultContext;
+        let teamMultiplier = 1.0;
+        
+        if (!isHistoricalWeek) {
+          if (position === 'QB') {
+            teamMultiplier = context.pace * (1 + (context.passRate - 0.57) * 0.5);
+          } else if (position === 'RB') {
+            teamMultiplier = context.pace * (1 + (0.57 - context.passRate) * 0.3) * context.rzEff;
+          } else if (position === 'WR' || position === 'TE') {
+            teamMultiplier = context.pace * (1 + (context.passRate - 0.57) * 0.4) * (context.rzEff * 0.8);
+          }
         }
         
-        // Calculate week projection with opponent adjustment
-        const defenseMultiplier = getDefensiveMultiplier(opponent, position);
-        
-        // Home/away adjustment (simplified: assume alternating, slight home advantage)
-        const homeAwayMultiplier = week % 2 === 0 ? 1.02 : 0.98;
-        
-        let weekProjection = adjustedBasePpg * defenseMultiplier * homeAwayMultiplier;
-        
-        // Playoff week bonus (weeks 15-17 for championship relevance)
-        if (week >= 15 && week <= 17) {
-          weekProjection *= 1.1; // 10% bonus for championship weeks
-          championshipWeeksProjection += weekProjection;
-        }
-        
-        rosProjection += weekProjection;
-        
-        // Track next 3 weeks
-        if (week < targetWeek + 3) {
-          next3WeeksTotal += weekProjection;
-        }
-        
-        weeklyProjections.push({ 
-          week, 
-          opponent, 
-          projection: Math.round(weekProjection * 10) / 10,
-          isBye: false 
-        });
-      }
+        const adjustedBasePpg = basePpgProjection * teamMultiplier;
       
-      // Enhanced sentiment scoring
-      let sentimentScore = 0;
-      if (trendingIds.has(playerId)) {
-        const trendCount = Number(trendingCountMap.get(playerId) || 1);
-        sentimentScore = Math.min(0.25, 0.05 + (trendCount / 100) * 0.2);
-      } else if (gamesPlayedUpToTarget > 0 && recentAvg > avgPointsPerGame * 1.2) {
-        sentimentScore = 0.08;
-      } else {
-        sentimentScore = -0.03;
-      }
-      
-      // Usage trend
-      let usageTrend = 0;
-      if (stats?.lastStats && targetWeek === currentWeek) {
-        const lastStats = stats.lastStats;
-        if (position === 'RB') {
-          const carries = lastStats.rush_att || 0;
-          usageTrend = carries > 15 ? 0.15 : carries > 10 ? 0.08 : 0;
-        } else if (position === 'WR' || position === 'TE') {
-          const targets = lastStats.rec_tgt || 0;
-          usageTrend = targets > 8 ? 0.15 : targets > 5 ? 0.08 : 0;
-        } else if (position === 'QB') {
-          const attempts = lastStats.pass_att || 0;
-          usageTrend = attempts > 35 ? 0.12 : attempts > 28 ? 0.06 : 0;
+        // Week-by-week ROS projection with matchup analysis
+        const teamSchedule = nflSchedule.get(p.team) || [];
+        let rosProjection = 0;
+        let championshipWeeksProjection = 0;
+        let remainingByeWeeks = 0;
+        let next3WeeksTotal = 0;
+        const weeklyProjections: any[] = [];
+        
+        // For historical weeks, include actual scores for future weeks if available
+        // For current week, use projections
+        for (let week = targetWeek; week <= 18; week++) {
+          const weekIndex = week - 1;
+          const opponent = teamSchedule[weekIndex];
+          
+          // Check if bye week
+          if (opponent === null || opponent === undefined) {
+            remainingByeWeeks++;
+            weeklyProjections.push({ week, opponent: null, projection: 0, isBye: true });
+            continue;
+          }
+          
+          let weekProjection = 0;
+          
+          // For historical target week with future actual data, use actual scores
+          if (isHistoricalWeek && week <= currentWeek) {
+            weekProjection = stats?.weeklyPoints[week - 1] || 0;
+          } else {
+            // Use projection logic for future weeks or current week
+            const defenseMultiplier = getDefensiveMultiplier(opponent, position);
+            const homeAwayMultiplier = week % 2 === 0 ? 1.02 : 0.98;
+            weekProjection = adjustedBasePpg * defenseMultiplier * homeAwayMultiplier;
+          }
+          
+          // Playoff week bonus (weeks 15-17 for championship relevance)
+          if (week >= 15 && week <= 17) {
+            if (!isHistoricalWeek || week > currentWeek) {
+              weekProjection *= 1.1; // 10% bonus for championship weeks (only for projections)
+            }
+            championshipWeeksProjection += weekProjection;
+          }
+          
+          rosProjection += weekProjection;
+          
+          // Track next 3 weeks
+          if (week < targetWeek + 3) {
+            next3WeeksTotal += weekProjection;
+          }
+          
+          weeklyProjections.push({ 
+            week, 
+            opponent, 
+            projection: Math.round(weekProjection * 10) / 10,
+            isBye: false 
+          });
         }
-      }
+      
+        // Enhanced sentiment scoring
+        let sentimentScore = 0;
+        if (trendingIds.has(playerId)) {
+          const trendCount = Number(trendingCountMap.get(playerId) || 1);
+          sentimentScore = Math.min(0.25, 0.05 + (trendCount / 100) * 0.2);
+        } else if (gamesPlayedUpToTarget > 0 && recentAvg > avgPointsPerGame * 1.2) {
+          sentimentScore = 0.08;
+        } else {
+          sentimentScore = -0.03;
+        }
+        
+        // Usage trend
+        let usageTrend = 0;
+        if (stats?.lastStats && targetWeek === currentWeek) {
+          const lastStats = stats.lastStats;
+          if (position === 'RB') {
+            const carries = lastStats.rush_att || 0;
+            usageTrend = carries > 15 ? 0.15 : carries > 10 ? 0.08 : 0;
+          } else if (position === 'WR' || position === 'TE') {
+            const targets = lastStats.rec_tgt || 0;
+            usageTrend = targets > 8 ? 0.15 : targets > 5 ? 0.08 : 0;
+          } else if (position === 'QB') {
+            const attempts = lastStats.pass_att || 0;
+            usageTrend = attempts > 35 ? 0.12 : attempts > 28 ? 0.06 : 0;
+          }
+        }
       
       // Role stability
       let roleStability = 0.5;
@@ -475,6 +496,23 @@ serve(async (req) => {
         injury_status: currentInjuryStatus,
         injury_duration_weeks: injuryDuration,
       });
+      }
+    }
+
+    console.log(`Generated ${valuations.length} player valuations for weeks 1-${currentWeek}`);
+
+    // Delete existing valuations for weeks 1 to current week before inserting new ones
+    console.log(`Deleting existing valuations for weeks 1-${currentWeek}...`);
+    const { error: deleteError } = await supabase
+      .from('player_valuations')
+      .delete()
+      .eq('season', currentSeason)
+      .gte('week', 1)
+      .lte('week', currentWeek);
+    
+    if (deleteError) {
+      console.error('Error deleting existing valuations:', deleteError);
+      throw deleteError;
     }
 
     // Get or create normalized player entries for all Sleeper IDs
@@ -532,13 +570,8 @@ serve(async (req) => {
       player_id: normalizedIdMap.get(v.player_id) || v.player_id,
     }));
     
-    // Delete any existing valuations for this week/season before upserting to prevent duplicates
-    await supabase
-      .from('player_valuations')
-      .delete()
-      .eq('season', currentSeason)
-      .eq('week', targetWeek);
-
+    
+    // Delete existing valuations for this season and weeks 1 to current week (already done above)
     // Upsert valuations
     const { error } = await supabase
       .from('player_valuations')
