@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 
@@ -10,17 +11,43 @@ const Admin = () => {
   const [week, setWeek] = useState<number>(1);
   const [loading, setLoading] = useState(false);
   const [backfillAll, setBackfillAll] = useState(false);
+  const [leagues, setLeagues] = useState<any[]>([]);
+  const [selectedLeague, setSelectedLeague] = useState<string>("");
+
+  useEffect(() => {
+    const fetchLeagues = async () => {
+      const { data } = await supabase
+        .from('connected_leagues')
+        .select('*')
+        .eq('platform', 'espn')
+        .order('created_at', { ascending: false });
+      
+      if (data) {
+        setLeagues(data);
+        if (data.length > 0) {
+          setSelectedLeague(data[0].league_id);
+        }
+      }
+    };
+    
+    fetchLeagues();
+  }, []);
 
   const handleBackfill = async (targetWeek: number) => {
+    if (!selectedLeague) {
+      toast.error('Please select a league');
+      return;
+    }
+
     setLoading(true);
     try {
-      const { data, error } = await supabase.functions.invoke('backfill-player-valuations', {
-        body: { week: targetWeek }
+      const { data, error } = await supabase.functions.invoke('backfill-espn-player-valuations', {
+        body: { week: targetWeek, leagueId: selectedLeague }
       });
 
       if (error) throw error;
 
-      toast.success(`Week ${targetWeek} backfilled successfully`);
+      toast.success(`Week ${targetWeek} backfilled with ESPN data successfully`);
       console.log('Backfill result:', data);
     } catch (error) {
       console.error('Backfill error:', error);
@@ -46,12 +73,27 @@ const Admin = () => {
     <div className="container mx-auto py-8 px-4">
       <Card>
         <CardHeader>
-          <CardTitle>Player Valuations Backfill</CardTitle>
+          <CardTitle>ESPN Player Valuations Backfill</CardTitle>
           <CardDescription>
-            Backfill historical player valuations data for weeks 1-6
+            Backfill historical player valuations using actual ESPN scoring data
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Select ESPN League</label>
+            <Select value={selectedLeague} onValueChange={setSelectedLeague}>
+              <SelectTrigger>
+                <SelectValue placeholder="Choose a league" />
+              </SelectTrigger>
+              <SelectContent>
+                {leagues.map((league) => (
+                  <SelectItem key={league.id} value={league.league_id}>
+                    {league.league_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-4">
             <div className="flex gap-4 items-end">
               <div className="flex-1">
