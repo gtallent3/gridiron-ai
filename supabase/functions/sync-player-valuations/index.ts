@@ -151,57 +151,48 @@ serve(async (req) => {
     // Default team context for teams not in top tier
     const defaultContext = { pace: 1.0, passRate: 0.57, rzEff: 1.0 };
 
-    // NFL Schedule 2025-26 Season - Each team has EXACTLY ONE bye week
-    // Array index represents week number (index 0 = week 1, index 1 = week 2, etc.)
-    const nflSchedule = new Map([
-      // AFC East
-      ['BUF', ['ARI', 'MIA', 'JAX', 'BAL', 'HOU', 'NYJ', null, 'TEN', 'MIA', 'IND', 'KC', 'SF', 'DET', 'LAC', 'NE', 'NYJ', 'NE', 'MIA']],
-      ['MIA', ['JAX', 'BUF', 'CLE', 'TEN', 'NE', 'CAR', 'IND', 'ARI', 'BUF', 'LAR', 'LV', null, 'NYJ', 'HOU', 'SF', 'CLE', 'NYJ', 'NE']],
-      ['NE', ['CIN', 'SEA', 'NYJ', 'SF', 'MIA', 'HOU', 'JAX', 'NYG', 'TEN', 'CHI', 'LAR', 'MIA', 'IND', null, 'BUF', 'LAC', 'BUF', 'WAS']],
-      ['NYJ', ['SF', 'TEN', 'NE', 'DEN', 'MIN', null, 'PIT', 'NE', 'HOU', 'ARI', 'IND', 'SEA', 'MIA', 'JAX', 'LAR', 'BUF', 'MIA', 'CLE']],
-      
-      // AFC North
-      ['BAL', ['KC', 'LV', 'DAL', 'BUF', 'CIN', 'WAS', null, 'CLE', 'DEN', 'CIN', 'PIT', 'PHI', 'NYG', 'PIT', 'HOU', 'CLE', 'CIN', 'PIT']],
-      ['CIN', ['NE', 'KC', 'WAS', 'PHI', 'BAL', 'NYG', 'CLE', null, 'LV', 'BAL', 'LAC', 'PIT', 'DAL', 'TEN', 'CLE', 'DEN', 'PIT', 'BAL']],
-      ['CLE', ['DAL', 'NO', 'NYG', 'LV', 'WAS', 'PHI', 'CIN', 'BAL', null, 'ARI', 'NO', 'PIT', 'KC', 'PIT', 'CIN', 'MIA', 'BAL', 'NYJ']],
-      ['PIT', ['ATL', 'KC', 'LAC', 'IND', 'DAL', 'LV', 'NYJ', 'NYG', null, 'PHI', 'BAL', 'CLE', 'CIN', 'BAL', 'PHI', 'KC', 'CIN', 'BAL']],
-      
-      // AFC South
-      ['HOU', ['IND', 'CHI', 'MIN', 'JAX', null, 'NE', 'GB', 'IND', 'NYJ', 'DET', 'DAL', 'JAX', 'TEN', 'MIA', 'KC', 'BAL', 'TEN', 'IND']],
-      ['IND', ['HOU', 'GB', 'CHI', 'PIT', 'JAX', 'TEN', 'MIA', 'HOU', 'MIN', 'BUF', null, 'DET', 'NE', 'DEN', 'TEN', 'NYG', 'JAX', 'HOU']],
-      ['JAX', ['MIA', 'CLE', 'BUF', 'HOU', null, 'CHI', 'NE', 'GB', 'PHI', 'MIN', 'DET', 'HOU', 'TEN', 'NYJ', 'LV', 'IND', 'TEN', 'IND']],
-      ['TEN', ['CHI', 'NYJ', 'GB', 'MIA', null, 'IND', 'BUF', 'DET', 'NE', 'LAC', 'MIN', 'CIN', 'JAX', null, 'IND', 'JAX', 'HOU', 'JAX']],
-      
-      // AFC West
-      ['DEN', ['NYG', 'NO', 'PIT', 'NYJ', 'LV', 'LAC', 'NO', 'CAR', 'BAL', 'KC', 'ATL', null, 'LV', 'IND', 'LAC', 'CIN', 'KC', 'LAC']],
-      ['KC', ['BAL', 'PIT', 'ATL', 'LAC', 'NO', 'SF', null, 'LV', 'TB', 'DEN', 'BUF', 'CAR', 'CLE', 'DEN', 'HOU', 'PIT', 'DEN', 'LV']],
-      ['LV', ['LAC', 'BAL', 'CAR', 'CLE', 'DEN', 'PIT', 'ARI', null, 'CIN', 'KC', 'MIA', 'DEN', 'ATL', 'TB', 'NO', 'JAX', 'NO', 'KC']],
-      ['LAC', ['LV', 'ARI', null, 'KC', 'ARI', 'DEN', 'ARI', 'CAR', 'CLE', 'TEN', 'CIN', 'ATL', 'TB', 'BUF', 'DEN', 'NE', 'LV', 'DEN']],
-      
-      // NFC East
-      ['DAL', ['CLE', 'ARI', 'NO', 'NYG', 'PIT', 'DET', null, 'SF', 'PHI', null, 'HOU', 'WAS', 'CIN', 'NYG', 'CAR', 'TB', 'PHI', 'NYG']],
-      ['NYG', ['DEN', 'WAS', 'CLE', 'DAL', 'SEA', 'CIN', 'PHI', 'PIT', null, 'WAS', 'TB', 'CAR', 'BAL', null, 'ATL', 'IND', 'WAS', 'PHI']],
-      ['PHI', ['GB', 'ATL', 'SF', 'CIN', null, 'CLE', 'NYG', null, 'JAX', 'PIT', 'WAS', 'BAL', 'CAR', 'DAL', 'WAS', 'DAL', 'NYG', 'WAS']],
-      ['WAS', ['TB', 'NYG', 'CIN', 'ARI', 'CLE', 'BAL', 'CAR', 'CHI', 'PIT', 'NYG', 'PHI', null, 'NO', 'CAR', null, 'ATL', 'PHI', 'NYG']],
-      
-      // NFC North
-      ['CHI', ['TEN', 'HOU', 'IND', 'LAR', null, 'JAX', 'CAR', 'WAS', 'ARI', null, 'GB', 'MIN', 'SEA', 'MIN', 'DET', 'SEA', 'GB', 'MIN']],
-      ['DET', ['LAR', 'TB', 'GB', null, 'ARI', 'SEA', 'MIN', 'TEN', 'GB', null, 'JAX', 'IND', 'BUF', 'GB', 'CHI', 'GB', 'SF', 'MIN']],
-      ['GB', ['PHI', 'IND', null, 'MIN', 'DET', null, 'ARI', 'HOU', 'JAX', 'DET', 'CHI', null, 'SEA', 'MIN', 'DET', 'SEA', 'NO', 'MIN']],
-      ['MIN', ['SF', 'ATL', 'HOU', null, 'NYJ', 'GB', 'DET', 'LAR', null, 'JAX', 'TEN', 'CHI', 'GB', null, 'SEA', 'CHI', 'GB', 'DET']],
-      
-      // NFC South
-      ['ATL', ['PIT', 'PHI', 'KC', null, 'TB', 'CAR', 'SEA', null, 'TB', null, 'NO', 'DEN', 'LAC', 'LV', 'CAR', 'NYG', 'WAS', 'NO']],
-      ['CAR', ['NO', 'TB', 'LV', 'ATL', null, 'MIA', 'WAS', null, 'DEN', 'NO', null, 'KC', 'PHI', null, 'WAS', 'DAL', 'TB', 'ATL']],
-      ['NO', ['CAR', 'DEN', 'DAL', 'SEA', null, 'KC', 'TB', 'DEN', 'CAR', null, 'ATL', 'CLE', 'LAR', 'WAS', null, 'LV', 'GB', 'TB']],
-      ['TB', ['WAS', 'DET', 'CAR', null, 'PHI', 'ATL', null, 'NO', 'ATL', 'KC', null, 'NYG', 'LAC', 'CAR', 'LV', 'DAL', 'NO', 'ATL']],
-      
-      // NFC West
-      ['ARI', ['BUF', 'LAC', null, 'LAR', 'SF', 'LAC', 'LV', 'GB', 'MIA', 'SEA', 'CLE', 'NYJ', null, 'SEA', 'SF', null, 'LAR', 'SF']],
-      ['LAR', ['DET', 'CHI', 'ARI', null, 'LAC', 'SF', null, 'LV', 'MIN', 'SEA', 'MIA', 'PHI', 'NO', 'ARI', 'SF', null, 'NYJ', 'ARI']],
-      ['SF', ['MIN', 'DAL', null, 'PHI', 'NE', 'ARI', 'LAR', 'KC', 'DAL', null, 'ARI', 'SEA', null, 'BUF', 'LAR', 'ARI', 'MIA', 'DET']],
-      ['SEA', ['DEN', null, 'NE', 'MIA', 'DET', 'NYG', null, 'ATL', 'DET', 'ARI', 'LAM', 'SF', 'GB', 'ARI', null, 'MIN', 'CHI', 'LAR']],
-    ]);
+    // Build NFL schedule dynamically from ESPN public API to ensure accuracy
+    const normalizeAbbr = (abbr: string | undefined): string | null => {
+      if (!abbr) return null;
+      if (abbr === 'WSH') return 'WAS';
+      return abbr;
+    };
+
+    const buildEspnSchedule = async (season: number): Promise<Map<string, (string | null)[]>> => {
+      const teams = [
+        'ARI','ATL','BAL','BUF','CAR','CHI','CIN','CLE','DAL','DEN','DET','GB','HOU','IND','JAX','KC','LAC','LAR','LV','MIA','MIN','NE','NO','NYG','NYJ','PHI','PIT','SEA','SF','TB','TEN','WAS'
+      ];
+      const scheduleMap = new Map<string, (string | null)[]>();
+      for (const t of teams) scheduleMap.set(t, new Array(18).fill(null));
+
+      const weekPromises = Array.from({ length: 18 }, (_, i) =>
+        fetch(`https://site.api.espn.com/apis/v2/sports/football/nfl/scoreboard?seasontype=2&week=${i + 1}&dates=${season}`).then(r => r.json())
+      );
+      const weeksData = await Promise.all(weekPromises);
+
+      weeksData.forEach((data, idx) => {
+        const weekIndex = idx; // 0-based
+        const events = data?.events || [];
+        for (const ev of events) {
+          const comp = ev?.competitions?.[0];
+          const competitors = comp?.competitors || [];
+          if (competitors.length >= 2) {
+            const a = normalizeAbbr(competitors[0]?.team?.abbreviation);
+            const b = normalizeAbbr(competitors[1]?.team?.abbreviation);
+            if (a && b) {
+              const arrA = scheduleMap.get(a);
+              const arrB = scheduleMap.get(b);
+              if (arrA) arrA[weekIndex] = b;
+              if (arrB) arrB[weekIndex] = a;
+            }
+          }
+        }
+      });
+
+      return scheduleMap;
+    };
+
+    const nflSchedule = await buildEspnSchedule(currentSeason);
 
     // Get position-specific defensive multiplier
     const getDefensiveMultiplier = (opponent: string | null, position: string): number => {
@@ -377,9 +368,8 @@ serve(async (req) => {
         roleStability = 0.6;
       }
       
-      // Bye week detection - check if team has a bye this week
-      const teamByeWeek = byeWeekSchedule.get(p.team);
-      const isByeWeek = teamByeWeek === targetWeek;
+      // Bye week detection based on dynamic ESPN schedule
+      const isByeWeek = (nflSchedule.get(p.team)?.[targetWeek - 1] ?? null) === null;
       
       // Injury risk and duration estimation
       let injuryRisk = 0.05;
