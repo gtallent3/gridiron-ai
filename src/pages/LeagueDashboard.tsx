@@ -67,6 +67,41 @@ export default function LeagueDashboard() {
       if (leagueError) throw leagueError;
       setLeague(leagueData);
 
+      // Helper function to enrich roster with player valuations
+      const enrichRosterWithValuations = async (roster: any) => {
+        // Ensure roster is an array
+        const rosterArray = Array.isArray(roster) ? roster : [];
+        
+        if (rosterArray.length === 0) return rosterArray;
+        
+        // Get all player IDs from roster
+        const playerIds = rosterArray.map((p: any) => p.player_id).filter(Boolean);
+        
+        if (playerIds.length === 0) return rosterArray;
+        
+        // Fetch player valuations for current week (7 for now)
+        const currentWeek = leagueData.current_week || 7;
+        const { data: valuations } = await supabase
+          .from('player_valuations')
+          .select('player_id, is_bye_week, injury_status, injury_duration_weeks')
+          .in('player_id', playerIds)
+          .eq('week', currentWeek)
+          .eq('season', 2025);
+        
+        // Create a map for quick lookup
+        const valuationsMap = new Map(
+          (valuations || []).map(v => [v.player_id, v])
+        );
+        
+        // Enrich roster with valuation data
+        return rosterArray.map((player: any) => ({
+          ...player,
+          is_bye_week: valuationsMap.get(player.player_id)?.is_bye_week || false,
+          injury_status: valuationsMap.get(player.player_id)?.injury_status || null,
+          injury_duration_weeks: valuationsMap.get(player.player_id)?.injury_duration_weeks || 0,
+        }));
+      };
+
       // Fetch user's team for this league using the user_team_id from league data
       if (leagueData.user_team_id) {
         const { data: teamData, error: teamError } = await supabase
@@ -77,6 +112,12 @@ export default function LeagueDashboard() {
           .maybeSingle();
 
         if (teamError) throw teamError;
+        
+        // Enrich roster with player valuations
+        if (teamData && teamData.roster) {
+          teamData.roster = await enrichRosterWithValuations(teamData.roster);
+        }
+        
         setUserTeam(teamData);
       } else {
         setUserTeam(null);
@@ -89,6 +130,16 @@ export default function LeagueDashboard() {
         .eq('league_id', leagueId);
 
       if (teamsError) throw teamsError;
+      
+      // Enrich all teams' rosters with player valuations
+      if (allTeamsData) {
+        for (const team of allTeamsData) {
+          if (team.roster) {
+            team.roster = await enrichRosterWithValuations(team.roster);
+          }
+        }
+      }
+      
       setAllTeams(allTeamsData || []);
 
     } catch (error: any) {
