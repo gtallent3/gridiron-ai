@@ -32,7 +32,7 @@ serve(async (req) => {
       // Continue without user ID - JWT verification is handled by Supabase
     }
 
-    const { messages } = await req.json();
+    const { messages, leagueContext, leagueId, teamRoster } = await req.json();
     
     // Log request for monitoring and abuse prevention
     console.log(`AI chat request from user: ${userId || 'unknown'}, message count: ${messages?.length || 0}`);
@@ -81,22 +81,40 @@ serve(async (req) => {
       );
     }
 
-    // System prompt with fantasy football context and data
-    const systemPrompt = `You are an expert Fantasy Football AI assistant. You help users make informed decisions about start/sit choices, trade evaluations, waiver pickups, and roster management.
+    // Build enhanced system prompt with league context
+    let systemPrompt = `You are a fast, concise Fantasy Football AI assistant. Provide SHORT, ACCURATE answers.
 
-Key Guidelines:
-- Provide data-driven advice based on recent performance, matchups, and trends
-- Consider factors like: target share, snap count, opponent defense rankings, weather conditions, and injury reports
-- When analyzing trades, evaluate both immediate value and long-term potential
-- For start/sit decisions, prioritize players with favorable matchups and consistent usage
-- Always explain your reasoning clearly and concisely
-- If you need more specific information (scoring format, league settings), ask clarifying questions
+CRITICAL RESPONSE RULES:
+- Give ONE-LINE verdicts for start/sit and trade questions
+- Use format: "Start [Player] — [reason in 5 words or less]"
+- For trades: "Accept — +X pts ROS advantage" or "Reject — [brief reason]"
+- NO long paragraphs, NO filler phrases like "Here's what I think"
+- Be direct, confident, neutral
+- Only ask follow-up if CRITICAL context is missing
 
-Current 2024 NFL Context:
-- Focus on recent weeks' performance (last 3-4 games) over season averages
-- Consider bye weeks and playoff schedules
-- Account for team offensive schemes and play-calling tendencies
-- Factor in weather for outdoor games (especially for kickers and passing games)`;
+ANALYSIS FACTORS:
+- Recent performance (last 3-4 games), matchups, target share, snap count
+- Injuries, bye weeks, opponent defense rankings
+- Weather for outdoor games (affects kickers/passing)
+- Playoff schedules for long-term trades
+
+EXAMPLE RESPONSES:
+✓ "Start Gibbs — +3.4 pts projection over Stevenson."
+✓ "Accept — +8 pts ROS, gains WR depth."
+✓ "Reject — losing your only top-tier RB."
+✗ "I think you should consider starting Gibbs because he has been performing well..."`;
+
+    // Add league-specific context if provided
+    if (leagueContext) {
+      systemPrompt += `\n\nLEAGUE CONTEXT: ${leagueContext}`;
+    }
+    
+    if (teamRoster) {
+      const rosterSummary = typeof teamRoster === 'object' ? 
+        `Roster: ${teamRoster.starters?.length || 0} starters, ${teamRoster.bench?.length || 0} bench` :
+        'Roster data available';
+      systemPrompt += `\n${rosterSummary}`;
+    }
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
