@@ -98,161 +98,166 @@ serve(async (req) => {
 
     const valuations: any[] = [];
 
-    for (const [playerId, player] of playerEntries) {
-      const p = player as any;
-      const position = p.fantasy_positions[0];
-      const stats = playerStats.get(playerId);
-      const weeksRemaining = Math.max(18 - currentWeek, 1);
+    // Generate valuations for each week (enables trend analysis)
+    for (let targetWeek = 1; targetWeek <= currentWeek; targetWeek++) {
+      console.log(`Processing valuations for week ${targetWeek}...`);
       
-      // Get actual performance data
-      const avgPointsPerGame = stats ? (stats.totalPoints / Math.max(stats.gamesPlayed, 1)) : 0;
-      const gamesPlayed = stats?.gamesPlayed || 0;
-      const recentForm = stats?.weeklyPoints.slice(-3) || [];
-      const recentAvg = recentForm.length > 0 ? recentForm.reduce((a: number, b: number) => a + b, 0) / recentForm.length : avgPointsPerGame;
-      
-      // Calculate variance for volatility
-      const variance = stats?.weeklyPoints.length > 0 
-        ? stats.weeklyPoints.reduce((acc: number, pts: number) => acc + Math.pow(pts - avgPointsPerGame, 2), 0) / stats.weeklyPoints.length
-        : 0;
-      const standardDev = Math.sqrt(variance);
-      
-      // Base ROS projection on actual performance
-      let rosProjection = 0;
-      if (gamesPlayed >= 3) {
-        // Use weighted average: 60% season avg, 40% recent form
-        rosProjection = (avgPointsPerGame * 0.6 + recentAvg * 0.4) * weeksRemaining;
-      } else if (gamesPlayed > 0) {
-        // Less data, be more conservative
-        rosProjection = avgPointsPerGame * 0.8 * weeksRemaining;
-      } else {
-        // No data, use position baseline
-        const baselines = { QB: 18, RB: 12, WR: 11, TE: 8, K: 7, DEF: 8 };
-        rosProjection = (baselines[position as keyof typeof baselines] || 10) * weeksRemaining;
-      }
-      
-      // Team context adjustments
-      const context = teamContext.get(p.team) || defaultContext;
-      let teamMultiplier = 1.0;
-      
-      if (position === 'QB') {
-        teamMultiplier = context.pace * (1 + (context.passRate - 0.57) * 0.5);
-      } else if (position === 'RB') {
-        teamMultiplier = context.pace * (1 + (0.57 - context.passRate) * 0.3) * context.rzEff;
-      } else if (position === 'WR' || position === 'TE') {
-        teamMultiplier = context.pace * (1 + (context.passRate - 0.57) * 0.4) * (context.rzEff * 0.8);
-      }
-      
-      rosProjection *= teamMultiplier;
-      
-      // Calculate schedule difficulty based on defensive rankings
-      const teamRank = defensiveRankings.get(p.team) || 16;
-      const scheduleDifficulty = (teamRank - 16) / 32; // Normalized -0.5 to 0.5
-      
-      // Enhanced sentiment scoring based on trending volume and recency
-      let sentimentScore = 0;
-      if (trendingIds.has(playerId)) {
-        const trendCount = Number(trendingCountMap.get(playerId) || 1);
-        // More adds = higher sentiment (max +0.25)
-        sentimentScore = Math.min(0.25, 0.05 + (trendCount / 100) * 0.2);
-      } else if (gamesPlayed > 0 && recentAvg > avgPointsPerGame * 1.2) {
-        // Recent performance bump without trending
-        sentimentScore = 0.08;
-      } else {
-        sentimentScore = -0.03; // Slight negative for non-trending
-      }
-      
-      // Usage trend based on actual snap/target/carry data
-      let usageTrend = 0;
-      if (stats?.lastStats) {
-        const lastStats = stats.lastStats;
-        if (position === 'RB') {
-          const carries = lastStats.rush_att || 0;
-          usageTrend = carries > 15 ? 0.15 : carries > 10 ? 0.08 : 0;
-        } else if (position === 'WR' || position === 'TE') {
-          const targets = lastStats.rec_tgt || 0;
-          usageTrend = targets > 8 ? 0.15 : targets > 5 ? 0.08 : 0;
-        } else if (position === 'QB') {
-          const attempts = lastStats.pass_att || 0;
-          usageTrend = attempts > 35 ? 0.12 : attempts > 28 ? 0.06 : 0;
+      for (const [playerId, player] of playerEntries) {
+        const p = player as any;
+        const position = p.fantasy_positions[0];
+        const stats = playerStats.get(playerId);
+        const weeksRemaining = Math.max(18 - targetWeek, 1);
+        
+        // Calculate stats up to target week
+        const weeklyPointsUpToTarget = stats?.weeklyPoints.slice(0, targetWeek) || [];
+        const gamesPlayedUpToTarget = weeklyPointsUpToTarget.filter((pts: number) => pts > 0).length;
+        const totalPointsUpToTarget = weeklyPointsUpToTarget.reduce((sum: number, pts: number) => sum + pts, 0);
+        const avgPointsPerGame = gamesPlayedUpToTarget > 0 ? totalPointsUpToTarget / gamesPlayedUpToTarget : 0;
+        
+        const recentForm = weeklyPointsUpToTarget.slice(-3);
+        const recentAvg = recentForm.length > 0 ? recentForm.reduce((a: number, b: number) => a + b, 0) / recentForm.length : avgPointsPerGame;
+        
+        // Calculate variance for volatility
+        const variance = weeklyPointsUpToTarget.length > 0 
+          ? weeklyPointsUpToTarget.reduce((acc: number, pts: number) => acc + Math.pow(pts - avgPointsPerGame, 2), 0) / weeklyPointsUpToTarget.length
+          : 0;
+        const standardDev = Math.sqrt(variance);
+        
+        // Base ROS projection on actual performance
+        let rosProjection = 0;
+        if (gamesPlayedUpToTarget >= 3) {
+          rosProjection = (avgPointsPerGame * 0.6 + recentAvg * 0.4) * weeksRemaining;
+        } else if (gamesPlayedUpToTarget > 0) {
+          rosProjection = avgPointsPerGame * 0.8 * weeksRemaining;
+        } else {
+          const baselines = { QB: 18, RB: 12, WR: 11, TE: 8, K: 7, DEF: 8 };
+          rosProjection = (baselines[position as keyof typeof baselines] || 10) * weeksRemaining;
         }
-      }
-      
-      // Role stability based on consistency and volume
-      let roleStability = 0.5;
-      if (gamesPlayed >= 6) {
-        const consistency = standardDev > 0 ? 1 - Math.min(standardDev / avgPointsPerGame, 1) : 0.5;
-        const volumeStability = p.years_exp > 3 ? 0.9 : p.years_exp > 1 ? 0.7 : 0.5;
-        roleStability = (consistency * 0.6 + volumeStability * 0.4);
-      } else if (gamesPlayed > 0) {
-        roleStability = 0.6;
-      }
-      
-      // Injury risk assessment
-      let injuryRisk = 0.05; // Baseline
-      if (p.injury_status === 'Out') {
-        injuryRisk = 0.9;
-        rosProjection *= 0.1;
-      } else if (p.injury_status === 'Doubtful') {
-        injuryRisk = 0.7;
-        rosProjection *= 0.3;
-      } else if (p.injury_status === 'Questionable') {
-        injuryRisk = 0.4;
-        rosProjection *= 0.7;
-      } else if (p.injury_status === 'IR') {
-        injuryRisk = 1.0;
-        rosProjection *= 0.05;
-      }
-      
-      // Final player value calculation with all factors
-      const playerValue = rosProjection * 
-        (1 + sentimentScore) * 
-        (1 - scheduleDifficulty * 0.15) * 
-        (1 + usageTrend);
-      
-      // Next 3 weeks projection (near-term value)
-      const next3WeeksProjection = Math.min(
-        avgPointsPerGame > 0 ? recentAvg * 3 : rosProjection * 3 / weeksRemaining,
-        rosProjection
-      );
-      
-      // Playoff schedule difficulty (weeks 15-17)
-      const playoffDiff = scheduleDifficulty * 1.2; // Amplify for playoff implications
-      
-      // Volatility flag based on consistency
-      const isVolatile = injuryRisk > 0.3 || roleStability < 0.6 || standardDev > avgPointsPerGame * 0.6;
-      
-      // Confidence score (0-100)
-      const confidence = Math.round(
-        Math.max(0, Math.min(100,
-          50 + // Base
-          (gamesPlayed * 3) + // More games = more confidence
-          (roleStability * 25) + // Stable role adds confidence
-          (sentimentScore * 40) - // Positive sentiment helps
-          (injuryRisk * 30) - // Injury risk reduces confidence
-          (standardDev > avgPointsPerGame * 0.5 ? 15 : 0) // High variance reduces confidence
-        ))
-      );
+        
+        // Team context adjustments
+        const context = teamContext.get(p.team) || defaultContext;
+        let teamMultiplier = 1.0;
+        
+        if (position === 'QB') {
+          teamMultiplier = context.pace * (1 + (context.passRate - 0.57) * 0.5);
+        } else if (position === 'RB') {
+          teamMultiplier = context.pace * (1 + (0.57 - context.passRate) * 0.3) * context.rzEff;
+        } else if (position === 'WR' || position === 'TE') {
+          teamMultiplier = context.pace * (1 + (context.passRate - 0.57) * 0.4) * (context.rzEff * 0.8);
+        }
+        
+        rosProjection *= teamMultiplier;
+        
+        // Calculate schedule difficulty
+        const teamRank = defensiveRankings.get(p.team) || 16;
+        const scheduleDifficulty = (teamRank - 16) / 32;
+        
+        // Enhanced sentiment scoring
+        let sentimentScore = 0;
+        if (trendingIds.has(playerId)) {
+          const trendCount = Number(trendingCountMap.get(playerId) || 1);
+          sentimentScore = Math.min(0.25, 0.05 + (trendCount / 100) * 0.2);
+        } else if (gamesPlayedUpToTarget > 0 && recentAvg > avgPointsPerGame * 1.2) {
+          sentimentScore = 0.08;
+        } else {
+          sentimentScore = -0.03;
+        }
+        
+        // Usage trend
+        let usageTrend = 0;
+        if (stats?.lastStats && targetWeek === currentWeek) {
+          const lastStats = stats.lastStats;
+          if (position === 'RB') {
+            const carries = lastStats.rush_att || 0;
+            usageTrend = carries > 15 ? 0.15 : carries > 10 ? 0.08 : 0;
+          } else if (position === 'WR' || position === 'TE') {
+            const targets = lastStats.rec_tgt || 0;
+            usageTrend = targets > 8 ? 0.15 : targets > 5 ? 0.08 : 0;
+          } else if (position === 'QB') {
+            const attempts = lastStats.pass_att || 0;
+            usageTrend = attempts > 35 ? 0.12 : attempts > 28 ? 0.06 : 0;
+          }
+        }
+        
+        // Role stability
+        let roleStability = 0.5;
+        if (gamesPlayedUpToTarget >= 6) {
+          const consistency = standardDev > 0 ? 1 - Math.min(standardDev / avgPointsPerGame, 1) : 0.5;
+          const volumeStability = p.years_exp > 3 ? 0.9 : p.years_exp > 1 ? 0.7 : 0.5;
+          roleStability = (consistency * 0.6 + volumeStability * 0.4);
+        } else if (gamesPlayedUpToTarget > 0) {
+          roleStability = 0.6;
+        }
+        
+        // Injury risk
+        let injuryRisk = 0.05;
+        if (targetWeek === currentWeek) {
+          if (p.injury_status === 'Out') {
+            injuryRisk = 0.9;
+            rosProjection *= 0.1;
+          } else if (p.injury_status === 'Doubtful') {
+            injuryRisk = 0.7;
+            rosProjection *= 0.3;
+          } else if (p.injury_status === 'Questionable') {
+            injuryRisk = 0.4;
+            rosProjection *= 0.7;
+          } else if (p.injury_status === 'IR') {
+            injuryRisk = 1.0;
+            rosProjection *= 0.05;
+          }
+        }
+        
+        // Final player value
+        const playerValue = rosProjection * 
+          (1 + sentimentScore) * 
+          (1 - scheduleDifficulty * 0.15) * 
+          (1 + usageTrend);
+        
+        // Next 3 weeks projection
+        const next3WeeksProjection = Math.min(
+          avgPointsPerGame > 0 ? recentAvg * 3 : rosProjection * 3 / weeksRemaining,
+          rosProjection
+        );
+        
+        // Playoff schedule difficulty
+        const playoffDiff = scheduleDifficulty * 1.2;
+        
+        // Volatility flag
+        const isVolatile = injuryRisk > 0.3 || roleStability < 0.6 || standardDev > avgPointsPerGame * 0.6;
+        
+        // Confidence score
+        const confidence = Math.round(
+          Math.max(0, Math.min(100,
+            50 +
+            (gamesPlayedUpToTarget * 3) +
+            (roleStability * 25) +
+            (sentimentScore * 40) -
+            (injuryRisk * 30) -
+            (standardDev > avgPointsPerGame * 0.5 ? 15 : 0)
+          ))
+        );
 
-      valuations.push({
-        player_id: playerId,
-        player_name: `${p.first_name} ${p.last_name}`,
-        position,
-        team: p.team || 'FA',
-        season: currentSeason,
-        week: currentWeek,
-        player_value: Math.round(playerValue * 10) / 10,
-        ros_projection: Math.round(rosProjection * 10) / 10,
-        next_3_weeks_projection: Math.round(next3WeeksProjection * 10) / 10,
-        schedule_difficulty: Math.round(scheduleDifficulty * 100) / 100,
-        sentiment_score: Math.round(sentimentScore * 100) / 100,
-        usage_trend: Math.round(usageTrend * 100) / 100,
-        role_stability: Math.round(roleStability * 100) / 100,
-        injury_risk: Math.round(injuryRisk * 100) / 100,
-        volatility_flag: isVolatile,
-        confidence_score: confidence,
-        playoff_schedule_difficulty: Math.round(playoffDiff * 100) / 100,
-        last_updated_at: now.toISOString(),
-      });
+        valuations.push({
+          player_id: playerId,
+          player_name: `${p.first_name} ${p.last_name}`,
+          position,
+          team: p.team || 'FA',
+          season: currentSeason,
+          week: targetWeek,
+          player_value: Math.round(playerValue * 10) / 10,
+          ros_projection: Math.round(rosProjection * 10) / 10,
+          next_3_weeks_projection: Math.round(next3WeeksProjection * 10) / 10,
+          schedule_difficulty: Math.round(scheduleDifficulty * 100) / 100,
+          sentiment_score: Math.round(sentimentScore * 100) / 100,
+          usage_trend: Math.round(usageTrend * 100) / 100,
+          role_stability: Math.round(roleStability * 100) / 100,
+          injury_risk: Math.round(injuryRisk * 100) / 100,
+          volatility_flag: isVolatile,
+          confidence_score: confidence,
+          playoff_schedule_difficulty: Math.round(playoffDiff * 100) / 100,
+          last_updated_at: now.toISOString(),
+        });
+      }
     }
 
     // Get or create normalized player entries for all Sleeper IDs
