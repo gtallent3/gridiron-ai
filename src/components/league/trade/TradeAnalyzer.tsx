@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeftRight, Sparkles } from "lucide-react";
+import { Loader2, ArrowLeftRight, Sparkles, RefreshCw, Database } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TradeRosterPanel } from "./TradeRosterPanel";
@@ -48,6 +48,8 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [tradeResult, setTradeResult] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [playerDataStatus, setPlayerDataStatus] = useState<{ count: number; lastUpdated: string | null } | null>(null);
 
   // Position mapping for ESPN
   const POSITION_MAP: Record<number, string> = {
@@ -56,7 +58,52 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
 
   useEffect(() => {
     fetchAllTeams();
+    checkPlayerDataStatus();
   }, [league.id]);
+
+  const checkPlayerDataStatus = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('player_valuations')
+        .select('last_updated_at', { count: 'exact' })
+        .order('last_updated_at', { ascending: false })
+        .limit(1);
+
+      if (error) throw error;
+
+      setPlayerDataStatus({
+        count: data?.length || 0,
+        lastUpdated: data?.[0]?.last_updated_at || null,
+      });
+    } catch (error) {
+      console.error('Error checking player data status:', error);
+    }
+  };
+
+  const handleSyncPlayerData = async () => {
+    setIsSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-player-valuations');
+
+      if (error) throw error;
+
+      toast({
+        title: "Player Data Synced",
+        description: `Successfully synced ${data.count} players for Week ${data.week}`,
+      });
+
+      await checkPlayerDataStatus();
+    } catch (error: any) {
+      console.error('Error syncing player data:', error);
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync player data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (selectedTeamId) {
@@ -209,13 +256,14 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
       {/* Sticky Header */}
       <Card className="sticky top-0 z-10 shadow-lg border-2 border-primary/50">
         <CardHeader>
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <CardTitle className="text-xl">Trade Analyzer</CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Select players from both teams to evaluate potential trades
-              </p>
-            </div>
+          <div className="flex flex-col items-start gap-4">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 w-full">
+              <div className="space-y-1">
+                <CardTitle className="text-xl">Trade Analyzer</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Select players from both teams to evaluate potential trades
+                </p>
+              </div>
             
             <div className="flex items-center gap-3 flex-wrap">
               <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
@@ -253,6 +301,48 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
                     Evaluate Trade
+                  </>
+                )}
+              </Button>
+            </div>
+            </div>
+
+            {/* Data Sync Status Bar */}
+            <div className="flex items-center justify-between gap-4 pt-3 border-t">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Database className="h-4 w-4" />
+                {playerDataStatus ? (
+                  <span>
+                    {playerDataStatus.count > 0 ? (
+                      <>
+                        Player data: {playerDataStatus.lastUpdated ? 
+                          `Last synced ${new Date(playerDataStatus.lastUpdated).toLocaleDateString()}` 
+                          : 'Available'}
+                      </>
+                    ) : (
+                      <span className="text-destructive font-medium">No player data - sync required</span>
+                    )}
+                  </span>
+                ) : (
+                  <span>Checking data...</span>
+                )}
+              </div>
+              
+              <Button
+                onClick={handleSyncPlayerData}
+                variant="outline"
+                size="sm"
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    Sync Player Data
                   </>
                 )}
               </Button>
