@@ -62,12 +62,33 @@ serve(async (req) => {
     const currentWeek = Math.min(Math.floor((now.getTime() - new Date(now.getFullYear(), 8, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1, 18);
     const currentSeason = now.getFullYear();
 
-    // Fetch player valuations from database
-    const playerIds = [...myPlayers, ...theirPlayers].map(p => p.id || p.player_id);
+    // Get all player IDs from both sides
+    const allPlayerIds = [...myPlayers, ...theirPlayers].map(p => p.id || p.player_id);
+
+    // Look up normalized player IDs (handle both ESPN and Sleeper IDs)
+    const { data: normalizedPlayers } = await supabase
+      .from('normalized_players')
+      .select('player_id, espn_id, sleeper_id')
+      .or(`player_id.in.(${allPlayerIds.join(',')}),espn_id.in.(${allPlayerIds.join(',')}),sleeper_id.in.(${allPlayerIds.join(',')})`);
+
+    // Build mapping from platform ID to normalized player_id
+    const playerIdMap = new Map<string, string>();
+    if (normalizedPlayers) {
+      for (const p of normalizedPlayers) {
+        if (p.espn_id) playerIdMap.set(p.espn_id, p.player_id);
+        if (p.sleeper_id) playerIdMap.set(p.sleeper_id, p.player_id);
+        playerIdMap.set(p.player_id, p.player_id); // Also map normalized ID to itself
+      }
+    }
+
+    // Convert player IDs to normalized IDs for valuation lookups
+    const normalizedPlayerIds = allPlayerIds.map(id => playerIdMap.get(id) || id);
+
+    // Fetch player valuations from database using normalized IDs
     const { data: valuations } = await supabase
       .from('player_valuations')
       .select('*')
-      .in('player_id', playerIds)
+      .in('player_id', normalizedPlayerIds)
       .eq('season', currentSeason)
       .eq('week', currentWeek);
 
@@ -89,7 +110,9 @@ serve(async (req) => {
 
     // Calculate player values with context
     const calculatePlayerValue = (player: any) => {
-      const valuation = valuationMap.get(player.id || player.player_id);
+      const platformId = player.id || player.player_id;
+      const normalizedId = playerIdMap.get(platformId) || platformId;
+      const valuation = valuationMap.get(normalizedId);
       
       if (!valuation) {
         // Fallback to projected points

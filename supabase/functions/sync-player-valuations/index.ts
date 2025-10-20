@@ -96,7 +96,7 @@ serve(async (req) => {
              player.team;
     }).slice(0, 200);
 
-    const valuations = [];
+    const valuations: any[] = [];
 
     for (const [playerId, player] of playerEntries) {
       const p = player as any;
@@ -255,22 +255,68 @@ serve(async (req) => {
       });
     }
 
+    // Get or create normalized player entries for all Sleeper IDs
+    const sleeperIds = valuations.map(v => v.player_id);
+    const { data: normPlayers } = await supabase
+      .from('normalized_players')
+      .select('sleeper_id, player_id')
+      .in('sleeper_id', sleeperIds);
+
+    const normalizedIdMap = new Map<string, string>();
+    if (normPlayers) {
+      for (const p of normPlayers) {
+        if (p.sleeper_id) {
+          normalizedIdMap.set(p.sleeper_id, p.player_id);
+        }
+      }
+    }
+
+    // Create missing normalized entries
+    const missingSleeperIds = sleeperIds.filter(id => !normalizedIdMap.has(id));
+    if (missingSleeperIds.length > 0) {
+      const playersToInsert = missingSleeperIds.map(sleeperId => {
+        const valuation = valuations.find(v => v.player_id === sleeperId);
+        return {
+          player_id: sleeperId, // Use sleeper_id as normalized player_id
+          sleeper_id: sleeperId,
+          player_name: valuation?.player_name || 'Unknown',
+          position: valuation?.position || 'FLEX',
+          team: valuation?.team || 'FA',
+        };
+      });
+
+      await supabase
+        .from('normalized_players')
+        .upsert(playersToInsert, { onConflict: 'sleeper_id', ignoreDuplicates: true });
+
+      // Update the map
+      for (const p of playersToInsert) {
+        normalizedIdMap.set(p.sleeper_id, p.player_id);
+      }
+    }
+
+    // Update valuations to use normalized player_id
+    const normalizedValuations = valuations.map(v => ({
+      ...v,
+      player_id: normalizedIdMap.get(v.player_id) || v.player_id,
+    }));
+
     // Upsert valuations
     const { error } = await supabase
       .from('player_valuations')
-      .upsert(valuations, { 
+      .upsert(normalizedValuations, { 
         onConflict: 'player_id,season,week',
         ignoreDuplicates: false 
       });
 
     if (error) throw error;
 
-    console.log(`Successfully synced ${valuations.length} player valuations for Week ${currentWeek}`);
+    console.log(`Successfully synced ${normalizedValuations.length} player valuations for Week ${currentWeek}`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        count: valuations.length,
+        count: normalizedValuations.length,
         week: currentWeek,
         season: currentSeason 
       }),

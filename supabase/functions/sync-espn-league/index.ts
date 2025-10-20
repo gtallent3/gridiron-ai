@@ -204,10 +204,85 @@ serve(async (req) => {
       throw new Error('Unable to save league data');
     }
 
+      // Collect all unique ESPN player IDs for normalization
+      const allEspnPlayerIds = new Set<string>();
+      for (const team of leagueData.teams || []) {
+        for (const entry of team.roster?.entries || []) {
+          if (entry.playerId) {
+            allEspnPlayerIds.add(entry.playerId.toString());
+          }
+        }
+      }
+
+      // Build a map of ESPN ID -> normalized player info
+      const normalizedMap = new Map<string, { player_id: string; player_name: string; position: string; team: string }>();
+      
+      if (allEspnPlayerIds.size > 0) {
+        // Check which players already exist in normalized_players
+        const { data: normPlayers } = await supabase
+          .from('normalized_players')
+          .select('espn_id, player_id, player_name, position, team')
+          .in('espn_id', Array.from(allEspnPlayerIds));
+        
+        if (normPlayers && normPlayers.length > 0) {
+          for (const p of normPlayers) {
+            if (p.espn_id) {
+              normalizedMap.set(p.espn_id, {
+                player_id: p.player_id,
+                player_name: p.player_name,
+                position: p.position,
+                team: p.team,
+              });
+            }
+          }
+        }
+      }
+
+      // For missing players, create normalized entries
+      const playersToInsert = [];
+      for (const team of leagueData.teams || []) {
+        for (const entry of team.roster?.entries || []) {
+          const espnId = entry.playerId?.toString();
+          if (espnId && !normalizedMap.has(espnId)) {
+            const player = entry.playerPoolEntry?.player;
+            const playerName = player?.fullName || 'Unknown Player';
+            const position = player?.defaultPositionId?.toString() || 'FLEX';
+            const teamAbbr = player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA';
+            
+            // Generate a normalized player_id (using ESPN ID as base)
+            const normalizedPlayerId = `espn_${espnId}`;
+            
+            normalizedMap.set(espnId, {
+              player_id: normalizedPlayerId,
+              player_name: playerName,
+              position: position,
+              team: teamAbbr,
+            });
+            
+            playersToInsert.push({
+              player_id: normalizedPlayerId,
+              espn_id: espnId,
+              player_name: playerName,
+              position: position,
+              team: teamAbbr,
+            });
+          }
+        }
+      }
+
+      // Batch insert new players
+      if (playersToInsert.length > 0) {
+        await supabase
+          .from('normalized_players')
+          .upsert(playersToInsert, { onConflict: 'espn_id', ignoreDuplicates: true });
+      }
+
       // Sync ALL teams in the league (not just the user's team)
       for (const team of leagueData.teams || []) {
         const roster = (team.roster?.entries || []).map((entry: any) => {
           const player = entry.playerPoolEntry?.player;
+          const espnId = entry.playerId?.toString();
+          const normalizedPlayer = espnId ? normalizedMap.get(espnId) : null;
           
           // Get current week projection (kona)
           let projected = 0;
@@ -219,10 +294,11 @@ serve(async (req) => {
           }
 
           return {
-            player_id: entry.playerId?.toString(),
-            player_name: player?.fullName,
-            position: player?.defaultPositionId,
-            team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null,
+            player_id: normalizedPlayer?.player_id || espnId || 'unknown',
+            espn_id: espnId,
+            player_name: normalizedPlayer?.player_name || player?.fullName,
+            position: normalizedPlayer?.position || player?.defaultPositionId,
+            team: normalizedPlayer?.team || (player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
             projected,
             slot: entry.lineupSlotId,
           };
