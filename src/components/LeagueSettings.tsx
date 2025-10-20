@@ -23,6 +23,7 @@ export const LeagueSettings = () => {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [isSyncingPlayers, setIsSyncingPlayers] = useState(false);
   const { toast } = useToast();
 
   const getDisplayScoringType = (lg: any) => {
@@ -183,6 +184,29 @@ export const LeagueSettings = () => {
     }
   };
 
+  const handleSyncPlayerValuations = async () => {
+    setIsSyncingPlayers(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-player-valuations');
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Player Valuations Synced",
+        description: "Player data including bye weeks and injuries has been updated",
+      });
+    } catch (error: any) {
+      console.error('Error syncing player valuations:', error);
+      toast({
+        title: "Sync Failed",
+        description: error.message || "Failed to sync player valuations",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingPlayers(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -206,6 +230,38 @@ export const LeagueSettings = () => {
 
   return (
     <div className="space-y-4">
+      {/* Admin Controls */}
+      <Card>
+        <CardHeader>
+          <CardTitle>System Settings</CardTitle>
+          <CardDescription>Manage player data and system updates</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button
+            onClick={handleSyncPlayerValuations}
+            disabled={isSyncingPlayers}
+            variant="outline"
+            size="sm"
+          >
+            {isSyncingPlayers ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Syncing Player Data...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Sync Player Valuations
+              </>
+            )}
+          </Button>
+          <p className="text-xs text-muted-foreground mt-2">
+            Updates all player bye weeks, injuries, and projections for the 2025-26 season
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Connected Leagues */}
       {leagues.map((league) => (
         <Card key={league.id}>
           <CardHeader>
