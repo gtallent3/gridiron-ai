@@ -38,6 +38,11 @@ export const Header = ({ user }: HeaderProps) => {
             <a href="/connect-league" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Connect League
             </a>
+            {user && (
+              <a href="/settings" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                Settings
+              </a>
+            )}
           </nav>
 
           {user ? (

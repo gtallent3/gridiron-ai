@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import ConnectLeague from "./pages/ConnectLeague";
 import Auth from "./pages/Auth";
 import LeagueDashboard from "./pages/LeagueDashboard";
+import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/connect-league" element={<ConnectLeague />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/league/:leagueId" element={<LeagueDashboard />} />
+          <Route path="/settings" element={<Settings />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
