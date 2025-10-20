@@ -28,9 +28,10 @@ const POSITION_MAP: Record<number, string> = {
   16: 'DEF',
 };
 
-// Slot types for starters vs bench
-const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+// Slot types for starters vs bench vs IR
+const STARTER_SLOTS = [0, 2, 4, 6, 16, 17];
 const BENCH_SLOT = 20;
+const IR_SLOT = 23;
 
 export function RosterView({ league, userTeam }: RosterViewProps) {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
@@ -50,7 +51,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         // For ESPN
         let positionName = POSITION_MAP[player.position] || 'FLEX';
         let isStarter = STARTER_SLOTS.includes(player.slot);
-        let isBench = player.slot === BENCH_SLOT;
+        let isBench = player.slot === BENCH_SLOT || player.slot === IR_SLOT;
         
         // For Sleeper (different format)
         if (league.platform === 'sleeper') {

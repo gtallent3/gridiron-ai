@@ -124,8 +124,9 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
       QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0
     };
     
-    // Filter to only include starters (slot 0-17, 23 for ESPN, starter=true for Sleeper)
-    const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+    // Filter to only include starters (slot 0-17 for ESPN, starter=true for Sleeper)
+    // Note: Slot 20 = Bench, Slot 23 = IR - both should be excluded
+    const STARTER_SLOTS = [0, 2, 4, 6, 16, 17];
     
     roster.forEach((p: any) => {
       // Check if player is a starter
