@@ -313,7 +313,7 @@ serve(async (req) => {
           );
           projected = currentWeekStat?.appliedTotal || 0;
           
-          // Calculate ROS projection by summing all remaining weeks' ESPN projections
+          // Remaining-week projections available from ESPN (often just current week)
           const weeksRemaining = Math.max(18 - currentWeek, 1);
           const remainingWeekProjections = player.stats
             .filter((stat: any) => 
@@ -323,11 +323,15 @@ serve(async (req) => {
             )
             .map((stat: any) => stat.appliedTotal || 0);
           
-          if (remainingWeekProjections.length > 0) {
+          const availableWeeks = remainingWeekProjections.length;
+          if (availableWeeks > 1) {
             rosProjection = remainingWeekProjections.reduce((sum: number, pts: number) => sum + pts, 0);
-            ppgProjection = rosProjection / weeksRemaining;
+            ppgProjection = rosProjection / availableWeeks;
+          } else if (availableWeeks === 1) {
+            const w = remainingWeekProjections[0] || projected || 0;
+            ppgProjection = w;
+            rosProjection = w * weeksRemaining;
           } else if (projected > 0) {
-            // Fallback: use current week projection * weeks remaining
             ppgProjection = projected;
             rosProjection = projected * weeksRemaining;
           }

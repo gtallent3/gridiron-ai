@@ -74,7 +74,7 @@ export async function enrichRosterWithValuations(
   return rosterArray.map((p: RosterPlayer) => {
     const key = (p.player_name || p.playerName || p.name) as string | undefined;
     const v = key ? valMap.get(key) : undefined;
-    
+
     // Debug: Log what data we have for key players
     if (key && (key.includes('Mahomes') || key.includes('Hurts'))) {
       console.log(`[enrichRoster] ${key}:`, {
@@ -86,12 +86,19 @@ export async function enrichRosterWithValuations(
         val_ppg: v?.ppg_projection,
       });
     }
-    
+
+    // Prefer valuations if they are non-zero; otherwise fallback to ESPN roster values
+    const chosenRos = (v?.ros_projection && Number(v.ros_projection) > 0)
+      ? Number(v.ros_projection)
+      : Number(p.ros_projection ?? 0);
+    const chosenPpg = (v?.ppg_projection && Number(v.ppg_projection) > 0)
+      ? Number(v.ppg_projection)
+      : Number(p.ppg_projection ?? 0);
+
     return {
       ...p,
-      // Prefer player_valuations (authoritative) over ESPN roster data
-      ros_projection: v?.ros_projection ?? p.ros_projection ?? 0,
-      ppg_projection: v?.ppg_projection ?? p.ppg_projection ?? 0,
+      ros_projection: chosenRos,
+      ppg_projection: chosenPpg,
       next_3_weeks_projection: v?.next_3_weeks_projection ?? p.next_3_weeks_projection ?? 0,
       // Always use valuations for flags (most up-to-date)
       is_bye_week: v?.is_bye_week ?? p.is_bye_week ?? false,
