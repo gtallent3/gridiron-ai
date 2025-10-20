@@ -100,34 +100,58 @@ export const LeagueSettings = () => {
   };
 
   const handleManualRefresh = async (leagueId: string, platform: string) => {
-    if (platform !== 'sleeper') {
-      toast({
-        title: "Coming Soon",
-        description: `Manual refresh for ${platform.toUpperCase()} is not yet available`,
-      });
-      return;
-    }
-
     setRefreshingId(leagueId);
     try {
-      // This would trigger a re-sync - for now just update the timestamp
-      const { error } = await supabase
-        .from('connected_leagues')
-        .update({ last_synced_at: new Date().toISOString() })
-        .eq('id', leagueId);
+      if (platform === 'espn') {
+        // Use the resync edge function for ESPN
+        const { data, error } = await supabase.functions.invoke('resync-espn-league', {
+          body: { leagueId }
+        });
 
-      if (error) throw error;
+        if (error) {
+          // Check if credentials expired
+          if (error.message?.includes('credentials') || error.message?.includes('expired')) {
+            toast({
+              title: "Credentials Expired",
+              description: "Please reconnect your ESPN league with updated credentials",
+              variant: "destructive",
+            });
+            return;
+          }
+          throw error;
+        }
+
+        toast({
+          title: "✅ League Resynced",
+          description: data.message || "Your ESPN league data has been updated",
+        });
+      } else if (platform === 'sleeper') {
+        // Update timestamp for sleeper (implement proper sync later)
+        const { error } = await supabase
+          .from('connected_leagues')
+          .update({ last_synced_at: new Date().toISOString() })
+          .eq('id', leagueId);
+
+        if (error) throw error;
+
+        toast({
+          title: "Refreshed",
+          description: "League data has been updated",
+        });
+      } else {
+        toast({
+          title: "Coming Soon",
+          description: `Manual refresh for ${platform.toUpperCase()} is not yet available`,
+        });
+        return;
+      }
 
       await fetchLeagues();
-      toast({
-        title: "Refreshed",
-        description: "League data has been updated",
-      });
     } catch (error: any) {
       console.error('Error refreshing league:', error);
       toast({
-        title: "Error",
-        description: "Failed to refresh league",
+        title: "Resync Failed",
+        description: error.message || "Failed to refresh league. Please try again.",
         variant: "destructive",
       });
     } finally {

@@ -4,7 +4,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, Loader2, Plus } from "lucide-react";
+import { CheckCircle2, Loader2, Plus, RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 type League = {
@@ -20,6 +20,7 @@ type League = {
 export const ConnectedLeagues = () => {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -67,6 +68,52 @@ export const ConnectedLeagues = () => {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleQuickResync = async (e: React.MouseEvent, leagueId: string, platform: string) => {
+    e.stopPropagation(); // Prevent navigation
+    
+    if (platform !== 'espn') {
+      toast({
+        title: "Not Available",
+        description: "Quick resync is currently only available for ESPN leagues",
+      });
+      return;
+    }
+
+    setRefreshingId(leagueId);
+    try {
+      const { data, error } = await supabase.functions.invoke('resync-espn-league', {
+        body: { leagueId }
+      });
+
+      if (error) {
+        if (error.message?.includes('credentials') || error.message?.includes('expired')) {
+          toast({
+            title: "Credentials Expired",
+            description: "Please reconnect your ESPN league",
+            variant: "destructive",
+          });
+          return;
+        }
+        throw error;
+      }
+
+      await fetchLeagues();
+      toast({
+        title: "✅ Resynced",
+        description: "League data updated successfully",
+      });
+    } catch (error: any) {
+      console.error('Error resyncing:', error);
+      toast({
+        title: "Resync Failed",
+        description: "Please try again or reconnect your league",
+        variant: "destructive",
+      });
+    } finally {
+      setRefreshingId(null);
     }
   };
 
@@ -118,7 +165,7 @@ export const ConnectedLeagues = () => {
             className="flex items-center justify-between p-4 rounded-lg border border-border/50 hover:border-primary/50 transition-colors cursor-pointer"
             onClick={() => navigate(`/league/${league.id}`)}
           >
-            <div className="space-y-1">
+            <div className="space-y-1 flex-1">
               <div className="flex items-center gap-2">
                 <h4 className="font-semibold">{league.league_name}</h4>
                 <Badge variant="outline">{league.platform.toUpperCase()}</Badge>
@@ -131,6 +178,19 @@ export const ConnectedLeagues = () => {
                 Last synced: {new Date(league.last_synced_at).toLocaleString()}
               </p>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(e) => handleQuickResync(e, league.id, league.platform)}
+              disabled={refreshingId === league.id}
+              className="ml-4"
+            >
+              {refreshingId === league.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         ))}
       </CardContent>
