@@ -58,14 +58,27 @@ export async function enrichRosterWithValuations(
   return rosterArray.map((p: RosterPlayer) => {
     const key = (p.player_name || p.playerName || p.name) as string | undefined;
     const v = key ? valMap.get(key) : undefined;
+    
+    // Debug: Log what data we have
+    if (p.player_name === 'Patrick Mahomes' || p.player_name === 'Jalen Hurts') {
+      console.log(`[enrichRoster] ${key}:`, {
+        espn_ros: p.ros_projection,
+        espn_ppg: p.ppg_projection,
+        val_ros: v?.ros_projection,
+        val_ppg: v?.ppg_projection,
+      });
+    }
+    
     return {
       ...p,
-      is_bye_week: v?.is_bye_week ?? p.is_bye_week ?? false,
-      injury_status: v?.injury_status ?? p.injury_status ?? null,
-      injury_duration_weeks: v?.injury_duration_weeks ?? p.injury_duration_weeks ?? 0,
+      // Prefer player_valuations (authoritative) over ESPN roster data
       ros_projection: v?.ros_projection ?? p.ros_projection ?? 0,
       ppg_projection: v?.ppg_projection ?? p.ppg_projection ?? 0,
       next_3_weeks_projection: v?.next_3_weeks_projection ?? p.next_3_weeks_projection ?? 0,
+      // Always use valuations for flags (most up-to-date)
+      is_bye_week: v?.is_bye_week ?? p.is_bye_week ?? false,
+      injury_status: v?.injury_status ?? p.injury_status ?? null,
+      injury_duration_weeks: v?.injury_duration_weeks ?? p.injury_duration_weeks ?? 0,
     };
   });
 }
