@@ -90,7 +90,17 @@ serve(async (req) => {
     }
 
     const leagueData = await leagueResponse.json();
-    const scoringItems = leagueData.settings?.scoringSettings?.scoringItems || {};
+    const scoringItemsArray = Array.isArray(leagueData.settings?.scoringSettings?.scoringItems)
+      ? leagueData.settings.scoringSettings.scoringItems
+      : [];
+    const scoringMap = new Map<number, number>();
+    for (const item of scoringItemsArray) {
+      const statId = Number(item?.statId);
+      const points = Number(item?.points);
+      if (!Number.isNaN(statId) && Number.isFinite(points)) {
+        scoringMap.set(statId, points);
+      }
+    }
 
     // Fetch league-specific player info with applied totals for the target week
     const statsUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${leagueId}?scoringPeriodId=${week}&view=kona_player_info`;
@@ -163,12 +173,13 @@ serve(async (req) => {
         const rawStats = weekStats.stats;
         console.log(`${fullName} (${positionName}) week ${week} raw stats:`, Object.keys(rawStats).length, 'stats');
         for (const [statId, statValue] of Object.entries(rawStats)) {
-          const scoringItem = scoringItems[statId as keyof typeof scoringItems];
-          if (scoringItem && typeof (scoringItem as any).points === 'number' && typeof statValue === 'number') {
-            const points = (scoringItem as any).points * statValue;
-            actualPoints += points;
-            if (Math.abs(points) > 1) {
-              console.log(`  Stat ${statId}: ${statValue} × ${(scoringItem as any).points} = ${points.toFixed(2)}`);
+          const statIdNum = Number(statId);
+          const points = scoringMap.get(statIdNum) || 0;
+          if (points !== 0 && typeof statValue === 'number') {
+            const statPoints = points * statValue;
+            actualPoints += statPoints;
+            if (Math.abs(statPoints) > 1) {
+              console.log(`  Stat ${statId}: ${statValue} × ${points} = ${statPoints.toFixed(2)}`);
             }
           }
         }
