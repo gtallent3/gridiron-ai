@@ -187,21 +187,37 @@ export const LeagueSettings = () => {
   const handleSyncPlayerValuations = async () => {
     setIsSyncingPlayers(true);
     try {
-      const { data, error } = await supabase.functions.invoke('sync-player-valuations');
+      toast({
+        title: "Sync Started",
+        description: "Player data sync is running in the background. This may take 1-2 minutes...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('sync-player-valuations', {
+        body: {},
+      });
 
       if (error) throw error;
 
       toast({
         title: "✅ Player Valuations Synced",
-        description: "Player data including bye weeks and injuries has been updated",
+        description: `Successfully synced ${data.count || 'all'} players for Week ${data.week}`,
       });
     } catch (error: any) {
       console.error('Error syncing player valuations:', error);
-      toast({
-        title: "Sync Failed",
-        description: error.message || "Failed to sync player valuations",
-        variant: "destructive",
-      });
+      
+      // Check if it's a timeout/network error
+      if (error.message?.includes('fetch') || error.message?.includes('network')) {
+        toast({
+          title: "Sync In Progress",
+          description: "The sync is still running. Check the logs in a few minutes to confirm completion.",
+        });
+      } else {
+        toast({
+          title: "Sync Failed",
+          description: error.message || "Failed to sync player valuations",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSyncingPlayers(false);
     }
