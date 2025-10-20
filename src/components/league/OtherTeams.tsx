@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { enrichRosterWithValuations } from "@/lib/enrichRoster";
 
 // ESPN numeric position -> label mapping
 const POSITION_MAP: Record<number, string> = {
@@ -58,7 +59,12 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
 
       if (error) throw error;
       
-      setTeams(data || []);
+      const enrichedTeams = await Promise.all((data || []).map(async (team: any) => ({
+        ...team,
+        roster: await enrichRosterWithValuations(Array.isArray(team.roster) ? team.roster : [], { week: 7, season: 2025 })
+      })));
+      
+      setTeams(enrichedTeams);
     } catch (error) {
       console.error('Error fetching teams:', error);
       setTeams([]);
@@ -85,6 +91,9 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
         position,
         team: player.team || 'NFL',
         projected: typeof player.projected === 'number' ? player.projected : 0,
+        is_bye_week: player.is_bye_week || false,
+        injury_status: player.injury_status || null,
+        injury_duration_weeks: player.injury_duration_weeks || 0,
       };
     });
   };

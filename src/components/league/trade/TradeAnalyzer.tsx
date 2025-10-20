@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TradeRosterPanel } from "./TradeRosterPanel";
 import { TradeEvaluation } from "./TradeEvaluation";
+import { enrichRosterWithValuations } from "@/lib/enrichRoster";
 
 type League = {
   id: string;
@@ -125,14 +126,14 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
 
       if (error) throw error;
 
-      // Filter out current user's team and properly type the roster
-      const otherTeams = data
-        .filter(team => team.team_id !== userTeam?.team_id)
-        .map(team => ({
-          ...team,
-          roster: Array.isArray(team.roster) ? team.roster : []
-        }));
-      setAllTeams(otherTeams as Team[]);
+      // Filter out current user's team and enrich rosters with valuations
+      const otherTeamsRaw = (data || []).filter(team => team.team_id !== userTeam?.team_id);
+      const enriched = await Promise.all(otherTeamsRaw.map(async (team: any) => ({
+        ...team,
+        roster: await enrichRosterWithValuations(Array.isArray(team.roster) ? team.roster : [], { week: 7, season: 2025 })
+      })));
+
+      setAllTeams(enriched as Team[]);
     } catch (error: any) {
       console.error('Error fetching teams:', error);
       toast({

@@ -5,6 +5,7 @@ import { Progress } from "@/components/ui/progress";
 import { PlayerCard } from "./PlayerCard";
 import { Trophy, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { enrichRosterWithValuations } from "@/lib/enrichRoster";
 
 type League = {
   id: string;
@@ -46,9 +47,11 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
         .maybeSingle();
 
       if (!error && data) {
+        const baseRoster = Array.isArray(data.roster) ? data.roster : [];
+        const enrichedRoster = await enrichRosterWithValuations(baseRoster, { week: league.current_week || 7, season: 2025 });
         setOpponentTeam({
           ...data,
-          roster: Array.isArray(data.roster) ? data.roster : [],
+          roster: enrichedRoster,
         });
       }
       setLoading(false);
@@ -95,6 +98,9 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
       position: p.position,
       team: p.team,
       projected: p.projected,
+      is_bye_week: p.is_bye_week || false,
+      injury_status: p.injury_status || null,
+      injury_duration_weeks: p.injury_duration_weeks || 0,
     }));
 
   // Map ESPN position IDs to position strings
