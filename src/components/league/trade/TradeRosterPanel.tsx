@@ -10,6 +10,8 @@ type Player = {
   position: string;
   team: string;
   projected: number;
+  ros_projection?: number;
+  ppg_projection?: number;
   status?: string;
   is_bye_week?: boolean;
   injury_status?: string | null;
@@ -33,10 +35,10 @@ export function TradeRosterPanel({
   onPlayerToggle,
   side,
 }: TradeRosterPanelProps) {
-  const totalProjected = roster.reduce((sum, p) => sum + (p.projected || 0), 0);
+  const totalProjected = roster.reduce((sum, p) => sum + (p.ros_projection || p.projected || 0), 0);
   const selectedTotal = roster
     .filter(p => selectedPlayers.includes(p.id))
-    .reduce((sum, p) => sum + (p.projected || 0), 0);
+    .reduce((sum, p) => sum + (p.ros_projection || p.projected || 0), 0);
 
   // Group by position
   const groupedRoster = roster.reduce((acc, player) => {
@@ -62,7 +64,7 @@ export function TradeRosterPanel({
             )}
           </div>
           <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">Total Projected</span>
+            <span className="text-muted-foreground">Total ROS Projected</span>
             <span className="font-bold text-primary">{totalProjected.toFixed(1)} pts</span>
           </div>
           {selectedPlayers.length > 0 && (

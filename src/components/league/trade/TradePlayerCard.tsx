@@ -10,6 +10,8 @@ type Player = {
   position: string;
   team: string;
   projected: number;
+  ros_projection?: number;
+  ppg_projection?: number;
   status?: string;
   is_bye_week?: boolean;
   injury_status?: string | null;
@@ -83,39 +85,42 @@ export function TradePlayerCard({ player, isSelected, onToggle }: TradePlayerCar
         </div>
 
         <div className="pt-2 border-t border-border/50">
-          <p className="text-xs text-muted-foreground">Rest-of-Season</p>
+          <p className="text-xs text-muted-foreground">Rest-of-Season Projection</p>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <p className="text-lg font-bold cursor-help">
-                  {player.projected > 0 
-                    ? player.projected.toFixed(1) 
+                  {(player.ros_projection ?? 0) > 0 
+                    ? (player.ros_projection ?? 0).toFixed(1) 
                     : player.is_bye_week 
-                      ? '0 (Bye Week)' 
+                      ? 'BYE' 
                       : player.injury_status 
-                        ? '0 (Injured)'
+                        ? 'INJ'
                         : 'N/A'}
                 </p>
               </TooltipTrigger>
-              {(player.is_bye_week || player.injury_status) && (
-                <TooltipContent>
-                  {player.is_bye_week && <p>Player's team is on bye this week - no long-term impact</p>}
+              <TooltipContent>
+                <div className="space-y-1">
+                  <p>ROS Total: {(player.ros_projection ?? 0).toFixed(1)} pts</p>
+                  <p>PPG: {(player.ppg_projection ?? 0).toFixed(1)} pts/game</p>
+                  <p>This Week: {player.projected.toFixed(1)} pts</p>
+                  {player.is_bye_week && <p className="text-yellow-400 mt-2">Team on bye this week</p>}
                   {player.injury_status && (
-                    <div>
+                    <div className="mt-2">
                       <p>Status: {player.injury_status}</p>
                       {player.injury_duration_weeks && player.injury_duration_weeks >= 4 && (
-                        <p className="text-red-400">Long-term injury (4+ weeks) - trade value reduced 70%</p>
+                        <p className="text-red-400">Long-term injury (4+ weeks)</p>
                       )}
                       {player.injury_duration_weeks && player.injury_duration_weeks >= 2 && player.injury_duration_weeks < 4 && (
-                        <p className="text-orange-400">Medium-term injury (2-3 weeks) - trade value reduced 25%</p>
+                        <p className="text-orange-400">Medium-term injury (2-3 weeks)</p>
                       )}
                       {player.injury_duration_weeks && player.injury_duration_weeks === 1 && (
-                        <p className="text-yellow-400">Short-term injury (~1 week) - trade value reduced 10%</p>
+                        <p className="text-yellow-400">Short-term injury (~1 week)</p>
                       )}
                     </div>
                   )}
-                </TooltipContent>
-              )}
+                </div>
+              </TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>

@@ -36,6 +36,8 @@ type Player = {
   position: string;
   team: string;
   projected: number;
+  ros_projection?: number;
+  ppg_projection?: number;
   status?: string;
   is_bye_week?: boolean;
   injury_status?: string | null;
@@ -164,6 +166,8 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
         position: positionName.toString().toUpperCase(),
         team: player.team || 'NFL',
         projected: player.projected || 0,
+        ros_projection: player.ros_projection || 0,
+        ppg_projection: player.ppg_projection || 0,
         status: player.status,
         is_bye_week: player.is_bye_week || false,
         injury_status: player.injury_status || null,
