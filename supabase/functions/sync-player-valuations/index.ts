@@ -122,25 +122,26 @@ serve(async (req) => {
     // Default team context for teams not in top tier
     const defaultContext = { pace: 1.0, passRate: 0.57, rzEff: 1.0 };
 
-    // Filter for active players only (exclude retired)
-    const playerEntries = Object.entries(sleeperPlayers).filter(([_, player]: [string, any]) => {
-      const isFantasyRelevant = player.fantasy_positions && 
-             player.fantasy_positions.length > 0 &&
-             ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].includes(player.fantasy_positions[0]);
-      
-      const hasTeam = player.team && player.team !== null;
-      
-      // Filter out retired players - check active status and exclude old statuses
-      const isActive = player.active === true || 
-                      (player.status === 'Active' || 
-                       player.status === 'Injured Reserve' || 
-                       player.status === 'Practice Squad' ||
-                       player.status === null || 
-                       player.status === undefined);
-      
-      const notRetired = player.status !== 'Retired';
-      
-      return isFantasyRelevant && hasTeam && isActive && notRetired;
+    // Build filtered entries for active and relevant players (exclude retired/inactive)
+    const playerEntries = Object.entries(sleeperPlayers).filter(([id, player]: [string, any]) => {
+      const p = player as any;
+      const pos = p.fantasy_positions?.[0];
+      const isFantasyRelevant = pos && ['QB','RB','WR','TE','K','DEF'].includes(pos);
+      const status = (p.status || '').toString().toLowerCase();
+      const isRetired = status === 'retired';
+      const isInactive = status === 'inactive';
+      const isActiveFlag = p.active === true;
+      const hasRecentStats = playerStats.has(id);
+      const isTrending = trendingIds.has(id);
+      const hasTeam = !!p.team;
+
+      return (
+        isFantasyRelevant &&
+        !isRetired &&
+        !(p.active === false && isInactive) &&
+        (isActiveFlag || hasRecentStats || isTrending) &&
+        (hasTeam || hasRecentStats)
+      );
     });
 
     const valuations: any[] = [];
@@ -309,7 +310,7 @@ serve(async (req) => {
 
       valuations.push({
         player_id: playerId,
-        player_name: `${p.first_name} ${p.last_name}`,
+        player_name: (p.full_name || `${p.first_name ?? ''} ${p.last_name ?? ''}`).trim(),
         position,
         team: p.team || 'FA',
         season: currentSeason,
