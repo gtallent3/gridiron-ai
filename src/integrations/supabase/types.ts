@@ -145,7 +145,10 @@ export type Database = {
           confidence_score: number | null
           created_at: string | null
           id: string
+          injury_duration_weeks: number | null
           injury_risk: number | null
+          injury_status: string | null
+          is_bye_week: boolean | null
           last_updated_at: string | null
           next_3_weeks_projection: number
           player_id: string
@@ -168,7 +171,10 @@ export type Database = {
           confidence_score?: number | null
           created_at?: string | null
           id?: string
+          injury_duration_weeks?: number | null
           injury_risk?: number | null
+          injury_status?: string | null
+          is_bye_week?: boolean | null
           last_updated_at?: string | null
           next_3_weeks_projection?: number
           player_id: string
@@ -191,7 +197,10 @@ export type Database = {
           confidence_score?: number | null
           created_at?: string | null
           id?: string
+          injury_duration_weeks?: number | null
           injury_risk?: number | null
+          injury_status?: string | null
+          is_bye_week?: boolean | null
           last_updated_at?: string | null
           next_3_weeks_projection?: number
           player_id?: string

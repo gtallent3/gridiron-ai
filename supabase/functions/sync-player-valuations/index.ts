@@ -33,6 +33,39 @@ serve(async (req) => {
     const trendingIds = new Set(trending.map((t: any) => t.player_id));
     const trendingCountMap = new Map(trending.map((t: any) => [t.player_id, t.count || 1]));
 
+    // Fetch team bye weeks for the current season
+    const byeWeeks = new Map<string, number>();
+    try {
+      const scheduleRes = await fetch(`https://api.sleeper.app/v1/schedule/nfl/regular/${currentSeason}`);
+      const schedule = await scheduleRes.json();
+      
+      // Map teams to their bye weeks
+      const teamsByWeek = new Map<number, Set<string>>();
+      schedule.forEach((game: any) => {
+        const week = game.week;
+        if (!teamsByWeek.has(week)) teamsByWeek.set(week, new Set());
+        if (game.home) teamsByWeek.get(week)!.add(game.home);
+        if (game.away) teamsByWeek.get(week)!.add(game.away);
+      });
+      
+      // Detect bye weeks (teams not playing in a given week)
+      const allTeams = new Set<string>();
+      Object.values(sleeperPlayers).forEach((p: any) => {
+        if (p.team) allTeams.add(p.team);
+      });
+      
+      for (let week = 1; week <= 18; week++) {
+        const playingTeams = teamsByWeek.get(week) || new Set();
+        allTeams.forEach(team => {
+          if (!playingTeams.has(team)) {
+            byeWeeks.set(`${team}_${week}`, week);
+          }
+        });
+      }
+    } catch (err) {
+      console.warn('Could not fetch bye week data:', err);
+    }
+
     // Fetch player stats for current season
     const statsPromises = [];
     for (let week = 1; week <= currentWeek; week++) {
@@ -189,21 +222,35 @@ serve(async (req) => {
           roleStability = 0.6;
         }
         
-        // Injury risk
+        // Bye week detection
+        const isByeWeek = byeWeeks.has(`${p.team}_${targetWeek}`);
+        
+        // Injury risk and duration estimation
         let injuryRisk = 0.05;
+        let injuryDuration = 0; // weeks
+        let injuryMultiplier = 1.0;
+        
         if (targetWeek === currentWeek) {
           if (p.injury_status === 'Out') {
             injuryRisk = 0.9;
-            rosProjection *= 0.1;
+            injuryDuration = 1; // Short-term, 1 week
+            injuryMultiplier = 0.9; // 10% penalty
+            rosProjection *= injuryMultiplier;
           } else if (p.injury_status === 'Doubtful') {
             injuryRisk = 0.7;
-            rosProjection *= 0.3;
+            injuryDuration = 1;
+            injuryMultiplier = 0.9;
+            rosProjection *= injuryMultiplier;
           } else if (p.injury_status === 'Questionable') {
             injuryRisk = 0.4;
-            rosProjection *= 0.7;
-          } else if (p.injury_status === 'IR') {
+            injuryDuration = 1;
+            injuryMultiplier = 0.95; // 5% penalty
+            rosProjection *= injuryMultiplier;
+          } else if (p.injury_status === 'IR' || p.injury_status === 'PUP') {
             injuryRisk = 1.0;
-            rosProjection *= 0.05;
+            injuryDuration = 4; // Long-term, 4+ weeks
+            injuryMultiplier = 0.3; // 70% penalty
+            rosProjection *= injuryMultiplier;
           }
         }
         
@@ -256,6 +303,9 @@ serve(async (req) => {
           confidence_score: confidence,
           playoff_schedule_difficulty: Math.round(playoffDiff * 100) / 100,
           last_updated_at: now.toISOString(),
+          is_bye_week: isByeWeek,
+          injury_status: p.injury_status || null,
+          injury_duration_weeks: injuryDuration,
         });
       }
     }

@@ -122,12 +122,47 @@ serve(async (req) => {
           scheduleAdj: 0,
           sentimentAdj: 0,
           volatility: false,
+          is_bye_week: false,
+          injury_status: null,
+          injury_duration_weeks: 0,
         };
       }
 
       const posWeight = POSITION_WEIGHTS[valuation.position as keyof typeof POSITION_WEIGHTS] || 1;
       let rosValue = Number(valuation.player_value) * posWeight;
       let next3Value = Number(valuation.next_3_weeks_projection);
+
+      // Bye week and injury handling
+      const isByeWeek = valuation.is_bye_week || false;
+      const injuryStatus = valuation.injury_status;
+      const injuryDuration = valuation.injury_duration_weeks || 0;
+
+      // Bye week: reduce next 3 weeks but NOT ROS value (temporary absence)
+      if (isByeWeek) {
+        next3Value *= 0.67; // One week of 3 is a bye
+        // ROS value is unaffected by bye weeks
+      }
+
+      // Injury: reduce both short-term and long-term value based on severity
+      if (injuryStatus && (injuryStatus === 'Out' || injuryStatus === 'IR' || injuryStatus === 'PUP' || injuryStatus === 'Doubtful' || injuryStatus === 'Questionable')) {
+        if (injuryDuration >= 4 || injuryStatus === 'IR' || injuryStatus === 'PUP') {
+          // Long-term injury (4+ weeks or IR): significant ROS penalty
+          rosValue *= 0.3; // 70% penalty
+          next3Value *= 0.1; // Likely out for next 3 weeks
+        } else if (injuryDuration >= 2) {
+          // Medium-term (2-3 weeks): moderate penalty
+          rosValue *= 0.75; // 25% penalty
+          next3Value *= 0.5; // 50% penalty for next 3 weeks
+        } else if (injuryDuration === 1 || injuryStatus === 'Out' || injuryStatus === 'Doubtful') {
+          // Short-term (1 week): minor penalty
+          rosValue *= 0.9; // 10% penalty
+          next3Value *= 0.7; // 30% penalty for next 3 weeks
+        } else if (injuryStatus === 'Questionable') {
+          // Questionable: very minor penalty
+          rosValue *= 0.95; // 5% penalty
+          next3Value *= 0.85; // 15% penalty
+        }
+      }
 
       // Apply schedule adjustment
       const scheduleAdj = Number(valuation.schedule_difficulty) * SCHEDULE_WEIGHT;
@@ -156,6 +191,9 @@ serve(async (req) => {
         volatility: valuation.volatility_flag,
         usageTrend: Number(valuation.usage_trend),
         roleStability: Number(valuation.role_stability),
+        is_bye_week: isByeWeek,
+        injury_status: injuryStatus,
+        injury_duration_weeks: injuryDuration,
       };
     };
 

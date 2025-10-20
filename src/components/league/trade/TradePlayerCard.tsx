@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
 type Player = {
@@ -10,6 +11,9 @@ type Player = {
   team: string;
   projected: number;
   status?: string;
+  is_bye_week?: boolean;
+  injury_status?: string | null;
+  injury_duration_weeks?: number;
 };
 
 type TradePlayerCardProps = {
@@ -55,9 +59,40 @@ export function TradePlayerCard({ player, isSelected, onToggle }: TradePlayerCar
 
         <div className="pt-2 border-t border-border/50">
           <p className="text-xs text-muted-foreground">Rest-of-Season</p>
-          <p className="text-lg font-bold">
-            {player.projected > 0 ? player.projected.toFixed(1) : 'N/A'}
-          </p>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <p className="text-lg font-bold cursor-help">
+                  {player.projected > 0 
+                    ? player.projected.toFixed(1) 
+                    : player.is_bye_week 
+                      ? '0 (Bye Week)' 
+                      : player.injury_status 
+                        ? '0 (Injured)'
+                        : 'N/A'}
+                </p>
+              </TooltipTrigger>
+              {(player.is_bye_week || player.injury_status) && (
+                <TooltipContent>
+                  {player.is_bye_week && <p>Player's team is on bye this week - no long-term impact</p>}
+                  {player.injury_status && (
+                    <div>
+                      <p>Status: {player.injury_status}</p>
+                      {player.injury_duration_weeks && player.injury_duration_weeks >= 4 && (
+                        <p className="text-red-400">Long-term injury (4+ weeks) - trade value reduced 70%</p>
+                      )}
+                      {player.injury_duration_weeks && player.injury_duration_weeks >= 2 && player.injury_duration_weeks < 4 && (
+                        <p className="text-orange-400">Medium-term injury (2-3 weeks) - trade value reduced 25%</p>
+                      )}
+                      {player.injury_duration_weeks && player.injury_duration_weeks === 1 && (
+                        <p className="text-yellow-400">Short-term injury (~1 week) - trade value reduced 10%</p>
+                      )}
+                    </div>
+                  )}
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </CardContent>
     </Card>
