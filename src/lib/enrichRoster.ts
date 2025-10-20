@@ -53,15 +53,22 @@ export async function enrichRosterWithValuations(
     .eq('season', season)
     .in('player_name', Array.from(new Set(names)));
 
+  console.log(`[enrichRoster] Fetched ${valuations?.length || 0} valuations for ${names.length} names`);
+  if (valuations && valuations.length > 0) {
+    console.log('[enrichRoster] Sample valuations:', valuations.slice(0, 3).map(v => ({ name: v.player_name, ros: v.ros_projection, ppg: v.ppg_projection })));
+  }
+
   const valMap = new Map<string, any>((valuations || []).map(v => [v.player_name, v]));
 
   return rosterArray.map((p: RosterPlayer) => {
     const key = (p.player_name || p.playerName || p.name) as string | undefined;
     const v = key ? valMap.get(key) : undefined;
     
-    // Debug: Log what data we have
-    if (p.player_name === 'Patrick Mahomes' || p.player_name === 'Jalen Hurts') {
+    // Debug: Log what data we have for key players
+    if (key && (key.includes('Mahomes') || key.includes('Hurts'))) {
       console.log(`[enrichRoster] ${key}:`, {
+        key_used: key,
+        has_valuation: !!v,
         espn_ros: p.ros_projection,
         espn_ppg: p.ppg_projection,
         val_ros: v?.ros_projection,
