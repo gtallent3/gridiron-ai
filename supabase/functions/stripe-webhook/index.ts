@@ -13,8 +13,7 @@
  *    - checkout.session.completed
  *    - invoice.payment_succeeded
  *    - customer.subscription.deleted
- * 6. Save and copy the "Signing secret"
- * 7. Add the signing secret as STRIPE_WEBHOOK_SECRET in Supabase secrets
+ * 6. Save and copy the "Signing secret" (already configured)
  * 
  * Events Handled:
  * - checkout.session.completed: Credits tokens for one-time purchases and subscription signups
@@ -62,9 +61,21 @@ serve(async (req) => {
       throw new Error("No Stripe signature found");
     }
 
-    // Verify webhook signature (in production, use your webhook secret)
-    // For now, parse the event directly
-    const event = JSON.parse(body);
+    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+    if (!webhookSecret) {
+      throw new Error("STRIPE_WEBHOOK_SECRET is not set");
+    }
+
+    // Verify webhook signature for security
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      logStep("Webhook signature verified");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logStep("Webhook signature verification failed", { error: errorMessage });
+      throw new Error(`Webhook signature verification failed: ${errorMessage}`);
+    }
     logStep("Event type", { type: event.type });
 
     switch (event.type) {
