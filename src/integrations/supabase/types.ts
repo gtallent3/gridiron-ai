@@ -485,6 +485,27 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_teams: {
         Row: {
           created_at: string | null
@@ -659,6 +680,13 @@ export type Database = {
         Args: { p_league_id: string; p_platform: string; p_user_id: string }
         Returns: Json
       }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
       store_league_credentials: {
         Args: {
           p_credentials: Json
@@ -679,6 +707,7 @@ export type Database = {
       }
     }
     Enums: {
+      app_role: "admin" | "moderator" | "user"
       league_platform: "espn" | "yahoo" | "sleeper"
       player_position: "QB" | "RB" | "WR" | "TE" | "K" | "DEF"
       prop_stat_type:
@@ -834,6 +863,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "moderator", "user"],
       league_platform: ["espn", "yahoo", "sleeper"],
       player_position: ["QB", "RB", "WR", "TE", "K", "DEF"],
       prop_stat_type: [
