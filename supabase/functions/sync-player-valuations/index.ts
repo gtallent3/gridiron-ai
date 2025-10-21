@@ -27,11 +27,11 @@ serve(async (req) => {
     console.log('Starting weekly player valuation sync...');
 
     const now = new Date();
-    // Calculate current week based on 2025 NFL season start (typically early September)
+    // Fallback calculation based on estimated 2025 NFL season start (kept as fallback only)
     const seasonStart = new Date(2025, 8, 5); // September 5, 2025 (month is 0-indexed)
     const weeksSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (7 * 24 * 60 * 60 * 1000));
-    const currentWeek = Math.min(Math.max(weeksSinceStart + 1, 1), 18);
-    const currentSeason = 2025;
+    let currentWeek = Math.min(Math.max(weeksSinceStart + 1, 1), 18);
+    let currentSeason = 2025;
 
     // Fetch all required data in parallel
     const [sleeperPlayers, trending, nflState] = await Promise.all([
@@ -39,6 +39,17 @@ serve(async (req) => {
       fetch('https://api.sleeper.app/v1/players/nfl/trending/add?lookback_hours=168&limit=200').then(r => r.json()),
       fetch(`https://api.sleeper.app/v1/state/nfl`).then(r => r.json())
     ]);
+    
+    // Prefer live NFL state for season/week when available
+    const stateSeason = Number(nflState?.season);
+    const stateWeek = Number(nflState?.week);
+    if (Number.isFinite(stateSeason) && stateSeason > 2000) {
+      currentSeason = stateSeason;
+    }
+    if (Number.isFinite(stateWeek) && stateWeek >= 1 && stateWeek <= 18) {
+      currentWeek = stateWeek;
+    }
+    console.log(`Using live NFL state: season=${currentSeason}, week=${currentWeek}`);
     
     const trendingIds = new Set(trending.map((t: any) => t.player_id));
     const trendingCountMap = new Map(trending.map((t: any) => [t.player_id, t.count || 1]));
