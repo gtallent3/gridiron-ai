@@ -108,8 +108,8 @@ serve(async (req) => {
             .eq("user_id", userId)
             .maybeSingle();
 
-          const newBalance = (currentTokenData?.balance || 3) + 10;
-          const newLifetimeEarned = (currentTokenData?.lifetime_earned || 3) + 10;
+          const newBalance = (currentTokenData?.balance || 0) + 10;
+          const newLifetimeEarned = (currentTokenData?.lifetime_earned || 0) + 10;
 
           // UPSERT user tokens with unlimited subscription
           const { error: updateError } = await supabaseClient
@@ -151,7 +151,7 @@ serve(async (req) => {
             .eq("user_id", userId)
             .maybeSingle();
 
-          const newPurchaseBalance = (currentPurchaseData?.balance || 3) + tokens;
+          const newPurchaseBalance = (currentPurchaseData?.balance || 0) + tokens;
           const newLifetimePurchased = (currentPurchaseData?.lifetime_purchased || 0) + tokens;
 
           // UPSERT tokens to user balance
@@ -204,8 +204,8 @@ serve(async (req) => {
               .eq("user_id", userId)
               .maybeSingle();
 
-            const newRenewalBalance = (renewalData?.balance || 3) + 10;
-            const newRenewalEarned = (renewalData?.lifetime_earned || 3) + 10;
+            const newRenewalBalance = (renewalData?.balance || 0) + 10;
+            const newRenewalEarned = (renewalData?.lifetime_earned || 0) + 10;
 
             // UPSERT subscription renewal and add monthly tokens
             const { error: updateError } = await supabaseClient
