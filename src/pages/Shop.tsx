@@ -129,7 +129,7 @@ export default function Shop() {
               <Badge className="bg-purple-500 text-white">Most Popular</Badge>
             </div>
             <CardDescription className="text-base">
-              All AI features + unlimited props betting
+              All AI features + 10 free tokens
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -141,7 +141,7 @@ export default function Shop() {
                 "Unlimited AI Assistant questions",
                 "Unlimited Start/Sit recommendations",
                 "Unlimited Trade Analysis",
-                "Unlimited Props betting",
+                "10 free tokens monthly",
                 "Priority support",
                 "Early access to new features"
               ].map((feature) => (

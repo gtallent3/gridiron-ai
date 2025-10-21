@@ -29,3 +29,6 @@ verify_jwt = true
 
 [functions.deduct-token]
 verify_jwt = true
+
+[functions.grant-weekly-reward]
+verify_jwt = true

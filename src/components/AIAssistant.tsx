@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { MessageSquare, Send, Bot } from "lucide-react";
+import { MessageSquare, Send, Bot, Coins } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Input } from "./ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useTokens } from "@/hooks/useTokens";
 
 type Message = {
   role: "user" | "assistant";
@@ -13,6 +14,7 @@ type Message = {
 
 export const AIAssistant = () => {
   const { toast } = useToast();
+  const { deductToken, checkBalance, hasUnlimited } = useTokens();
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -27,6 +29,16 @@ export const AIAssistant = () => {
 
   const handleSend = async () => {
     if (!input.trim()) return;
+    
+    // Check token balance
+    if (!checkBalance(1)) {
+      toast({
+        title: "Insufficient Tokens",
+        description: "You need 1 token to ask a question",
+        variant: "destructive",
+      });
+      return;
+    }
     
     // Validate message length
     if (input.length > MAX_MESSAGE_LENGTH) {
@@ -52,6 +64,13 @@ export const AIAssistant = () => {
     setIsTyping(true);
 
     try {
+      // Deduct token
+      const tokenResult = await deductToken("ai_chat", `AI Assistant question: ${input.slice(0, 50)}...`);
+      if (!tokenResult.success) {
+        setIsTyping(false);
+        return;
+      }
+
       // Get the user's auth token
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -125,6 +144,10 @@ export const AIAssistant = () => {
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5 text-primary" />
                 Fantasy AI Chat
+                <span className="ml-auto flex items-center gap-1 text-sm font-normal text-muted-foreground">
+                  <Coins className="h-4 w-4 text-amber-400" />
+                  1 token per question
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">

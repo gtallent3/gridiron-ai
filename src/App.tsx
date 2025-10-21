@@ -10,6 +10,7 @@ import LeagueDashboard from "./pages/LeagueDashboard";
 import Settings from "./pages/Settings";
 import Admin from "./pages/Admin";
 import Shop from "./pages/Shop";
+import Props from "./pages/Props";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
