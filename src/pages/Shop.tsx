@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Badge } from "@/components/ui/badge";
 import { Coins, Sparkles, Crown, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 interface TokenPackage {
   id: string;
@@ -22,10 +22,31 @@ export default function Shop() {
   const [purchasing, setPurchasing] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     fetchPackages();
-  }, []);
+    
+    // Check for success or cancel in URL
+    if (searchParams.get("success") === "true") {
+      toast({
+        title: "Purchase Successful!",
+        description: "Your tokens have been added to your account.",
+      });
+      // Clear the success param
+      setSearchParams({});
+      // Refresh the page to update token balance
+      window.location.reload();
+    } else if (searchParams.get("canceled") === "true") {
+      toast({
+        title: "Payment Cancelled",
+        description: "You can try again anytime.",
+        variant: "destructive",
+      });
+      // Clear the canceled param
+      setSearchParams({});
+    }
+  }, [searchParams, setSearchParams, toast]);
 
   const fetchPackages = async () => {
     try {
@@ -57,12 +78,42 @@ export default function Shop() {
         return;
       }
 
-      toast({
-        title: "Coming Soon",
-        description: "Stripe integration will be enabled next.",
+      let priceId: string;
+      let packageType: string;
+      let tokens: number = 0;
+      let packageName: string = "";
+
+      if (packageId === "unlimited") {
+        priceId = "price_1SKlUaIEGdCnVLfuxenjOiZU";
+        packageType = "subscription";
+        tokens = 10;
+        packageName = "Unlimited Monthly";
+      } else {
+        const pkg = packages.find(p => p.id === packageId);
+        if (!pkg || !pkg.stripe_price_id) {
+          throw new Error("Package not found or missing Stripe price ID");
+        }
+        priceId = pkg.stripe_price_id;
+        packageType = "one-time";
+        tokens = pkg.tokens;
+        packageName = pkg.name;
+      }
+
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: {
+          price_id: priceId,
+          package_type: packageType,
+          package_id: packageId,
+          tokens,
+          package_name: packageName,
+        },
       });
 
-      // TODO: Implement Stripe checkout
+      if (error) throw error;
+
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
     } catch (error: any) {
       toast({
         title: "Error",
