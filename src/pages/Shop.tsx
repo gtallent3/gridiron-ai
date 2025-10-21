@@ -95,7 +95,8 @@ export default function Shop() {
         }
         priceId = pkg.stripe_price_id;
         packageType = "one-time";
-        tokens = pkg.tokens;
+        // Calculate total tokens including bonus
+        tokens = pkg.tokens + Math.floor(pkg.tokens * pkg.bonus_percentage / 100);
         packageName = pkg.name;
       }
 
@@ -229,7 +230,7 @@ export default function Shop() {
                   <CardTitle className="text-xl">{pkg.name}</CardTitle>
                   <CardDescription>
                     {pkg.bonus_percentage > 0
-                      ? `${pkg.tokens} tokens (${Math.floor(pkg.tokens / (1 + pkg.bonus_percentage / 100))} + ${Math.ceil(pkg.tokens * pkg.bonus_percentage / 100)} bonus)`
+                      ? `${pkg.tokens + Math.floor(pkg.tokens * pkg.bonus_percentage / 100)} tokens (${pkg.tokens} + ${Math.floor(pkg.tokens * pkg.bonus_percentage / 100)} bonus)`
                       : `${pkg.tokens} tokens`}
                   </CardDescription>
                 </CardHeader>
@@ -238,7 +239,7 @@ export default function Shop() {
                     ${(pkg.price_cents / 100).toFixed(2)}
                   </div>
                   <p className="text-sm text-muted-foreground mt-2">
-                    ${((pkg.price_cents / 100) / pkg.tokens).toFixed(2)} per token
+                    ${((pkg.price_cents / 100) / (pkg.tokens + Math.floor(pkg.tokens * pkg.bonus_percentage / 100))).toFixed(2)} per token
                   </p>
                 </CardContent>
                 <CardFooter>
