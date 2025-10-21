@@ -69,7 +69,7 @@ serve(async (req) => {
     // Verify webhook signature for security
     let event;
     try {
-      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
       logStep("Webhook signature verified");
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -106,22 +106,22 @@ serve(async (req) => {
             .from("user_tokens")
             .select("balance, lifetime_earned")
             .eq("user_id", userId)
-            .single();
+            .maybeSingle();
 
-          const newBalance = (currentTokenData?.balance || 0) + 10;
-          const newLifetimeEarned = (currentTokenData?.lifetime_earned || 0) + 10;
+          const newBalance = (currentTokenData?.balance || 3) + 10;
+          const newLifetimeEarned = (currentTokenData?.lifetime_earned || 3) + 10;
 
-          // Update user tokens with unlimited subscription
+          // UPSERT user tokens with unlimited subscription
           const { error: updateError } = await supabaseClient
             .from("user_tokens")
-            .update({
+            .upsert({
+              user_id: userId,
               has_unlimited_subscription: true,
               subscription_expires_at: periodEnd.toISOString(),
               balance: newBalance,
               lifetime_earned: newLifetimeEarned,
               updated_at: new Date().toISOString(),
-            })
-            .eq("user_id", userId);
+            }, { onConflict: 'user_id' });
 
           if (updateError) throw updateError;
 
@@ -149,20 +149,20 @@ serve(async (req) => {
             .from("user_tokens")
             .select("balance, lifetime_purchased")
             .eq("user_id", userId)
-            .single();
+            .maybeSingle();
 
-          const newPurchaseBalance = (currentPurchaseData?.balance || 0) + tokens;
+          const newPurchaseBalance = (currentPurchaseData?.balance || 3) + tokens;
           const newLifetimePurchased = (currentPurchaseData?.lifetime_purchased || 0) + tokens;
 
-          // Add tokens to user balance
+          // UPSERT tokens to user balance
           const { error: updateError } = await supabaseClient
             .from("user_tokens")
-            .update({
+            .upsert({
+              user_id: userId,
               balance: newPurchaseBalance,
               lifetime_purchased: newLifetimePurchased,
               updated_at: new Date().toISOString(),
-            })
-            .eq("user_id", userId);
+            }, { onConflict: 'user_id' });
 
           if (updateError) throw updateError;
 
@@ -200,23 +200,24 @@ serve(async (req) => {
             // Get current balance first
             const { data: renewalData } = await supabaseClient
               .from("user_tokens")
-              .select("balance, lifetime_earned")
+              .select("balance, lifetime_earned, has_unlimited_subscription")
               .eq("user_id", userId)
-              .single();
+              .maybeSingle();
 
-            const newRenewalBalance = (renewalData?.balance || 0) + 10;
-            const newRenewalEarned = (renewalData?.lifetime_earned || 0) + 10;
+            const newRenewalBalance = (renewalData?.balance || 3) + 10;
+            const newRenewalEarned = (renewalData?.lifetime_earned || 3) + 10;
 
-            // Extend subscription and add monthly tokens
+            // UPSERT subscription renewal and add monthly tokens
             const { error: updateError } = await supabaseClient
               .from("user_tokens")
-              .update({
+              .upsert({
+                user_id: userId,
+                has_unlimited_subscription: true,
                 subscription_expires_at: periodEnd.toISOString(),
                 balance: newRenewalBalance,
                 lifetime_earned: newRenewalEarned,
                 updated_at: new Date().toISOString(),
-              })
-              .eq("user_id", userId);
+              }, { onConflict: 'user_id' });
 
             if (updateError) throw updateError;
 
