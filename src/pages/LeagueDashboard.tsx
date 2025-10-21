@@ -87,7 +87,7 @@ export default function LeagueDashboard() {
           .from('player_valuations')
           .select('player_name, is_bye_week, injury_status, injury_duration_weeks, team, position')
           .eq('week', currentWeek)
-          .eq('season', 2025);
+          .eq('season', 2024);
         
         // Create a map for quick lookup by normalized player name
         const valuationsMap = new Map(

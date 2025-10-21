@@ -93,8 +93,8 @@ serve(async (req) => {
 
     const { espn_s2, swid } = credentials;
 
-    const now = new Date();
-    const currentSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+    // Use 2024 as the current NFL season
+    const currentSeason = 2024;
 
     // Fetch user's team roster for specific week
     const teamUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=mRoster&view=mTeam`;
