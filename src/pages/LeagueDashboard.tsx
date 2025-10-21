@@ -67,45 +67,58 @@ export default function LeagueDashboard() {
       if (leagueError) throw leagueError;
       setLeague(leagueData);
 
-      // Helper function to enrich roster with player valuations
+      // Helper function to enrich roster with ESPN data
       const enrichRosterWithValuations = async (roster: any) => {
         // Ensure roster is an array
         const rosterArray = Array.isArray(roster) ? roster : [];
         
         if (rosterArray.length === 0) return rosterArray;
         
-        // Get all player names from roster (normalize them for matching)
-        const playerNames = rosterArray
-          .map((p: any) => p.player_name)
-          .filter(Boolean);
-        
-        if (playerNames.length === 0) return rosterArray;
-        
-        // Fetch player valuations for current week, matching by name
+        // Fetch accurate data from ESPN for current week
         const currentWeek = leagueData.current_week || 7;
-        const { data: valuations } = await supabase
-          .from('player_valuations')
-          .select('player_name, is_bye_week, injury_status, injury_duration_weeks, team, position')
-          .eq('week', currentWeek)
-          .eq('season', 2025);
         
-        // Create a map for quick lookup by normalized player name
-        const valuationsMap = new Map(
-          (valuations || []).map(v => [v.player_name?.toLowerCase().trim(), v])
-        );
-        
-        // Enrich roster with valuation data by matching player names
-        return rosterArray.map((player: any) => {
-          const normalizedName = player.player_name?.toLowerCase().trim();
-          const valuation = valuationsMap.get(normalizedName);
+        try {
+          const { data: weekScores, error } = await supabase.functions.invoke('get-espn-week-scores', {
+            body: { week: currentWeek, leagueId: leagueId }
+          });
+
+          if (error) throw error;
+
+          if (!weekScores?.players) {
+            console.error('No player data returned from ESPN');
+            return rosterArray;
+          }
+
+          // Create maps for quick lookup by player ID and name
+          const scoresMapById = new Map(
+            weekScores.players.map((p: any) => [String(p.player_id), p])
+          );
+          const scoresMapByName = new Map(
+            weekScores.players.map((p: any) => [p.player_name?.toLowerCase().trim(), p])
+          );
           
-          return {
-            ...player,
-            is_bye_week: valuation?.is_bye_week || false,
-            injury_status: valuation?.injury_status || null,
-            injury_duration_weeks: valuation?.injury_duration_weeks || 0,
-          };
-        });
+          // Enrich roster with ESPN data by matching player ID or name
+          return rosterArray.map((player: any) => {
+            const playerId = String(player.player_id || player.playerId || player.id || '');
+            const playerName = player.player_name?.toLowerCase().trim();
+            
+            // Try ID match first, then name match
+            let espnData = scoresMapById.get(playerId) as any;
+            if (!espnData && playerName) {
+              espnData = scoresMapByName.get(playerName) as any;
+            }
+            
+            return {
+              ...player,
+              is_bye_week: espnData?.is_bye_week || false,
+              injury_status: espnData?.injury_status || null,
+              injury_duration_weeks: espnData?.injury_duration_weeks || 0,
+            };
+          });
+        } catch (err) {
+          console.error('Error enriching roster with ESPN data:', err);
+          return rosterArray;
+        }
       };
 
       // Fetch user's team for this league using the user_team_id from league data
