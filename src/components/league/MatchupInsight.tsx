@@ -48,7 +48,7 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
 
       if (!error && data) {
         const baseRoster = Array.isArray(data.roster) ? data.roster : [];
-        const enrichedRoster = await enrichRosterWithValuations(baseRoster, { week: league.current_week || 7, season: 2024 });
+        const enrichedRoster = await enrichRosterWithValuations(baseRoster, { week: league.current_week || 7, season: 2025 });
         setOpponentTeam({
           ...data,
           roster: enrichedRoster,
