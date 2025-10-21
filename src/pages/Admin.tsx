@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Coins } from "lucide-react";
+import { useTokens } from "@/hooks/useTokens";
 
 const Admin = () => {
   const [week, setWeek] = useState<number>(1);
@@ -13,6 +14,9 @@ const Admin = () => {
   const [backfillAll, setBackfillAll] = useState(false);
   const [leagues, setLeagues] = useState<any[]>([]);
   const [selectedLeague, setSelectedLeague] = useState<string>("");
+  const [tokenAmount, setTokenAmount] = useState<number>(10);
+  const [tokenLoading, setTokenLoading] = useState(false);
+  const { balance, refreshBalance } = useTokens();
 
   useEffect(() => {
     const fetchLeagues = async () => {
@@ -69,8 +73,79 @@ const Admin = () => {
     toast.success('All weeks backfilled!');
   };
 
+  const handleTokenAdjustment = async (action: 'add' | 'subtract' | 'set') => {
+    setTokenLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke('admin-adjust-tokens', {
+        body: { action, amount: tokenAmount }
+      });
+
+      if (error) throw error;
+
+      await refreshBalance();
+      toast.success(`Tokens ${action === 'set' ? 'set to' : action === 'add' ? 'added' : 'removed'}: ${tokenAmount}`);
+    } catch (error) {
+      console.error('Token adjustment error:', error);
+      toast.error('Failed to adjust tokens');
+    } finally {
+      setTokenLoading(false);
+    }
+  };
+
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto py-8 px-4 space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Coins className="h-5 w-5" />
+            Token Management
+          </CardTitle>
+          <CardDescription>
+            Adjust your token balance for testing purposes. Current balance: {balance}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex gap-4 items-end">
+            <div className="flex-1">
+              <label className="text-sm font-medium mb-2 block">
+                Token Amount
+              </label>
+              <Input
+                type="number"
+                min={0}
+                value={tokenAmount}
+                onChange={(e) => setTokenAmount(Number(e.target.value))}
+                disabled={tokenLoading}
+              />
+            </div>
+            <Button
+              onClick={() => handleTokenAdjustment('add')}
+              disabled={tokenLoading}
+              variant="default"
+            >
+              {tokenLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Add Tokens
+            </Button>
+            <Button
+              onClick={() => handleTokenAdjustment('subtract')}
+              disabled={tokenLoading}
+              variant="destructive"
+            >
+              {tokenLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Remove Tokens
+            </Button>
+            <Button
+              onClick={() => handleTokenAdjustment('set')}
+              disabled={tokenLoading}
+              variant="outline"
+            >
+              {tokenLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Set Balance
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>ESPN Player Valuations Backfill</CardTitle>
