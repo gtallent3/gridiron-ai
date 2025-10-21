@@ -233,6 +233,56 @@ export type Database = {
         }
         Relationships: []
       }
+      prop_bets: {
+        Row: {
+          created_at: string
+          id: string
+          multiplier: number
+          payout_amount: number | null
+          potential_payout: number
+          prop_id: string
+          selection: string
+          settled_at: string | null
+          status: Database["public"]["Enums"]["prop_status"]
+          tokens_wagered: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          multiplier: number
+          payout_amount?: number | null
+          potential_payout: number
+          prop_id: string
+          selection: string
+          settled_at?: string | null
+          status?: Database["public"]["Enums"]["prop_status"]
+          tokens_wagered: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          multiplier?: number
+          payout_amount?: number | null
+          potential_payout?: number
+          prop_id?: string
+          selection?: string
+          settled_at?: string | null
+          status?: Database["public"]["Enums"]["prop_status"]
+          tokens_wagered?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prop_bets_prop_id_fkey"
+            columns: ["prop_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_props"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       team_strategies: {
         Row: {
           created_at: string | null
@@ -297,6 +347,78 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      token_packages: {
+        Row: {
+          bonus_percentage: number
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          price_cents: number
+          stripe_price_id: string | null
+          tokens: number
+          updated_at: string
+        }
+        Insert: {
+          bonus_percentage?: number
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          price_cents: number
+          stripe_price_id?: string | null
+          tokens: number
+          updated_at?: string
+        }
+        Update: {
+          bonus_percentage?: number
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_cents?: number
+          stripe_price_id?: string | null
+          tokens?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      token_transactions: {
+        Row: {
+          amount: number
+          balance_after: number
+          created_at: string
+          description: string | null
+          id: string
+          metadata: Json | null
+          transaction_type: Database["public"]["Enums"]["token_transaction_type"]
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          balance_after: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          transaction_type: Database["public"]["Enums"]["token_transaction_type"]
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          balance_after?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          metadata?: Json | null
+          transaction_type?: Database["public"]["Enums"]["token_transaction_type"]
+          user_id?: string
+        }
+        Relationships: []
       }
       trade_evaluations: {
         Row: {
@@ -413,11 +535,122 @@ export type Database = {
           },
         ]
       }
+      user_tokens: {
+        Row: {
+          balance: number
+          created_at: string
+          has_unlimited_subscription: boolean
+          id: string
+          last_weekly_reward_at: string | null
+          lifetime_earned: number
+          lifetime_purchased: number
+          lifetime_spent: number
+          subscription_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          has_unlimited_subscription?: boolean
+          id?: string
+          last_weekly_reward_at?: string | null
+          lifetime_earned?: number
+          lifetime_purchased?: number
+          lifetime_spent?: number
+          subscription_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          has_unlimited_subscription?: boolean
+          id?: string
+          last_weekly_reward_at?: string | null
+          lifetime_earned?: number
+          lifetime_purchased?: number
+          lifetime_spent?: number
+          subscription_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      weekly_props: {
+        Row: {
+          actual_value: number | null
+          created_at: string
+          game_time: string | null
+          id: string
+          line: number
+          opponent: string | null
+          over_multiplier: number
+          player_id: string
+          player_name: string
+          season: number
+          settled_at: string | null
+          stat_type: Database["public"]["Enums"]["prop_stat_type"]
+          status: Database["public"]["Enums"]["prop_status"]
+          team: string
+          under_multiplier: number
+          updated_at: string
+          week: number
+        }
+        Insert: {
+          actual_value?: number | null
+          created_at?: string
+          game_time?: string | null
+          id?: string
+          line: number
+          opponent?: string | null
+          over_multiplier?: number
+          player_id: string
+          player_name: string
+          season: number
+          settled_at?: string | null
+          stat_type: Database["public"]["Enums"]["prop_stat_type"]
+          status?: Database["public"]["Enums"]["prop_status"]
+          team: string
+          under_multiplier?: number
+          updated_at?: string
+          week: number
+        }
+        Update: {
+          actual_value?: number | null
+          created_at?: string
+          game_time?: string | null
+          id?: string
+          line?: number
+          opponent?: string | null
+          over_multiplier?: number
+          player_id?: string
+          player_name?: string
+          season?: number
+          settled_at?: string | null
+          stat_type?: Database["public"]["Enums"]["prop_stat_type"]
+          status?: Database["public"]["Enums"]["prop_status"]
+          team?: string
+          under_multiplier?: number
+          updated_at?: string
+          week?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      deduct_tokens: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_transaction_type: Database["public"]["Enums"]["token_transaction_type"]
+          p_user_id: string
+        }
+        Returns: Json
+      }
       get_league_credentials: {
         Args: { p_league_id: string; p_platform: string; p_user_id: string }
         Returns: Json
@@ -448,8 +681,32 @@ export type Database = {
     Enums: {
       league_platform: "espn" | "yahoo" | "sleeper"
       player_position: "QB" | "RB" | "WR" | "TE" | "K" | "DEF"
+      prop_stat_type:
+        | "passing_yards"
+        | "rushing_yards"
+        | "receiving_yards"
+        | "touchdowns"
+        | "receptions"
+        | "fantasy_points"
+      prop_status:
+        | "pending"
+        | "active"
+        | "settled_won"
+        | "settled_lost"
+        | "cancelled"
       risk_profile: "aggressive" | "balanced" | "conservative"
       scoring_type: "standard" | "ppr" | "half_ppr" | "custom"
+      token_transaction_type:
+        | "purchase"
+        | "signup_bonus"
+        | "weekly_reward"
+        | "ai_assistant"
+        | "start_sit"
+        | "trade_analysis"
+        | "prop_bet"
+        | "prop_win"
+        | "admin_adjustment"
+        | "subscription"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -579,8 +836,35 @@ export const Constants = {
     Enums: {
       league_platform: ["espn", "yahoo", "sleeper"],
       player_position: ["QB", "RB", "WR", "TE", "K", "DEF"],
+      prop_stat_type: [
+        "passing_yards",
+        "rushing_yards",
+        "receiving_yards",
+        "touchdowns",
+        "receptions",
+        "fantasy_points",
+      ],
+      prop_status: [
+        "pending",
+        "active",
+        "settled_won",
+        "settled_lost",
+        "cancelled",
+      ],
       risk_profile: ["aggressive", "balanced", "conservative"],
       scoring_type: ["standard", "ppr", "half_ppr", "custom"],
+      token_transaction_type: [
+        "purchase",
+        "signup_bonus",
+        "weekly_reward",
+        "ai_assistant",
+        "start_sit",
+        "trade_analysis",
+        "prop_bet",
+        "prop_win",
+        "admin_adjustment",
+        "subscription",
+      ],
     },
   },
 } as const

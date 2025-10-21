@@ -3,6 +3,7 @@ import { Button } from "./ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
+import { TokenBalance } from "./TokenBalance";
 
 type HeaderProps = {
   user?: any;
@@ -46,10 +47,13 @@ export const Header = ({ user }: HeaderProps) => {
           </nav>
 
           {user ? (
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </Button>
+            <div className="flex items-center gap-3">
+              <TokenBalance />
+              <Button variant="outline" size="sm" onClick={handleSignOut}>
+                <LogOut className="h-4 w-4 mr-2" />
+                Sign Out
+              </Button>
+            </div>
           ) : (
             <Button variant="hero" size="sm" onClick={() => navigate('/auth')}>
               <LogIn className="h-4 w-4 mr-2" />
