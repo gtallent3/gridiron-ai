@@ -59,7 +59,16 @@ export default function Admin() {
 
   // Props Management State
   const [props, setProps] = useState<Prop[]>([]);
-  const [newProp, setNewProp] = useState({
+  const [newProp, setNewProp] = useState<{
+    player_name: string;
+    team: string;
+    stat_type: "fantasy_points" | "passing_yards" | "receiving_yards" | "receptions" | "rushing_yards" | "touchdowns";
+    line: number;
+    over_multiplier: number;
+    under_multiplier: number;
+    week: number;
+    season: number;
+  }>({
     player_name: "",
     team: "",
     stat_type: "passing_yards",
@@ -545,7 +554,7 @@ export default function Admin() {
                     />
                     <Select
                       value={newProp.stat_type}
-                      onValueChange={(value) => setNewProp({ ...newProp, stat_type: value })}
+                      onValueChange={(value) => setNewProp({ ...newProp, stat_type: value as typeof newProp.stat_type })}
                     >
                       <SelectTrigger>
                         <SelectValue />
