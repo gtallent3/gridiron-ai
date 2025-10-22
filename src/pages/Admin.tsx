@@ -264,26 +264,17 @@ export default function Admin() {
 
   const handleSettleProp = async (propId: string, actualValue: number) => {
     try {
-      // Get the prop to determine if it's won or lost
-      const prop = props.find(p => p.id === propId);
-      if (!prop) return;
-
-      const status = actualValue > prop.line ? "settled_won" : "settled_lost";
-
-      const { error } = await supabase
-        .from("weekly_props")
-        .update({ 
-          actual_value: actualValue, 
-          status, 
-          settled_at: new Date().toISOString() 
-        })
-        .eq("id", propId);
+      // Call secure backend function that enforces admin and bypasses RLS via SECURITY DEFINER
+      const { error } = await supabase.rpc('settle_weekly_prop', {
+        p_prop_id: propId,
+        p_actual_value: actualValue,
+      });
 
       if (error) throw error;
 
       toast({
         title: "Prop Settled",
-        description: `Prop settled as ${status.toUpperCase()}`,
+        description: `Prop settled` ,
       });
 
       fetchProps();

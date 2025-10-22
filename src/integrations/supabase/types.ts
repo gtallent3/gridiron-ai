@@ -687,6 +687,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      settle_weekly_prop: {
+        Args: { p_actual_value: number; p_prop_id: string }
+        Returns: undefined
+      }
       store_league_credentials: {
         Args: {
           p_credentials: Json
