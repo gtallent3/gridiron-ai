@@ -100,8 +100,8 @@ export default function Profile() {
               <CardTitle>Your Benefits</CardTitle>
               <CardDescription>
                 {hasUnlimited 
-                  ? "As a subscriber, you have access to all premium features"
-                  : "Upgrade to subscriber for unlimited access"
+                  ? "As a subscriber, you have unlimited access to AI tools"
+                  : "Upgrade to subscriber for unlimited tool access"
                 }
               </CardDescription>
             </CardHeader>
@@ -113,9 +113,9 @@ export default function Profile() {
                       <div className="h-2 w-2 rounded-full bg-primary" />
                     </div>
                     <div>
-                      <p className="font-medium">Unlimited Tool Access</p>
+                      <p className="font-medium">Unlimited AI Tools</p>
                       <p className="text-sm text-muted-foreground">
-                        Use all AI tools without token deductions
+                        Trade Analyzer, Start/Sit, AI Chat - all free
                       </p>
                     </div>
                   </div>
@@ -126,7 +126,18 @@ export default function Profile() {
                     <div>
                       <p className="font-medium">Monthly Token Bonus</p>
                       <p className="text-sm text-muted-foreground">
-                        Receive 10 bonus tokens each month
+                        Receive 10 bonus tokens each month for prop betting
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1">
+                      <div className="h-2 w-2 rounded-full bg-amber-500" />
+                    </div>
+                    <div>
+                      <p className="font-medium">Prop Betting</p>
+                      <p className="text-sm text-muted-foreground">
+                        Use tokens to place prop bets (subscribers still need tokens for betting)
                       </p>
                     </div>
                   </div>
@@ -151,7 +162,7 @@ export default function Profile() {
                     <div>
                       <p className="font-medium text-muted-foreground">Token-Based Access</p>
                       <p className="text-sm text-muted-foreground">
-                        Each tool use costs tokens
+                        Each tool and prop bet costs tokens
                       </p>
                     </div>
                   </div>
@@ -160,7 +171,7 @@ export default function Profile() {
                       <div className="h-2 w-2 rounded-full bg-muted" />
                     </div>
                     <div>
-                      <p className="font-medium text-muted-foreground">Limited Features</p>
+                      <p className="font-medium text-muted-foreground">Basic Features</p>
                       <p className="text-sm text-muted-foreground">
                         Access to basic features only
                       </p>

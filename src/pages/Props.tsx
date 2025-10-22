@@ -157,10 +157,12 @@ export default function Props() {
               <div className="space-y-1">
                 <h3 className="font-semibold text-lg flex items-center gap-2">
                   <Coins className="h-5 w-5 text-amber-400" />
-                  Your Balance
+                  Token Balance for Betting
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  {hasUnlimited ? "Unlimited tokens - Purchase tokens for betting" : `${balance || 0} tokens available`}
+                  {hasUnlimited 
+                    ? `${balance || 0} tokens available (subscribers need tokens for prop bets)` 
+                    : `${balance || 0} tokens available`}
                 </p>
               </div>
               <Button onClick={() => navigate("/shop")} variant="outline">
@@ -303,6 +305,7 @@ export default function Props() {
               <li>✓ <strong>Weekly Updates:</strong> Fresh props every Tuesday</li>
               <li>✓ <strong>Secure:</strong> Tokens cannot be transferred or sold</li>
               <li>✓ <strong>For Fun:</strong> No real money gambling involved</li>
+              <li>⚠️ <strong>Note:</strong> All users (including subscribers) need tokens to place prop bets</li>
             </ul>
           </CardContent>
         </Card>
