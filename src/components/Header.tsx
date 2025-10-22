@@ -42,6 +42,9 @@ export const Header = ({ user }: HeaderProps) => {
             <a href="/connect-league" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Connect League
             </a>
+            <a href="/contact" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Contact Us
+            </a>
             {user && (
               <>
                 <a href="/profile" className="text-sm text-muted-foreground hover:text-primary transition-colors">
