@@ -30,6 +30,12 @@ export const Header = ({ user }: HeaderProps) => {
             <a href="/props" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Props Betting
             </a>
+            <a href="/my-bets" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              My Bets
+            </a>
+            <a href="/leaderboard" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Leaderboard
+            </a>
             <a href="/shop" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Token Shop
             </a>

@@ -237,6 +237,42 @@ export default function Admin() {
     }
   };
 
+  const handleRemoveSubscription = async () => {
+    if (!selectedUserId) {
+      toast({
+        title: "Select User",
+        description: "Please select a user first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAdjusting(true);
+    try {
+      const { error } = await supabase.functions.invoke("admin-remove-subscription", {
+        body: { userId: selectedUserId },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Subscription Removed",
+        description: "User subscription status has been removed",
+      });
+
+      fetchUsers();
+      refreshBalance();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove subscription",
+        variant: "destructive",
+      });
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
   // PROPS MANAGEMENT
   const fetchProps = async () => {
     const { data, error } = await supabase
@@ -555,17 +591,22 @@ export default function Admin() {
                     </SelectContent>
                   </Select>
 
-                  <div className="flex gap-2">
-                    <Button onClick={() => handleGrantSubscription(1)} disabled={adjusting}>
-                      Grant 1 Month
-                    </Button>
-                    <Button onClick={() => handleGrantSubscription(3)} disabled={adjusting}>
-                      Grant 3 Months
-                    </Button>
-                    <Button onClick={() => handleGrantSubscription(12)} disabled={adjusting}>
-                      Grant 1 Year
-                    </Button>
-                  </div>
+                  <Button onClick={() => handleGrantSubscription(1)} disabled={adjusting}>
+                    Grant 1 Month
+                  </Button>
+                  <Button onClick={() => handleGrantSubscription(3)} disabled={adjusting}>
+                    Grant 3 Months
+                  </Button>
+                  <Button onClick={() => handleGrantSubscription(12)} disabled={adjusting}>
+                    Grant 1 Year
+                  </Button>
+                  <Button 
+                    onClick={handleRemoveSubscription} 
+                    disabled={adjusting}
+                    variant="destructive"
+                  >
+                    Remove Subscription
+                  </Button>
                 </CardContent>
               </Card>
 
