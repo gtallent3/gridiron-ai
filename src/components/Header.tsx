@@ -1,9 +1,15 @@
-import { Zap, LogOut, LogIn } from "lucide-react";
+import { Zap, LogOut, LogIn, ChevronDown } from "lucide-react";
 import { Button } from "./ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
 import { TokenBalance } from "./TokenBalance";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 type HeaderProps = {
   user?: any;
@@ -27,36 +33,59 @@ export const Header = ({ user }: HeaderProps) => {
             <a href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Dashboard
             </a>
-            <a href="/props" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              Props Betting
-            </a>
-            <a href="/my-bets" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              My Bets
-            </a>
-            <a href="/leaderboard" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              Leaderboard
-            </a>
+            
+            {/* Betting Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors outline-none">
+                Betting <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-card border-border z-50">
+                <DropdownMenuItem asChild>
+                  <a href="/props" className="cursor-pointer">Props Betting</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/my-bets" className="cursor-pointer">My Bets</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/leaderboard" className="cursor-pointer">Leaderboard</a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <a href="/shop" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Token Shop
             </a>
-            <a href="/connect-league" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              Connect League
-            </a>
+
+            {/* Account Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors outline-none">
+                Account <ChevronDown className="h-3 w-3" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="bg-card border-border z-50">
+                {user && (
+                  <>
+                    <DropdownMenuItem asChild>
+                      <a href="/profile" className="cursor-pointer">Profile</a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <a href="/settings" className="cursor-pointer">Settings</a>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuItem asChild>
+                  <a href="/connect-league" className="cursor-pointer">Connect League</a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <a href="/contact" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Contact Us
             </a>
+
             {user && (
-              <>
-                <a href="/profile" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                  Profile
-                </a>
-                <a href="/settings" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                  Settings
-                </a>
-                <a href="/admin" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                  Admin
-                </a>
-              </>
+              <a href="/admin" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                Admin
+              </a>
             )}
           </nav>
 
