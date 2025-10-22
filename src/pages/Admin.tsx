@@ -198,6 +198,45 @@ export default function Admin() {
     }
   };
 
+  const handleGrantSubscription = async (months: number) => {
+    if (!selectedUserId) {
+      toast({
+        title: "Select User",
+        description: "Please select a user first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAdjusting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("admin-grant-subscription", {
+        body: { 
+          userId: selectedUserId,
+          durationMonths: months 
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Subscription Granted",
+        description: `User now has subscriber status for ${months} month${months > 1 ? 's' : ''} with 10 bonus tokens`,
+      });
+
+      fetchUsers();
+      refreshBalance();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to grant subscription",
+        variant: "destructive",
+      });
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
   // PROPS MANAGEMENT
   const fetchProps = async () => {
     const { data, error } = await supabase
@@ -470,7 +509,7 @@ export default function Admin() {
                       {users.map(user => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.email} - {user.balance} tokens
-                          {user.has_unlimited_subscription && " (Unlimited)"}
+                          {user.has_unlimited_subscription && " (Subscriber)"}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -492,6 +531,39 @@ export default function Admin() {
                     </Button>
                     <Button onClick={() => handleTokenAdjustment("set")} variant="outline" disabled={adjusting}>
                       Set Balance
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Grant Subscriber Status</CardTitle>
+                  <CardDescription>Give users unlimited access with 10 bonus tokens</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {users.map(user => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.email} - {user.has_unlimited_subscription ? "Subscriber" : "Basic"}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <div className="flex gap-2">
+                    <Button onClick={() => handleGrantSubscription(1)} disabled={adjusting}>
+                      Grant 1 Month
+                    </Button>
+                    <Button onClick={() => handleGrantSubscription(3)} disabled={adjusting}>
+                      Grant 3 Months
+                    </Button>
+                    <Button onClick={() => handleGrantSubscription(12)} disabled={adjusting}>
+                      Grant 1 Year
                     </Button>
                   </div>
                 </CardContent>

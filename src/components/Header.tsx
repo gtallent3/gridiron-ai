@@ -38,6 +38,9 @@ export const Header = ({ user }: HeaderProps) => {
             </a>
             {user && (
               <>
+                <a href="/profile" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Profile
+                </a>
                 <a href="/settings" className="text-sm text-muted-foreground hover:text-primary transition-colors">
                   Settings
                 </a>
