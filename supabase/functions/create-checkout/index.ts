@@ -89,13 +89,11 @@ serve(async (req) => {
       },
     };
 
-    // Add trial period for subscriptions
+    // Add subscription metadata
     if (package_type === "subscription") {
       sessionConfig.subscription_data = {
-        trial_period_days: 7,
         metadata: {
           user_id: user.id,
-          tokens: "10", // Monthly bonus tokens
         },
       };
     }

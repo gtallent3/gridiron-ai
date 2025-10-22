@@ -98,8 +98,27 @@ serve(async (req) => {
 
           // Get subscription details
           const subscriptionId = session.subscription;
-          const subscription = await stripe.subscriptions.retrieve(subscriptionId as string);
-          const periodEnd = new Date(subscription.current_period_end * 1000);
+          if (!subscriptionId) {
+            throw new Error("No subscription ID in session");
+          }
+
+          let periodEnd: Date;
+          try {
+            const subscription = await stripe.subscriptions.retrieve(subscriptionId as string);
+            if (!subscription.current_period_end) {
+              throw new Error("No current_period_end on subscription");
+            }
+            periodEnd = new Date(subscription.current_period_end * 1000);
+            logStep("Subscription retrieved", { 
+              subscriptionId, 
+              periodEnd: periodEnd.toISOString() 
+            });
+          } catch (subError) {
+            // If subscription retrieval fails, set expiry to 1 month from now
+            logStep("Subscription retrieval failed, using default expiry", { error: subError });
+            periodEnd = new Date();
+            periodEnd.setMonth(periodEnd.getMonth() + 1);
+          }
 
           // Get current balance first
           const { data: currentTokenData } = await supabaseClient
