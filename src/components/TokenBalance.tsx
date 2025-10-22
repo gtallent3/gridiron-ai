@@ -77,52 +77,53 @@ export const TokenBalance = () => {
           size="sm"
           className="gap-2 bg-gradient-to-r from-amber-500/10 to-yellow-500/10 border-amber-500/30 hover:border-amber-500/50"
         >
-          {hasUnlimited ? (
-            <>
-              <Infinity className="h-4 w-4 text-amber-400" />
-              <span className="font-semibold text-amber-400">Unlimited</span>
-            </>
-          ) : (
-            <>
-              <Coins className="h-4 w-4 text-amber-400" />
-              <span className="font-semibold text-amber-400">{balance ?? 0}</span>
-            </>
-          )}
+          <Coins className="h-4 w-4 text-amber-400" />
+          <span className="font-semibold text-amber-400">{balance ?? 0}</span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-4" align="end">
         <div className="space-y-4">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Your Balance</span>
-              {hasUnlimited ? (
-                <div className="flex items-center gap-1 text-amber-400">
-                  <Infinity className="h-5 w-5" />
-                  <span className="font-bold text-xl">Unlimited</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-1">
-                  <Coins className="h-5 w-5 text-amber-400" />
-                  <span className="font-bold text-xl text-amber-400">{balance ?? 0}</span>
-                </div>
-              )}
+              <span className="text-sm text-muted-foreground">Token Balance</span>
+              <div className="flex items-center gap-1">
+                <Coins className="h-5 w-5 text-amber-400" />
+                <span className="font-bold text-xl text-amber-400">{balance ?? 0}</span>
+              </div>
             </div>
             {hasUnlimited && (
-              <p className="text-xs text-muted-foreground">
-                All AI features and props betting included
-              </p>
+              <div className="bg-primary/10 border border-primary/20 rounded-md p-2">
+                <p className="text-xs font-medium text-primary flex items-center gap-1">
+                  <Infinity className="h-3 w-3" />
+                  Subscriber Benefits
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Unlimited access to AI tools (Trade Analyzer, Start/Sit, AI Chat) but still need tokens for prop betting
+                </p>
+              </div>
             )}
           </div>
 
           <div className="space-y-2 pt-2 border-t">
             <p className="text-xs text-muted-foreground">
-              Use tokens for:
+              {hasUnlimited ? "Subscribers get:" : "Use tokens for:"}
             </p>
             <ul className="text-xs space-y-1 text-muted-foreground">
-              <li>• AI Assistant (1 token/question)</li>
-              <li>• Start/Sit Advice (1 token)</li>
-              <li>• Trade Analysis (1 token)</li>
-              <li>• Props Betting</li>
+              {hasUnlimited ? (
+                <>
+                  <li>✓ AI Assistant (Free)</li>
+                  <li>✓ Start/Sit Advice (Free)</li>
+                  <li>✓ Trade Analysis (Free)</li>
+                  <li>⚠️ Props Betting (Tokens Required)</li>
+                </>
+              ) : (
+                <>
+                  <li>• AI Assistant (1 token/question)</li>
+                  <li>• Start/Sit Advice (1 token)</li>
+                  <li>• Trade Analysis (1 token)</li>
+                  <li>• Props Betting</li>
+                </>
+              )}
             </ul>
           </div>
 
