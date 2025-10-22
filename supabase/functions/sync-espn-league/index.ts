@@ -75,7 +75,8 @@ serve(async (req) => {
       throw new Error('Authentication required');
     }
 
-    const { espn_s2, swid, leagueId } = await req.json();
+    const requestBody = await req.json();
+    const { espn_s2, swid, leagueId } = requestBody;
 
     // Log request without credentials
     console.log('Sync request for league:', leagueId?.substring(0, 6) + '***');
@@ -107,16 +108,27 @@ serve(async (req) => {
       throw new Error('Invalid credentials format');
     }
 
-    // Store credentials securely in Vault using user-authenticated client
-    const { error: storeError } = await supabaseUser.rpc('store_league_credentials', {
-      p_user_id: user.id,
-      p_platform: 'espn',
-      p_league_id: leagueId,
-      p_credentials: { espn_s2, swid }
-    });
+    // Store credentials securely - isolate from error context
+    let credentialStored = false;
 
-    if (storeError) {
-      console.error('[ERR_CRED_001] Credential storage failed:', storeError.message);
+    // Store credentials securely in Vault - handle errors without credential context
+    try {
+      const { error: storeError } = await supabaseUser.rpc('store_league_credentials', {
+        p_user_id: user.id,
+        p_platform: 'espn',
+        p_league_id: leagueId,
+        p_credentials: { espn_s2, swid }
+      });
+
+      if (storeError) {
+        console.error('[ERR_CRED_001] Credential storage failed');
+        throw new Error('Unable to save credentials');
+      }
+      
+      credentialStored = true;
+    } catch (error) {
+      // Log error without any credential context
+      console.error('[ERR_CRED_002] Credential operation failed');
       throw new Error('Unable to save credentials');
     }
 
@@ -124,23 +136,30 @@ serve(async (req) => {
     const now = new Date();
     const currentYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
-    // Fetch league data from ESPN API with projections
+    // Fetch league data from ESPN API - isolate credentials from error handling
     const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentYear}/segments/0/leagues/${leagueId}?view=mSettings&view=mTeam&view=mRoster&view=mMembers&view=kona_player_info`;
     
-    const leagueResponse = await fetch(leagueUrl, {
-      headers: {
-        'Cookie': `espn_s2=${espn_s2}; SWID=${swid}`,
-      },
-    });
+    let leagueData;
+    try {
+      const leagueResponse = await fetch(leagueUrl, {
+        headers: {
+          'Cookie': `espn_s2=${espn_s2}; SWID=${swid}`,
+        },
+      });
 
-    if (!leagueResponse.ok) {
-      if (leagueResponse.status === 401) {
-        throw new Error('Unable to authenticate with the provided credentials');
+      if (!leagueResponse.ok) {
+        if (leagueResponse.status === 401) {
+          throw new Error('Unable to authenticate with the provided credentials');
+        }
+        throw new Error('Unable to fetch league data');
       }
+
+      leagueData = await leagueResponse.json();
+    } catch (error) {
+      // Log error without credential context
+      console.error('[ERR_ESPN_001] ESPN API request failed');
       throw new Error('Unable to fetch league data');
     }
-
-    const leagueData = await leagueResponse.json();
 
     // Determine scoring type - ESPN uses stat ID 53 for receptions
     let scoringType = 'standard';

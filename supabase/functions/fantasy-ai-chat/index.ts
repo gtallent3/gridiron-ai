@@ -12,10 +12,10 @@ serve(async (req) => {
   }
 
   try {
-    // Initialize Supabase client
+    // Initialize Supabase clients
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     // Extract and validate JWT to identify user
     const authHeader = req.headers.get('Authorization');
@@ -26,9 +26,14 @@ serve(async (req) => {
       );
     }
 
+    // Create user-authenticated client for RLS-enforced queries
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    
     // Cryptographically verify JWT and extract user ID
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: { user }, error: authError } = await supabaseUser.auth.getUser(token);
     
     if (authError || !user) {
       console.error("Authentication failed:", authError);
@@ -39,6 +44,29 @@ serve(async (req) => {
     }
     
     const userId = user.id;
+
+    // Check rate limit (10 requests per 5 minutes)
+    const rateLimitResult = await supabaseUser.rpc('check_rate_limit', {
+      p_user_id: userId,
+      p_endpoint: 'fantasy-ai-chat',
+      p_max_requests: 10,
+      p_window_minutes: 5
+    });
+
+    if (rateLimitResult.error) {
+      console.error('Rate limit check failed:', rateLimitResult.error);
+    } else if (!rateLimitResult.data?.allowed) {
+      return new Response(
+        JSON.stringify({ 
+          error: "Rate limit exceeded. Please wait before making another request.",
+          retryAfter: rateLimitResult.data?.reset_at
+        }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Create service role client only for operations that require it
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { messages, leagueContext, leagueId, teamRoster } = await req.json();
     
