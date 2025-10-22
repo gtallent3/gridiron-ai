@@ -65,7 +65,7 @@ export const AIAssistant = () => {
 
     try {
       // Deduct token
-      const tokenResult = await deductToken("ai_chat", `AI Assistant question: ${input.slice(0, 50)}...`);
+      const tokenResult = await deductToken("ai_assistant", `AI Assistant question: ${input.slice(0, 50)}...`);
       if (!tokenResult.success) {
         setIsTyping(false);
         return;
