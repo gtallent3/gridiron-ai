@@ -2,8 +2,10 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, ArrowLeftRight, TrendingUp, Loader2 } from "lucide-react";
+import { Sparkles, ArrowLeftRight, TrendingUp, Loader2, Coins } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useTokens } from "@/hooks/useTokens";
+import { useNavigate } from "react-router-dom";
 
 type Player = {
   id: string;
@@ -29,14 +31,28 @@ type Recommendation = {
 
 export function StartSitRecommendations({ starters, bench, onSubstitution }: StartSitRecommendationsProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { hasUnlimited, checkBalance, deductToken } = useTokens();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
 
   const analyzeLineup = async () => {
+    // Check token balance
+    if (!hasUnlimited && !checkBalance(1)) {
+      toast({
+        title: "Insufficient Tokens",
+        description: "You need 1 token for Start/Sit analysis",
+        variant: "destructive",
+      });
+      setTimeout(() => navigate("/shop"), 2000);
+      return;
+    }
+
     setIsAnalyzing(true);
     
-    // Simulate AI analysis
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      // Simulate AI analysis
+      await new Promise(resolve => setTimeout(resolve, 1500));
     
     // Mock recommendations - will be replaced with real AI
     const mockRecommendations: Recommendation[] = [
@@ -49,13 +65,24 @@ export function StartSitRecommendations({ starters, bench, onSubstitution }: Sta
       },
     ].filter(r => r.benchPlayer && r.starterPlayer);
 
-    setRecommendations(mockRecommendations);
-    setIsAnalyzing(false);
-    
-    toast({
-      title: "Analysis Complete",
-      description: `Found ${mockRecommendations.length} optimization${mockRecommendations.length !== 1 ? 's' : ''}`,
-    });
+      // Deduct token after successful analysis
+      await deductToken("start_sit", "Lineup optimization analysis");
+
+      setRecommendations(mockRecommendations);
+      
+      toast({
+        title: "Analysis Complete",
+        description: `Found ${mockRecommendations.length} optimization${mockRecommendations.length !== 1 ? 's' : ''}`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to analyze lineup",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const applyRecommendation = (rec: Recommendation) => {
@@ -79,8 +106,12 @@ export function StartSitRecommendations({ starters, bench, onSubstitution }: Sta
               <Sparkles className="h-5 w-5 text-primary" />
               AI Start/Sit Recommendations
             </CardTitle>
-            <CardDescription>
+            <CardDescription className="flex items-center gap-2">
               Optimize your lineup with AI-powered suggestions
+              <Badge variant="outline" className="text-xs flex items-center gap-1">
+                <Coins className="h-3 w-3" />
+                1 token
+              </Badge>
             </CardDescription>
           </div>
           <Button 

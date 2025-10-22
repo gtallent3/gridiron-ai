@@ -2,12 +2,15 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeftRight, Sparkles, RefreshCw, Database } from "lucide-react";
+import { Loader2, ArrowLeftRight, Sparkles, RefreshCw, Database, Coins } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TradeRosterPanel } from "./TradeRosterPanel";
 import { TradeEvaluation } from "./TradeEvaluation";
 import { enrichRosterWithValuations } from "@/lib/enrichRoster";
+import { useTokens } from "@/hooks/useTokens";
+import { useNavigate } from "react-router-dom";
+import { Badge } from "@/components/ui/badge";
 
 type League = {
   id: string;
@@ -46,6 +49,8 @@ type Player = {
 
 export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { hasUnlimited, checkBalance, deductToken } = useTokens();
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -203,6 +208,17 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
       return;
     }
 
+    // Check token balance
+    if (!hasUnlimited && !checkBalance(1)) {
+      toast({
+        title: "Insufficient Tokens",
+        description: "You need 1 token for trade analysis",
+        variant: "destructive",
+      });
+      setTimeout(() => navigate("/shop"), 2000);
+      return;
+    }
+
     setIsEvaluating(true);
     setTradeResult(null);
 
@@ -231,6 +247,12 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
       });
 
       if (error) throw error;
+
+      // Deduct token after successful evaluation
+      await deductToken(
+        "trade_analysis", 
+        `Trade: ${myPlayers.map(p => p.name).join(', ')} for ${theirPlayers.map(p => p.name).join(', ')}`
+      );
 
       setTradeResult(data);
       

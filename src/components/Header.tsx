@@ -24,25 +24,27 @@ export const Header = ({ user }: HeaderProps) => {
           </div>
           
           <nav className="hidden md:flex items-center gap-6">
-            <a href="#dashboard" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+            <a href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Dashboard
             </a>
-            <a href="#start-sit" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              Start/Sit
+            <a href="/props" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Props Betting
             </a>
-            <a href="#trade-analyzer" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              Trade Analyzer
-            </a>
-            <a href="#assistant" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-              AI Assistant
+            <a href="/shop" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              Token Shop
             </a>
             <a href="/connect-league" className="text-sm text-muted-foreground hover:text-primary transition-colors">
               Connect League
             </a>
             {user && (
-              <a href="/settings" className="text-sm text-muted-foreground hover:text-primary transition-colors">
-                Settings
-              </a>
+              <>
+                <a href="/settings" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Settings
+                </a>
+                <a href="/admin" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+                  Admin
+                </a>
+              </>
             )}
           </nav>
 

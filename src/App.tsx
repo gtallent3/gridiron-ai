@@ -28,6 +28,7 @@ const App = () => (
           <Route path="/league/:leagueId" element={<LeagueDashboard />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/shop" element={<Shop />} />
+          <Route path="/props" element={<Props />} />
           <Route path="/admin" element={<Admin />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

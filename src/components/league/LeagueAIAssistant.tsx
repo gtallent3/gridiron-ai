@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { MessageSquare, Send, Bot, ThumbsUp, ThumbsDown } from "lucide-react";
+import { MessageSquare, Send, Bot, ThumbsUp, ThumbsDown, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { useTokens } from "@/hooks/useTokens";
+import { useNavigate } from "react-router-dom";
 
 type League = {
   id: string;
@@ -37,6 +39,8 @@ type LeagueAIAssistantProps = {
 
 export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
+  const { balance, hasUnlimited, checkBalance, deductToken } = useTokens();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
@@ -124,6 +128,17 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
       return;
     }
 
+    // Check token balance
+    if (!hasUnlimited && !checkBalance(1)) {
+      toast({
+        title: "Insufficient Tokens",
+        description: "You need 1 token to ask a question",
+        variant: "destructive",
+      });
+      setTimeout(() => navigate("/shop"), 2000);
+      return;
+    }
+
     const userMessage: Message = { role: "user", content: input };
     const conversationHistory = [...messages, userMessage];
     
@@ -166,6 +181,10 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
       }
 
       const data = await response.json();
+      
+      // Deduct token after successful response
+      await deductToken("ai_assistant", `Question: ${input.substring(0, 50)}...`);
+      
       const aiResponse: Message = {
         role: "assistant",
         content: data.message,
@@ -197,6 +216,10 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
               Ask for quick, league-specific fantasy advice
             </p>
             <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs flex items-center gap-1">
+                <Coins className="h-3 w-3" />
+                1 token per question
+              </Badge>
               <Badge variant="outline" className="text-xs">
                 {league.scoring_type}
               </Badge>
