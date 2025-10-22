@@ -39,16 +39,32 @@ serve(async (req) => {
       );
     }
 
-    const { action, amount } = await req.json();
+    const { action, amount, userId: targetUserId } = await req.json();
 
-    // Get current balance
+    // Validate target user ID
+    if (!targetUserId) {
+      return new Response(
+        JSON.stringify({ error: "Target user ID is required" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    // Validate UUID format
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid user ID format" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+      );
+    }
+
+    // Get current balance for TARGET user
     const { data: tokenData } = await supabaseClient
       .from("user_tokens")
       .select("balance")
-      .eq("user_id", user.id)
+      .eq("user_id", targetUserId)
       .maybeSingle();
 
-    let newBalance = tokenData?.balance || 3;
+    let newBalance = tokenData?.balance || 0;
 
     switch (action) {
       case "add":
@@ -62,24 +78,24 @@ serve(async (req) => {
         break;
     }
 
-    // Update balance
+    // Update balance for TARGET user
     const { error } = await supabaseClient
       .from("user_tokens")
       .upsert({
-        user_id: user.id,
+        user_id: targetUserId,
         balance: newBalance,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'user_id' });
 
     if (error) throw error;
 
-    // Log transaction
+    // Log transaction for TARGET user
     await supabaseClient.from("token_transactions").insert({
-      user_id: user.id,
+      user_id: targetUserId,
       transaction_type: "admin_adjustment",
       amount: action === "subtract" ? -amount : amount,
       balance_after: newBalance,
-      description: `Admin adjustment: ${action} ${amount} tokens`,
+      description: `Admin adjustment by ${user.email || user.id.substring(0, 8)}: ${action} ${amount} tokens`,
     });
 
     return new Response(
