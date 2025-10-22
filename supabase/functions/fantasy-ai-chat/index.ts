@@ -26,16 +26,19 @@ serve(async (req) => {
       );
     }
 
-    // Parse JWT to extract user ID
-    let userId: string | null = null;
-    try {
-      const jwt = authHeader.replace('Bearer ', '');
-      const [, payload] = jwt.split('.');
-      const decodedPayload = JSON.parse(atob(payload));
-      userId = decodedPayload.sub || null;
-    } catch (e) {
-      console.error("Failed to parse JWT:", e);
+    // Cryptographically verify JWT and extract user ID
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error("Authentication failed:", authError);
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired authentication token." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+    
+    const userId = user.id;
 
     const { messages, leagueContext, leagueId, teamRoster } = await req.json();
     
