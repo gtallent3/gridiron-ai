@@ -49,6 +49,7 @@ serve(async (req) => {
       'ai_assistant': 'ai_assistant',
       'start_sit': 'start_sit',
       'trade_analysis': 'trade_analysis',
+      'prop_bet': 'prop_bet',
     };
 
     const transactionType = transactionTypeMap[feature];
