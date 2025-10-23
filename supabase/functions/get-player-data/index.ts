@@ -530,6 +530,27 @@ serve(async (req) => {
       
       const { total, breakdown } = calculateFantasyPoints(adjustedStats, scoringSettings);
       
+      // Prefer ESPN kicker projected_fp for projections
+      const isKicker = player.position === 'K' || player.position === '5';
+      let kickerProjected: number | undefined = undefined;
+      if (isKicker && player.source_type !== 'actual') {
+        const pf = (player as any).projected_fp ?? (playerStats as any).projected_fp;
+        if (typeof pf === 'number' && !Number.isNaN(pf)) {
+          kickerProjected = pf;
+        } else {
+          const breakdownRaw = (player as any).__applied_breakdown ?? (playerStats as any).__applied_breakdown;
+          if (breakdownRaw && typeof breakdownRaw === 'object') {
+            kickerProjected = Object.values(breakdownRaw as Record<string, number | unknown>)
+              .reduce((acc: number, v: unknown) => acc + (typeof v === 'number' ? v : 0), 0);
+          }
+        }
+      }
+
+      const finalTotal = typeof kickerProjected === 'number' ? Math.round(kickerProjected * 100) / 100 : total;
+      const projectedFpForStats = typeof kickerProjected === 'number'
+        ? kickerProjected
+        : (typeof (playerStats as any)?.projected_fp === 'number' ? (playerStats as any).projected_fp : undefined);
+      
       return {
         player_id: player.player_id,
         player_name: player.player_name,
@@ -565,8 +586,10 @@ serve(async (req) => {
           receiving_tds: playerStats.receiving_tds,
           receiving_2pt_conversions: playerStats.receiving_2pt_conversions,
           fumbles_lost: playerStats.fumbles_lost,
+          // Include projected_fp so the UI can prioritize it for kickers
+          projected_fp: projectedFpForStats,
         },
-        fantasy_points: total,
+        fantasy_points: finalTotal,
         points_breakdown: breakdown,
         source: player.source || 'espn',
         last_updated: player.updated_at,
