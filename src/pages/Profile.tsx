@@ -4,15 +4,23 @@ import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Loader2, Crown, User, Calendar, Coins } from "lucide-react";
 import { useTokens } from "@/hooks/useTokens";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Profile() {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const { balance, hasUnlimited } = useTokens();
   const [subscriptionExpiry, setSubscriptionExpiry] = useState<string | null>(null);
+  const [username, setUsername] = useState("");
+  const [newUsername, setNewUsername] = useState("");
+  const [isEditingUsername, setIsEditingUsername] = useState(false);
+  const [savingUsername, setSavingUsername] = useState(false);
 
   useEffect(() => {
     checkAuth();
@@ -28,6 +36,18 @@ export default function Profile() {
 
     setUser(user);
 
+    // Fetch profile
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("username")
+      .eq("id", user.id)
+      .single();
+
+    if (profile) {
+      setUsername(profile.username);
+      setNewUsername(profile.username);
+    }
+
     // Fetch subscription details
     const { data: tokenData } = await supabase
       .from("user_tokens")
@@ -40,6 +60,56 @@ export default function Profile() {
     }
 
     setLoading(false);
+  };
+
+  const handleUpdateUsername = async () => {
+    if (newUsername === username) {
+      setIsEditingUsername(false);
+      return;
+    }
+
+    setSavingUsername(true);
+    try {
+      // Check if username is taken
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("username")
+        .eq("username", newUsername)
+        .neq("id", user.id)
+        .maybeSingle();
+
+      if (existing) {
+        toast({
+          title: "Username Taken",
+          description: "This username is already in use.",
+          variant: "destructive",
+        });
+        setSavingUsername(false);
+        return;
+      }
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ username: newUsername })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      setUsername(newUsername);
+      setIsEditingUsername(false);
+      toast({
+        title: "Username Updated",
+        description: "Your username has been changed successfully.",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update username",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingUsername(false);
+    }
   };
 
   if (loading) {
@@ -211,7 +281,50 @@ export default function Profile() {
             <CardHeader>
               <CardTitle>Account Information</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Username</span>
+                {isEditingUsername ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={newUsername}
+                      onChange={(e) => setNewUsername(e.target.value)}
+                      className="w-40"
+                      minLength={3}
+                      maxLength={20}
+                      pattern="[a-zA-Z0-9_]+"
+                    />
+                    <Button 
+                      size="sm" 
+                      onClick={handleUpdateUsername}
+                      disabled={savingUsername}
+                    >
+                      {savingUsername ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => {
+                        setIsEditingUsername(false);
+                        setNewUsername(username);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{username}</span>
+                    <Button 
+                      size="sm" 
+                      variant="outline"
+                      onClick={() => setIsEditingUsername(true)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                )}
+              </div>
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Email</span>
                 <span className="font-medium">{user?.email}</span>

@@ -12,11 +12,18 @@ import { z } from "zod";
 const authSchema = z.object({
   email: z.string().trim().email("Please enter a valid email address").max(255, "Email is too long"),
   password: z.string().min(6, "Password must be at least 6 characters").max(72, "Password is too long"),
+  username: z.string()
+    .trim()
+    .min(3, "Username must be at least 3 characters")
+    .max(20, "Username must be less than 20 characters")
+    .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores")
+    .optional(),
 });
 
 export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const navigate = useNavigate();
@@ -45,7 +52,11 @@ export default function Auth() {
 
     try {
       // Validate inputs with zod schema
-      const validationResult = authSchema.safeParse({ email, password });
+      const validationResult = authSchema.safeParse({ 
+        email, 
+        password, 
+        username: isSignUp ? username : undefined 
+      });
       
       if (!validationResult.success) {
         const firstError = validationResult.error.errors[0];
@@ -58,14 +69,36 @@ export default function Auth() {
         return;
       }
 
-      const { email: validEmail, password: validPassword } = validationResult.data;
+      const { email: validEmail, password: validPassword, username: validUsername } = validationResult.data;
 
       if (isSignUp) {
+        // Check if username already exists
+        if (validUsername) {
+          const { data: existingUser } = await supabase
+            .from("profiles")
+            .select("username")
+            .eq("username", validUsername)
+            .maybeSingle();
+
+          if (existingUser) {
+            toast({
+              title: "Username Taken",
+              description: "This username is already in use. Please choose another.",
+              variant: "destructive",
+            });
+            setIsLoading(false);
+            return;
+          }
+        }
+
         const { error } = await supabase.auth.signUp({
           email: validEmail,
           password: validPassword,
           options: {
             emailRedirectTo: `${window.location.origin}/`,
+            data: {
+              username: validUsername,
+            },
           },
         });
 
@@ -76,6 +109,7 @@ export default function Auth() {
           description: "You can now sign in.",
         });
         setIsSignUp(false);
+        setUsername("");
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: validEmail,
@@ -113,6 +147,25 @@ export default function Auth() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleAuth} className="space-y-4">
+            {isSignUp && (
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  placeholder="Choose a unique username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  required
+                  minLength={3}
+                  maxLength={20}
+                  pattern="[a-zA-Z0-9_]+"
+                />
+                <p className="text-xs text-muted-foreground">
+                  3-20 characters, letters, numbers, and underscores only
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
               <Input

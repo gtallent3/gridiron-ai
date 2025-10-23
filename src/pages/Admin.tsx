@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 
 type UserWithTokens = {
   id: string;
-  email: string;
+  username: string;
   balance: number;
   has_unlimited_subscription: boolean;
 };
@@ -138,7 +138,12 @@ export default function Admin() {
   const fetchUsers = async () => {
     const { data, error } = await supabase
       .from("user_tokens")
-      .select("user_id, balance, has_unlimited_subscription")
+      .select(`
+        user_id, 
+        balance, 
+        has_unlimited_subscription,
+        profiles!inner(username)
+      `)
       .limit(100);
 
     if (error) {
@@ -146,11 +151,9 @@ export default function Admin() {
       return;
     }
 
-    // Note: In production, you'd use admin API to fetch emails
-    // For now, just show user IDs
     const usersData = (data || []).map(tokenData => ({
       id: tokenData.user_id,
-      email: tokenData.user_id.substring(0, 8) + "...", // Truncated ID
+      username: (tokenData.profiles as any)?.username || "Unknown",
       balance: tokenData.balance,
       has_unlimited_subscription: tokenData.has_unlimited_subscription,
     }));
@@ -544,7 +547,7 @@ export default function Admin() {
                     <SelectContent>
                       {users.map(user => (
                         <SelectItem key={user.id} value={user.id}>
-                          {user.email} - {user.balance} tokens
+                          {user.username} - {user.balance} tokens
                           {user.has_unlimited_subscription && " (Subscriber)"}
                         </SelectItem>
                       ))}
@@ -585,7 +588,7 @@ export default function Admin() {
                     <SelectContent>
                       {users.map(user => (
                         <SelectItem key={user.id} value={user.id}>
-                          {user.email} - {user.has_unlimited_subscription ? "Subscriber" : "Basic"}
+                          {user.username} - {user.has_unlimited_subscription ? "Subscriber" : "Basic"}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -619,7 +622,7 @@ export default function Admin() {
                     {users.map(user => (
                       <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
                         <div>
-                          <div className="font-medium">{user.email}</div>
+                          <div className="font-medium">{user.username}</div>
                           <div className="text-sm text-muted-foreground">{user.id}</div>
                         </div>
                         <div className="flex items-center gap-2">

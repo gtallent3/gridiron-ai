@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 
 type LeaderboardEntry = {
   user_id: string;
+  username: string;
   total_winnings: number;
   wins: number;
   losses: number;
@@ -89,6 +90,7 @@ export default function Leaderboard() {
       const leaderboardData: LeaderboardEntry[] = Array.from(userStats.entries())
         .map(([user_id, stats]) => ({
           user_id,
+          username: '', // Will be populated below
           total_winnings: stats.winnings,
           wins: stats.wins,
           losses: stats.losses,
@@ -98,6 +100,22 @@ export default function Leaderboard() {
         }))
         .sort((a, b) => b.total_winnings - a.total_winnings)
         .slice(0, 10); // Top 10
+
+      // Fetch usernames for leaderboard entries
+      if (leaderboardData.length > 0) {
+        const userIds = leaderboardData.map(entry => entry.user_id);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, username")
+          .in("id", userIds);
+
+        if (profiles) {
+          leaderboardData.forEach(entry => {
+            const profile = profiles.find(p => p.id === entry.user_id);
+            entry.username = profile?.username || "Unknown User";
+          });
+        }
+      }
 
       setLeaderboard(leaderboardData);
     } catch (error: any) {
@@ -179,7 +197,7 @@ export default function Leaderboard() {
                       {/* User Info */}
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold truncate">
-                          {entry.user_id === user?.id ? "You" : `User ${entry.user_id.slice(0, 8)}...`}
+                          {entry.username}
                           {entry.user_id === user?.id && (
                             <Badge variant="outline" className="ml-2">You</Badge>
                           )}
