@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Users, Trophy, DollarSign, BarChart3, Settings, Download, Coins } from "lucide-react";
+import { Loader2, Users, Trophy, DollarSign, BarChart3, Settings, Download, Coins, Search } from "lucide-react";
 import { Header } from "@/components/Header";
 import { useTokens } from "@/hooks/useTokens";
 import { useNavigate } from "react-router-dom";
@@ -53,9 +53,12 @@ export default function Admin() {
 
   // User Management State
   const [users, setUsers] = useState<UserWithTokens[]>([]);
+  const [filteredUsers, setFilteredUsers] = useState<UserWithTokens[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedUserId, setSelectedUserId] = useState("");
   const [tokenAmount, setTokenAmount] = useState(1);
   const [adjusting, setAdjusting] = useState(false);
+  const [userRoles, setUserRoles] = useState<Map<string, boolean>>(new Map());
 
   // Props Management State
   const [props, setProps] = useState<Prop[]>([]);
@@ -129,6 +132,7 @@ export default function Admin() {
     
     // Load all data
     fetchUsers();
+    fetchUserRoles();
     fetchProps();
     fetchTransactions();
     fetchAnalytics();
@@ -172,7 +176,40 @@ export default function Admin() {
     }));
 
     setUsers(usersData);
+    setFilteredUsers(usersData);
   };
+
+  const fetchUserRoles = async () => {
+    const { data, error } = await supabase
+      .from("user_roles")
+      .select("user_id, role")
+      .eq("role", "admin");
+
+    if (error) {
+      console.error("Error fetching roles:", error);
+      return;
+    }
+
+    const roleMap = new Map<string, boolean>();
+    (data || []).forEach((role: any) => {
+      roleMap.set(role.user_id, true);
+    });
+    setUserRoles(roleMap);
+  };
+
+  // Filter users based on search query
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredUsers(users);
+    } else {
+      const query = searchQuery.toLowerCase();
+      const filtered = users.filter(user => 
+        user.username.toLowerCase().includes(query) ||
+        user.id.toLowerCase().includes(query)
+      );
+      setFilteredUsers(filtered);
+    }
+  }, [searchQuery, users]);
   const handleTokenAdjustment = async (action: "add" | "subtract" | "set") => {
     if (!selectedUserId) {
       toast({
@@ -201,6 +238,7 @@ export default function Admin() {
       });
 
       fetchUsers();
+      fetchUserRoles();
       refreshBalance();
     } catch (error: any) {
       toast({
@@ -240,6 +278,7 @@ export default function Admin() {
       });
 
       fetchUsers();
+      fetchUserRoles();
       refreshBalance();
     } catch (error: any) {
       toast({
@@ -276,11 +315,38 @@ export default function Admin() {
       });
 
       fetchUsers();
+      fetchUserRoles();
       refreshBalance();
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message || "Failed to remove subscription",
+        variant: "destructive",
+      });
+    } finally {
+      setAdjusting(false);
+    }
+  };
+
+  const handleManageRole = async (targetUserId: string, action: "grant" | "revoke") => {
+    setAdjusting(true);
+    try {
+      const { error } = await supabase.functions.invoke("admin-manage-role", {
+        body: { targetUserId, action },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: action === "grant" ? "Admin Granted" : "Admin Revoked",
+        description: `Successfully ${action === "grant" ? "granted" : "revoked"} admin privileges`,
+      });
+
+      fetchUserRoles();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to manage role",
         variant: "destructive",
       });
     } finally {
@@ -557,10 +623,11 @@ export default function Admin() {
                       <SelectValue placeholder="Select a user" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map(user => (
+                      {filteredUsers.map(user => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.username} - {user.balance} tokens
                           {user.has_unlimited_subscription && " (Subscriber)"}
+                          {userRoles.get(user.id) && " [Admin]"}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -598,9 +665,10 @@ export default function Admin() {
                       <SelectValue placeholder="Select a user" />
                     </SelectTrigger>
                     <SelectContent>
-                      {users.map(user => (
+                      {filteredUsers.map(user => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.username} - {user.has_unlimited_subscription ? "Subscriber" : "Basic"}
+                          {userRoles.get(user.id) && " [Admin]"}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -627,26 +695,67 @@ export default function Admin() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>All Users</CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>All Users</CardTitle>
+                    <div className="w-64">
+                      <Input
+                        placeholder="Search by username or ID..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                      />
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {users.map(user => (
-                      <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <div className="font-medium">{user.username}</div>
-                          <div className="text-sm text-muted-foreground">{user.id}</div>
+                    {filteredUsers.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">
+                        No users found
+                      </p>
+                    ) : (
+                      filteredUsers.map(rowUser => (
+                        <div key={rowUser.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <div className="font-medium">{rowUser.username}</div>
+                              {userRoles.get(rowUser.id) && (
+                                <Badge variant="destructive" className="text-xs">Admin</Badge>
+                              )}
+                            </div>
+                            <div className="text-sm text-muted-foreground">{rowUser.id}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant={rowUser.has_unlimited_subscription ? "default" : "outline"}>
+                              {rowUser.balance} tokens
+                            </Badge>
+                            {rowUser.has_unlimited_subscription && (
+                              <Badge>Unlimited</Badge>
+                            )}
+                            {rowUser.id !== user?.id && (
+                              userRoles.get(rowUser.id) ? (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleManageRole(rowUser.id, "revoke")}
+                                  disabled={adjusting}
+                                >
+                                  Revoke Admin
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => handleManageRole(rowUser.id, "grant")}
+                                  disabled={adjusting}
+                                >
+                                  Make Admin
+                                </Button>
+                              )
+                            )}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={user.has_unlimited_subscription ? "default" : "outline"}>
-                            {user.balance} tokens
-                          </Badge>
-                          {user.has_unlimited_subscription && (
-                            <Badge>Unlimited</Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
