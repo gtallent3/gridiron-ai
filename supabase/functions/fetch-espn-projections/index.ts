@@ -273,15 +273,27 @@ serve(async (req) => {
               }
             }
             
-            // Always preserve appliedTotal as projected_fp (highest fidelity for league-specific scoring)
-            const projected_fp = typeof weekProjection.appliedTotal === 'number' ? weekProjection.appliedTotal : undefined;
-            if (projected_fp !== undefined) {
-              (normalizedStats as any).projected_fp = projected_fp;
-            }
-            
             // Preserve applied breakdown for debugging/transparency
             if (appliedStats && Object.keys(appliedStats).length > 0) {
               (normalizedStats as any).__applied_breakdown = appliedStats;
+            }
+            
+            // Calculate projected_fp
+            let projected_fp: number | undefined;
+            
+            if (isK && appliedStats && Object.keys(appliedStats).length > 0) {
+              // For kickers, sum all values in appliedStats
+              projected_fp = Object.values(appliedStats).reduce((sum: number, val: any) => {
+                const num = typeof val === 'number' ? val : parseFloat(val || '0') || 0;
+                return sum + num;
+              }, 0);
+            } else if (typeof weekProjection.appliedTotal === 'number') {
+              // For non-kickers, use appliedTotal if available
+              projected_fp = weekProjection.appliedTotal;
+            }
+            
+            if (projected_fp !== undefined) {
+              (normalizedStats as any).projected_fp = projected_fp;
             }
             
             // Create projection entry
