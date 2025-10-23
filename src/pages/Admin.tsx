@@ -382,13 +382,12 @@ export default function Admin() {
 
     setCreatingProp(true);
     try {
-      const { error } = await supabase.from("weekly_props").insert([{
-        ...newProp,
-        player_id: `${newProp.player_name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`,
-        status: "pending"
-      }]);
+      const { data, error } = await supabase.functions.invoke('admin-create-prop', {
+        body: newProp
+      });
 
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: "Prop Created",

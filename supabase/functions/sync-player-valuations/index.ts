@@ -21,7 +21,47 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    
+    // Create client with user's auth for role checking
+    const authClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        headers: { Authorization: req.headers.get("Authorization")! },
+      },
+    });
+
+    // Authenticate user
+    const {
+      data: { user },
+      error: authError,
+    } = await authClient.auth.getUser();
+
+    if (authError || !user) {
+      console.error("Authentication error:", authError);
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 }
+      );
+    }
+
+    console.log("Authenticated user:", user.id);
+
+    // Check if user has admin role
+    const { data: hasAdminRole, error: roleError } = await authClient.rpc(
+      "has_role",
+      { _user_id: user.id, _role: "admin" }
+    );
+
+    if (roleError || !hasAdminRole) {
+      console.error("Role check error:", roleError);
+      return new Response(
+        JSON.stringify({ error: "Forbidden: Admin access required" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 403 }
+      );
+    }
+
+    // Use service role key for database operations
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     console.log('Starting weekly player valuation sync...');

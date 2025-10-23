@@ -3,6 +3,9 @@ project_id = "zeklwogchobqttevcckl"
 [functions.fantasy-ai-chat]
 verify_jwt = true
 
+[functions.admin-create-prop]
+verify_jwt = true
+
 [functions.sync-sleeper-league]
 verify_jwt = true
 
@@ -19,7 +22,7 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.sync-player-valuations]
-verify_jwt = false
+verify_jwt = true
 
 [functions.find-trades]
 verify_jwt = true
