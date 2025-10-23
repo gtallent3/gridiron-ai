@@ -23,7 +23,7 @@ export const LeagueSettings = () => {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
-  const [isSyncingPlayers, setIsSyncingPlayers] = useState(false);
+  const [sleeperUsername, setSleeperUsername] = useState<string | null>(null);
   const { toast } = useToast();
 
   const getDisplayScoringType = (lg: any) => {
@@ -72,6 +72,21 @@ export const LeagueSettings = () => {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    const loadUsername = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (data?.username) setSleeperUsername(data.username);
+      }
+    };
+    loadUsername();
+  }, []);
 
   const handleAutoRefreshToggle = async (leagueId: string, currentValue: boolean) => {
     try {
@@ -127,17 +142,25 @@ export const LeagueSettings = () => {
           description: data.message || "Your ESPN league data has been updated",
         });
       } else if (platform === 'sleeper') {
-        // Update timestamp for sleeper (implement proper sync later)
-        const { error } = await supabase
-          .from('connected_leagues')
-          .update({ last_synced_at: new Date().toISOString() })
-          .eq('id', leagueId);
+        // Run the actual Sleeper sync using the user's profile username
+        if (!sleeperUsername) {
+          toast({
+            title: 'Missing Username',
+            description: 'Set your Sleeper username in your profile to sync.',
+            variant: 'destructive',
+          });
+          return;
+        }
+
+        const { data, error } = await supabase.functions.invoke('sync-sleeper-league', {
+          body: { username: sleeperUsername },
+        });
 
         if (error) throw error;
 
         toast({
-          title: "Refreshed",
-          description: "League data has been updated",
+          title: '✅ Sleeper Synced',
+          description: data?.message || 'Your Sleeper leagues have been updated',
         });
       } else {
         toast({
@@ -184,44 +207,6 @@ export const LeagueSettings = () => {
     }
   };
 
-  const handleSyncPlayerValuations = async () => {
-    setIsSyncingPlayers(true);
-    try {
-      toast({
-        title: "Sync Started",
-        description: "Player data sync is running in the background. This may take 1-2 minutes...",
-      });
-
-      const { data, error } = await supabase.functions.invoke('sync-player-valuations', {
-        body: {},
-      });
-
-      if (error) throw error;
-
-      toast({
-        title: "✅ Player Valuations Synced",
-        description: `Successfully synced ${data.count || 'all'} players for Week ${data.week}`,
-      });
-    } catch (error: any) {
-      console.error('Error syncing player valuations:', error);
-      
-      // Check if it's a timeout/network error
-      if (error.message?.includes('fetch') || error.message?.includes('network')) {
-        toast({
-          title: "Sync In Progress",
-          description: "The sync is still running. Check the logs in a few minutes to confirm completion.",
-        });
-      } else {
-        toast({
-          title: "Sync Failed",
-          description: error.message || "Failed to sync player valuations",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setIsSyncingPlayers(false);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -246,36 +231,6 @@ export const LeagueSettings = () => {
 
   return (
     <div className="space-y-4">
-      {/* Admin Controls */}
-      <Card>
-        <CardHeader>
-          <CardTitle>System Settings</CardTitle>
-          <CardDescription>Manage player data and system updates</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button
-            onClick={handleSyncPlayerValuations}
-            disabled={isSyncingPlayers}
-            variant="outline"
-            size="sm"
-          >
-            {isSyncingPlayers ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Syncing Player Data...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Sync Player Valuations
-              </>
-            )}
-          </Button>
-          <p className="text-xs text-muted-foreground mt-2">
-            Updates all player bye weeks, injuries, and projections for the 2025-26 season
-          </p>
-        </CardContent>
-      </Card>
 
       {/* Connected Leagues */}
       {leagues.map((league) => (
@@ -333,7 +288,7 @@ export const LeagueSettings = () => {
                 ) : (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Sync Now
+                    Sync Raw Stats
                   </>
                 )}
               </Button>
