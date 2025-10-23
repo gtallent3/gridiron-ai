@@ -421,7 +421,26 @@ serve(async (req) => {
 
     // Calculate fantasy points for each player
     const playersWithPoints = stats.map(player => {
-      const { total, breakdown } = calculateFantasyPoints(player, scoringSettings);
+      // Only apply defensive scoring to DST positions
+      const isDST = player.position === 'D/ST' || player.position === 'DEF' || player.position === '16';
+      const adjustedStats = { ...player };
+      
+      // Zero out defensive stats for non-DST players to prevent incorrect scoring
+      if (!isDST) {
+        adjustedStats.sacks = 0;
+        adjustedStats.fumbles_recovered = 0;
+        adjustedStats.interception_tds = 0;
+        adjustedStats.fumble_recovery_tds = 0;
+        adjustedStats.defensive_tds = 0;
+        adjustedStats.kick_return_tds = 0;
+        adjustedStats.punt_return_tds = 0;
+        adjustedStats.safeties = 0;
+        adjustedStats.blocked_kicks = 0;
+        adjustedStats.points_allowed = undefined;
+        adjustedStats.yards_allowed = undefined;
+      }
+      
+      const { total, breakdown } = calculateFantasyPoints(adjustedStats, scoringSettings);
       
       return {
         player_id: player.player_id,
@@ -431,15 +450,31 @@ serve(async (req) => {
         week: player.week,
         season: player.season,
         source_type: player.source_type,
-        stats: {
+        stats: isDST ? {
+          sacks: player.sacks,
+          fumbles_recovered: player.fumbles_recovered,
+          interception_tds: player.interception_tds,
+          fumble_recovery_tds: player.fumble_recovery_tds,
+          defensive_tds: player.defensive_tds,
+          kick_return_tds: player.kick_return_tds,
+          punt_return_tds: player.punt_return_tds,
+          safeties: player.safeties,
+          blocked_kicks: player.blocked_kicks,
+          points_allowed: player.points_allowed,
+          yards_allowed: player.yards_allowed,
+        } : {
           passing_yards: player.passing_yards,
           passing_tds: player.passing_tds,
           interceptions: player.interceptions,
+          passing_2pt_conversions: player.passing_2pt_conversions,
           rushing_yards: player.rushing_yards,
           rushing_tds: player.rushing_tds,
+          rushing_2pt_conversions: player.rushing_2pt_conversions,
           receptions: player.receptions,
           receiving_yards: player.receiving_yards,
           receiving_tds: player.receiving_tds,
+          receiving_2pt_conversions: player.receiving_2pt_conversions,
+          fumbles_lost: player.fumbles_lost,
         },
         fantasy_points: total,
         points_breakdown: breakdown,

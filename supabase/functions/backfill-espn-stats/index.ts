@@ -140,36 +140,63 @@ serve(async (req) => {
 
           if (weekActual?.stats) {
             const rawStats = weekActual.stats;
-            playerStatsToInsert.push({
+            const position = normalizedPlayer?.position || player.defaultPositionId?.toString() || 'FLEX';
+            const isDST = position === 'D/ST' || position === 'DEF' || position === '16';
+            
+            // Base stat object with common stats
+            const statEntry: any = {
               player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
               player_name: normalizedPlayer?.player_name || player.fullName || 'Unknown',
               team: normalizedPlayer?.team || (player.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
-              position: normalizedPlayer?.position || player.defaultPositionId?.toString() || 'FLEX',
+              position: position,
               week: week,
               season: currentSeason,
-              passing_yards: Math.round(parseFloat(rawStats['5']) || 0),
-              passing_tds: parseInt(rawStats['4']) || 0,
-              interceptions: parseInt(rawStats['20']) || 0,
-              passing_completions: parseInt(rawStats['3']) || 0,
-              passing_attempts: parseInt(rawStats['0']) || 0,
-              rushing_yards: Math.round(parseFloat(rawStats['24']) || 0),
-              rushing_tds: parseInt(rawStats['25']) || 0,
-              rushing_attempts: parseInt(rawStats['23']) || 0,
-              receiving_yards: Math.round(parseFloat(rawStats['42']) || 0),
-              receiving_tds: parseInt(rawStats['43']) || 0,
-              receptions: parseInt(rawStats['53']) || 0,
-              receiving_targets: parseInt(rawStats['58']) || 0,
               fumbles_lost: parseInt(rawStats['72']) || 0,
-              passing_2pt_conversions: parseInt(rawStats['19']) || 0,
-              rushing_2pt_conversions: parseInt(rawStats['29']) || 0,
-              receiving_2pt_conversions: parseInt(rawStats['44']) || 0,
               source: 'espn',
               source_type: 'actual',
               confidence: 0.95,
               freshness_ts: new Date().toISOString(),
               finalized: true,
               raw_data: weekActual,
-            });
+            };
+            
+            // Add offensive stats for non-DST players
+            if (!isDST) {
+              statEntry.passing_yards = Math.round(parseFloat(rawStats['5']) || 0);
+              statEntry.passing_tds = parseInt(rawStats['4']) || 0;
+              statEntry.interceptions = parseInt(rawStats['20']) || 0;
+              statEntry.passing_completions = parseInt(rawStats['3']) || 0;
+              statEntry.passing_attempts = parseInt(rawStats['0']) || 0;
+              statEntry.passing_2pt_conversions = parseInt(rawStats['19']) || 0;
+              
+              statEntry.rushing_yards = Math.round(parseFloat(rawStats['24']) || 0);
+              statEntry.rushing_tds = parseInt(rawStats['25']) || 0;
+              statEntry.rushing_attempts = parseInt(rawStats['23']) || 0;
+              statEntry.rushing_2pt_conversions = parseInt(rawStats['26']) || 0; // Corrected stat ID
+              
+              statEntry.receiving_yards = Math.round(parseFloat(rawStats['42']) || 0);
+              statEntry.receiving_tds = parseInt(rawStats['43']) || 0;
+              statEntry.receptions = parseInt(rawStats['53']) || 0;
+              statEntry.receiving_targets = parseInt(rawStats['58']) || 0;
+              statEntry.receiving_2pt_conversions = parseInt(rawStats['44']) || 0;
+            }
+            
+            // Add defensive stats for DST players
+            if (isDST) {
+              statEntry.sacks = parseFloat(rawStats['99']) || 0;
+              statEntry.fumbles_recovered = parseInt(rawStats['96']) || 0;
+              statEntry.interception_tds = parseInt(rawStats['102']) || 0; // Pick-6
+              statEntry.fumble_recovery_tds = parseInt(rawStats['103']) || 0;
+              statEntry.defensive_tds = (parseInt(rawStats['102']) || 0) + (parseInt(rawStats['103']) || 0);
+              statEntry.kick_return_tds = parseInt(rawStats['101']) || 0;
+              statEntry.punt_return_tds = parseInt(rawStats['104']) || 0;
+              statEntry.safeties = parseInt(rawStats['93']) || 0;
+              statEntry.blocked_kicks = parseInt(rawStats['97']) || 0;
+              statEntry.points_allowed = parseInt(rawStats['120']) || 0;
+              statEntry.yards_allowed = parseInt(rawStats['123']) || 0;
+            }
+            
+            playerStatsToInsert.push(statEntry);
 
             // Add normalized player if missing
             if (!normalizedPlayer && espnId) {
