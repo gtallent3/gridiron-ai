@@ -294,6 +294,9 @@ serve(async (req) => {
         .upsert(playersToInsert, { onConflict: 'espn_id', ignoreDuplicates: true });
     }
 
+    // Collect player stats for player_stats table
+    const playerStatsToInsert: any[] = [];
+
     // Sync all teams
     for (const team of espnLeagueData.teams || []) {
       const roster = (team.roster?.entries || []).map((entry: any) => {
@@ -312,6 +315,40 @@ serve(async (req) => {
             stat.statSourceId === 1 && stat.scoringPeriodId === espnLeagueData.scoringPeriodId
           );
           projected = currentWeekStat?.appliedTotal || 0;
+
+          // Current week actual stats -> push to player_stats
+          const currentWeekActual = player.stats.find((stat: any) => 
+            stat.statSourceId === 0 && stat.scoringPeriodId === currentWeek
+          );
+          if (currentWeekActual?.stats) {
+            const rawStats = currentWeekActual.stats;
+            playerStatsToInsert.push({
+              player_id: normalizedPlayer?.player_id || espnId || 'unknown',
+              player_name: normalizedPlayer?.player_name || player?.fullName || 'Unknown',
+              team: normalizedPlayer?.team || (player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
+              position: normalizedPlayer?.position || player?.defaultPositionId?.toString() || 'FLEX',
+              week: currentWeek,
+              season: currentYear,
+              passing_yards: rawStats['5'] || 0,
+              passing_tds: rawStats['4'] || 0,
+              interceptions: rawStats['20'] || 0,
+              passing_completions: rawStats['3'] || 0,
+              passing_attempts: rawStats['0'] || 0,
+              rushing_yards: rawStats['24'] || 0,
+              rushing_tds: rawStats['25'] || 0,
+              rushing_attempts: rawStats['23'] || 0,
+              receiving_yards: rawStats['42'] || 0,
+              receiving_tds: rawStats['43'] || 0,
+              receptions: rawStats['53'] || 0,
+              receiving_targets: rawStats['58'] || 0,
+              fumbles_lost: rawStats['72'] || 0,
+              passing_2pt_conversions: rawStats['19'] || 0,
+              rushing_2pt_conversions: rawStats['29'] || 0,
+              receiving_2pt_conversions: rawStats['44'] || 0,
+              source: 'espn',
+              raw_data: currentWeekActual,
+            });
+          }
           
           // Remaining-week projections available from ESPN (often just current week)
           const weeksRemaining = Math.max(18 - currentWeek, 1);
@@ -408,6 +445,14 @@ serve(async (req) => {
         }, {
           onConflict: 'league_id,team_id',
         });
+    }
+
+    // Batch insert all player stats collected
+    if (playerStatsToInsert.length > 0) {
+      console.log(`Resync: inserting ${playerStatsToInsert.length} player stats for week ${currentWeek}`);
+      await supabase
+        .from('player_stats')
+        .upsert(playerStatsToInsert, { onConflict: 'player_id,week,season,source', ignoreDuplicates: false });
     }
 
     return new Response(
