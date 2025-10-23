@@ -352,6 +352,10 @@ serve(async (req) => {
             rushing_2pt_conversions: stats.rush_2pt || 0,
             receiving_2pt_conversions: stats.rec_2pt || 0,
             source: 'sleeper',
+            source_type: 'actual',
+            confidence: 0.92,
+            freshness_ts: new Date().toISOString(),
+            finalized: false,
             raw_data: stats,
           });
         }

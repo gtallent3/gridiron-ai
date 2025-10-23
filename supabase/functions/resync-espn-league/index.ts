@@ -346,6 +346,10 @@ serve(async (req) => {
               rushing_2pt_conversions: rawStats['29'] || 0,
               receiving_2pt_conversions: rawStats['44'] || 0,
               source: 'espn',
+              source_type: 'actual',
+              confidence: 0.95,
+              freshness_ts: new Date().toISOString(),
+              finalized: false,
               raw_data: currentWeekActual,
             });
           } else {
@@ -379,6 +383,10 @@ serve(async (req) => {
                 rushing_2pt_conversions: projStats['29'] || 0,
                 receiving_2pt_conversions: projStats['44'] || 0,
                 source: 'espn_projection',
+                source_type: 'projection',
+                confidence: 0.70,
+                freshness_ts: new Date().toISOString(),
+                finalized: false,
                 raw_data: projWeek,
               });
             }

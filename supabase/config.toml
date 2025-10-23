@@ -44,3 +44,9 @@ verify_jwt = true
 
 [functions.get-player-data]
 verify_jwt = true
+
+[functions.ingest-week-stats]
+verify_jwt = true
+
+[functions.reconcile-stats]
+verify_jwt = true

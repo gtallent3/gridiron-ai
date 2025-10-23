@@ -170,6 +170,8 @@ export type Database = {
       player_stats: {
         Row: {
           blocked_kicks: number | null
+          confidence: number | null
+          conflict_flags: Json | null
           created_at: string | null
           defensive_tds: number | null
           fg_attempts: number | null
@@ -179,6 +181,8 @@ export type Database = {
           fg_made_30_39: number | null
           fg_made_40_49: number | null
           fg_made_50_plus: number | null
+          finalized: boolean | null
+          freshness_ts: string | null
           fumble_recovery_tds: number | null
           fumbles_forced: number | null
           fumbles_lost: number | null
@@ -196,6 +200,7 @@ export type Database = {
           player_name: string
           points_allowed: number | null
           position: string
+          provider_ids: Json | null
           punt_return_tds: number | null
           raw_data: Json | null
           receiving_2pt_conversions: number | null
@@ -203,6 +208,7 @@ export type Database = {
           receiving_tds: number | null
           receiving_yards: number | null
           receptions: number | null
+          reconciled_version: number | null
           rushing_2pt_conversions: number | null
           rushing_attempts: number | null
           rushing_tds: number | null
@@ -211,6 +217,7 @@ export type Database = {
           safeties: number | null
           season: number
           source: string
+          source_type: string | null
           team: string | null
           updated_at: string | null
           week: number
@@ -220,6 +227,8 @@ export type Database = {
         }
         Insert: {
           blocked_kicks?: number | null
+          confidence?: number | null
+          conflict_flags?: Json | null
           created_at?: string | null
           defensive_tds?: number | null
           fg_attempts?: number | null
@@ -229,6 +238,8 @@ export type Database = {
           fg_made_30_39?: number | null
           fg_made_40_49?: number | null
           fg_made_50_plus?: number | null
+          finalized?: boolean | null
+          freshness_ts?: string | null
           fumble_recovery_tds?: number | null
           fumbles_forced?: number | null
           fumbles_lost?: number | null
@@ -246,6 +257,7 @@ export type Database = {
           player_name: string
           points_allowed?: number | null
           position: string
+          provider_ids?: Json | null
           punt_return_tds?: number | null
           raw_data?: Json | null
           receiving_2pt_conversions?: number | null
@@ -253,6 +265,7 @@ export type Database = {
           receiving_tds?: number | null
           receiving_yards?: number | null
           receptions?: number | null
+          reconciled_version?: number | null
           rushing_2pt_conversions?: number | null
           rushing_attempts?: number | null
           rushing_tds?: number | null
@@ -261,6 +274,7 @@ export type Database = {
           safeties?: number | null
           season: number
           source: string
+          source_type?: string | null
           team?: string | null
           updated_at?: string | null
           week: number
@@ -270,6 +284,8 @@ export type Database = {
         }
         Update: {
           blocked_kicks?: number | null
+          confidence?: number | null
+          conflict_flags?: Json | null
           created_at?: string | null
           defensive_tds?: number | null
           fg_attempts?: number | null
@@ -279,6 +295,8 @@ export type Database = {
           fg_made_30_39?: number | null
           fg_made_40_49?: number | null
           fg_made_50_plus?: number | null
+          finalized?: boolean | null
+          freshness_ts?: string | null
           fumble_recovery_tds?: number | null
           fumbles_forced?: number | null
           fumbles_lost?: number | null
@@ -296,6 +314,7 @@ export type Database = {
           player_name?: string
           points_allowed?: number | null
           position?: string
+          provider_ids?: Json | null
           punt_return_tds?: number | null
           raw_data?: Json | null
           receiving_2pt_conversions?: number | null
@@ -303,6 +322,7 @@ export type Database = {
           receiving_tds?: number | null
           receiving_yards?: number | null
           receptions?: number | null
+          reconciled_version?: number | null
           rushing_2pt_conversions?: number | null
           rushing_attempts?: number | null
           rushing_tds?: number | null
@@ -311,6 +331,7 @@ export type Database = {
           safeties?: number | null
           season?: number
           source?: string
+          source_type?: string | null
           team?: string | null
           updated_at?: string | null
           week?: number
