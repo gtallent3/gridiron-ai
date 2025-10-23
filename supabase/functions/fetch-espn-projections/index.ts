@@ -205,14 +205,20 @@ serve(async (req) => {
               normalizedStats.yards_allowed = rawStats['127'] !== undefined ? parseFloat(rawStats['127']) : undefined as any;
             }
             
-            // Add kicker stats
+            // Add kicker stats - check if rawStats are fractional (points) vs whole numbers (counts)
             if (isK) {
-              normalizedStats.fg_made_0_19 = parseFloat(rawStats['80']) || 0;
-              normalizedStats.fg_made_20_29 = parseFloat(rawStats['81']) || 0;
-              normalizedStats.fg_made_30_39 = parseFloat(rawStats['82']) || 0;
-              normalizedStats.fg_made_40_49 = parseFloat(rawStats['83']) || 0;
-              normalizedStats.fg_made_50_plus = parseFloat(rawStats['84']) || 0;
-              normalizedStats.xp_made = parseFloat(rawStats['85']) || 0;
+              const sample = parseFloat(rawStats['80']) || parseFloat(rawStats['83']) || 0;
+              const looksLikePoints = sample > 0 && sample !== Math.floor(sample);
+              
+              // If rawStats look like points, skip and let appliedStats derivation handle it
+              if (!looksLikePoints) {
+                normalizedStats.fg_made_0_19 = parseFloat(rawStats['80']) || 0;
+                normalizedStats.fg_made_20_29 = parseFloat(rawStats['81']) || 0;
+                normalizedStats.fg_made_30_39 = parseFloat(rawStats['82']) || 0;
+                normalizedStats.fg_made_40_49 = parseFloat(rawStats['83']) || 0;
+                normalizedStats.fg_made_50_plus = parseFloat(rawStats['84']) || 0;
+                normalizedStats.xp_made = parseFloat(rawStats['85']) || 0;
+              }
             }
             
             // If everything is zero and appliedStats exist, derive estimates from appliedStats (league-scoring based)
@@ -265,8 +271,16 @@ serve(async (req) => {
                 normalizedStats.points_allowed = undefined as any;
                 normalizedStats.yards_allowed = undefined as any;
               }
-              // Preserve applied total and breakdown for consumers that rely on league-specific scoring
-              (normalizedStats as any).__applied_total = typeof weekProjection.appliedTotal === 'number' ? weekProjection.appliedTotal : undefined;
+            }
+            
+            // Always preserve appliedTotal as projected_fp (highest fidelity for league-specific scoring)
+            const projected_fp = typeof weekProjection.appliedTotal === 'number' ? weekProjection.appliedTotal : undefined;
+            if (projected_fp !== undefined) {
+              (normalizedStats as any).projected_fp = projected_fp;
+            }
+            
+            // Preserve applied breakdown for debugging/transparency
+            if (appliedStats && Object.keys(appliedStats).length > 0) {
               (normalizedStats as any).__applied_breakdown = appliedStats;
             }
             
