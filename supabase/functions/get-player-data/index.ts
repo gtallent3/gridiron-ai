@@ -346,14 +346,21 @@ serve(async (req) => {
       );
     }
 
-    // Parse request body
-    const body = await req.json();
-    const week = body.week;
-    const season = body.season || '2024';
-    const leagueId = body.leagueId;
-    const playerIds = body.playerIds;
+    // Parse request body (support body and query params) and infer season
+    const json = await req.json().catch(() => ({}));
+    const url = new URL(req.url);
+    const now = new Date();
+    const inferredSeason = (now.getMonth() + 1) >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
-    console.log('Fetching player data:', { week, season, leagueId, playerIds });
+    const rawWeek = json.week ?? url.searchParams.get('week');
+    const rawSeason = json.season ?? url.searchParams.get('season') ?? inferredSeason;
+    const leagueId = json.leagueId ?? url.searchParams.get('leagueId');
+    const playerIds = json.playerIds ?? (url.searchParams.get('playerIds')?.split(',') ?? undefined);
+
+    const weekNum = (rawWeek !== undefined && rawWeek !== null && rawWeek !== '') ? Number(rawWeek) : undefined;
+    const seasonNum = Number(rawSeason) || inferredSeason;
+
+    console.log('Fetching player data:', { week: weekNum, season: seasonNum, leagueId, playerIds });
 
     // Get league scoring settings if leagueId provided
     let scoringSettings = DEFAULT_SCORING;
@@ -378,14 +385,25 @@ serve(async (req) => {
     let query = supabase
       .from('player_stats')
       .select('*')
-      .eq('season', season);
+      .eq('season', seasonNum);
 
-    if (week) {
-      query = query.eq('week', week);
+    if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
+      query = query.eq('week', weekNum);
     }
 
     if (playerIds && playerIds.length > 0) {
-      query = query.in('player_id', playerIds);
+      // Normalize ESPN IDs (support both 'espn_1234' and '1234')
+      const variants = new Set<string>();
+      for (const id of playerIds) {
+        if (!id) continue;
+        variants.add(String(id));
+        const m = String(id).match(/^espn_(\-?\d+)$/);
+        if (m) variants.add(m[1]);
+        // Also add espn_ prefix variant if id is numeric
+        const n = String(id).match(/^\-?\d+$/);
+        if (n) variants.add(`espn_${id}`);
+      }
+      query = query.in('player_id', Array.from(variants));
     }
 
     const { data: stats, error: statsError } = await query;

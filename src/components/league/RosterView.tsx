@@ -55,11 +55,16 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         .map((p: any) => String(p.player_id || p.playerId || p.id || ''))
         .filter(Boolean);
 
+
+      // Infer NFL season (Aug-Dec -> current year, Jan-Jul -> previous year)
+      const now = new Date();
+      const inferredSeason = (now.getMonth() + 1) >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+
       // Fetch player stats with calculated fantasy points based on league scoring
       const { data: playerData, error } = await supabase.functions.invoke('get-player-data', {
         body: { 
-          week, 
-          season: 2024,
+          week: Number(week), 
+          season: inferredSeason,
           leagueId: league.id,
           playerIds 
         }
@@ -72,12 +77,18 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         return;
       }
 
-      // Create lookup map by player ID and name
-      const statsMapById = new Map(
-        playerData.players.map((p: any) => [String(p.player_id), p])
+      // Create lookup maps separated by source type
+      const projById = new Map(
+        playerData.players.filter((p: any) => p.source_type === 'projection').map((p: any) => [String(p.player_id), p])
       );
-      const statsMapByName = new Map(
-        playerData.players.map((p: any) => [p.player_name?.toLowerCase().trim(), p])
+      const actualById = new Map(
+        playerData.players.filter((p: any) => p.source_type !== 'projection').map((p: any) => [String(p.player_id), p])
+      );
+      const projByName = new Map(
+        playerData.players.filter((p: any) => p.source_type === 'projection').map((p: any) => [p.player_name?.toLowerCase().trim(), p])
+      );
+      const actualByName = new Map(
+        playerData.players.filter((p: any) => p.source_type !== 'projection').map((p: any) => [p.player_name?.toLowerCase().trim(), p])
       );
 
       const starterPlayers: any[] = [];
@@ -99,24 +110,22 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           isBench = player.starter === false;
         }
 
-        // Get stats for this player - try ID first, then name
-        let playerStats = statsMapById.get(playerId) as any;
-        if (!playerStats && playerName) {
-          playerStats = statsMapByName.get(playerName.toLowerCase().trim()) as any;
-        }
-
-        // Determine if we have actual or projected points
+        // Determine week context
         const isHistorical = week < currentWeek;
-        const isProjection = playerStats?.source_type === 'projection';
+
+        // Resolve stats preferring actuals for past weeks and projections for current week
+        const actualStats = (actualById.get(playerId) as any) || (playerName ? actualByName.get(playerName.toLowerCase().trim()) as any : undefined);
+        const projStats = (projById.get(playerId) as any) || (playerName ? projByName.get(playerName.toLowerCase().trim()) as any : undefined);
+        const chosenStats = isHistorical ? (actualStats || projStats) : (projStats || actualStats);
         
         const playerDataObj = {
           id: playerId || playerName,
           name: playerName,
           position: positionName,
-          team: playerStats?.team || player.team || 'NFL',
+          team: chosenStats?.team || player.team || 'NFL',
           // Use fantasy_points from calculated data
-          projected: !isHistorical || isProjection ? (playerStats?.fantasy_points || 0) : 0,
-          actualPoints: isHistorical && !isProjection ? (playerStats?.fantasy_points || 0) : 0,
+          projected: !isHistorical ? ((projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0)) : 0,
+          actualPoints: isHistorical ? ((actualStats?.fantasy_points ?? projStats?.fantasy_points ?? 0)) : 0,
           status: isStarter ? 'starter' : 'bench',
           is_bye_week: player.is_bye_week || false,
           injury_status: player.injury_status || null,
