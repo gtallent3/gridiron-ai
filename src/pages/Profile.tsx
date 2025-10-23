@@ -28,6 +28,7 @@ export default function Profile() {
   const [newUsername, setNewUsername] = useState("");
   const [isEditingUsername, setIsEditingUsername] = useState(false);
   const [savingUsername, setSavingUsername] = useState(false);
+  const [hasProfile, setHasProfile] = useState(true);
 
   useEffect(() => {
     checkAuth();
@@ -44,15 +45,21 @@ export default function Profile() {
     setUser(user);
 
     // Fetch profile
-    const { data: profile } = await supabase
+    const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("username")
       .eq("id", user.id)
-      .single();
+      .maybeSingle();
 
     if (profile) {
       setUsername(profile.username);
       setNewUsername(profile.username);
+      setHasProfile(true);
+    } else {
+      // No profile exists - user needs to create username
+      setHasProfile(false);
+      setIsEditingUsername(true); // Auto-enter edit mode
+      console.log("No profile found for user - needs to create username");
     }
 
     // Fetch subscription details
@@ -70,9 +77,9 @@ export default function Profile() {
   };
 
   const handleUpdateUsername = async () => {
-    console.log("handleUpdateUsername called", { newUsername, currentUsername: username });
+    console.log("handleUpdateUsername called", { newUsername, currentUsername: username, hasProfile });
     
-    if (newUsername === username) {
+    if (newUsername === username && hasProfile) {
       setIsEditingUsername(false);
       return;
     }
@@ -116,29 +123,52 @@ export default function Profile() {
         return;
       }
 
-      console.log("Updating username in database...");
-      const { error } = await supabase
-        .from("profiles")
-        .update({ username: newUsername })
-        .eq("id", user.id);
+      if (!hasProfile) {
+        // Create new profile
+        console.log("Creating new profile...");
+        const { error } = await supabase
+          .from("profiles")
+          .insert({ id: user.id, username: newUsername });
 
-      if (error) {
-        console.error("Error updating username:", error);
-        throw error;
+        if (error) {
+          console.error("Error creating profile:", error);
+          throw error;
+        }
+
+        console.log("Profile created successfully");
+        setUsername(newUsername);
+        setHasProfile(true);
+        setIsEditingUsername(false);
+        toast({
+          title: "Username Created",
+          description: "Your username has been set successfully!",
+        });
+      } else {
+        // Update existing profile
+        console.log("Updating username in database...");
+        const { error } = await supabase
+          .from("profiles")
+          .update({ username: newUsername })
+          .eq("id", user.id);
+
+        if (error) {
+          console.error("Error updating username:", error);
+          throw error;
+        }
+
+        console.log("Username updated successfully");
+        setUsername(newUsername);
+        setIsEditingUsername(false);
+        toast({
+          title: "Username Updated",
+          description: "Your username has been changed successfully.",
+        });
       }
-
-      console.log("Username updated successfully");
-      setUsername(newUsername);
-      setIsEditingUsername(false);
-      toast({
-        title: "Username Updated",
-        description: "Your username has been changed successfully.",
-      });
     } catch (error: any) {
       console.error("Failed to update username:", error);
       toast({
         title: "Error",
-        description: error.message || "Failed to update username",
+        description: error.message || "Failed to save username",
         variant: "destructive",
       });
     } finally {
@@ -316,9 +346,16 @@ export default function Profile() {
               <CardTitle>Account Information</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {!hasProfile && (
+                <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-4">
+                  <p className="text-sm font-medium text-amber-400">
+                    Please create your username to complete your profile setup
+                  </p>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Username</span>
-                {isEditingUsername ? (
+                {isEditingUsername || !hasProfile ? (
                   <div className="flex items-center gap-2">
                     <Input
                       value={newUsername}
@@ -330,7 +367,8 @@ export default function Profile() {
                         }
                       }}
                       className="w-40"
-                      placeholder="Username"
+                      placeholder="Enter username"
+                      autoFocus={!hasProfile}
                     />
                     <Button 
                       size="sm" 
@@ -341,18 +379,20 @@ export default function Profile() {
                       }}
                       disabled={savingUsername || newUsername.length < 3}
                     >
-                      {savingUsername ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                      {savingUsername ? <Loader2 className="h-4 w-4 animate-spin" /> : hasProfile ? "Save" : "Create"}
                     </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline"
-                      onClick={() => {
-                        setIsEditingUsername(false);
-                        setNewUsername(username);
-                      }}
-                    >
-                      Cancel
-                    </Button>
+                    {hasProfile && (
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        onClick={() => {
+                          setIsEditingUsername(false);
+                          setNewUsername(username);
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    )}
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
