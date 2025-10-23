@@ -136,31 +136,43 @@ export default function Admin() {
 
   // USER MANAGEMENT
   const fetchUsers = async () => {
-    const { data, error } = await supabase
+    // 1) Get token rows (no join)
+    const { data: tokenRows, error: tokensError } = await supabase
       .from("user_tokens")
-      .select(`
-        user_id, 
-        balance, 
-        has_unlimited_subscription,
-        profiles(username)
-      `)
+      .select("user_id, balance, has_unlimited_subscription")
       .limit(100);
 
-    if (error) {
-      console.error("Error fetching users:", error);
+    if (tokensError) {
+      console.error("Error fetching users:", tokensError);
       return;
     }
 
-    const usersData = (data || []).map(tokenData => ({
-      id: tokenData.user_id,
-      username: (tokenData.profiles as any)?.username || `user_${tokenData.user_id.substring(0, 8)}`,
-      balance: tokenData.balance,
-      has_unlimited_subscription: tokenData.has_unlimited_subscription,
+    const ids = (tokenRows || []).map((r) => r.user_id);
+
+    // 2) Fetch profiles for those ids (may be empty for legacy users)
+    let profileMap = new Map<string, string>();
+    if (ids.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, username")
+        .in("id", ids);
+
+      if (profilesError) {
+        console.error("Error fetching profiles:", profilesError);
+      } else if (profiles) {
+        profiles.forEach((p: any) => profileMap.set(p.id, p.username));
+      }
+    }
+
+    const usersData = (tokenRows || []).map((row: any) => ({
+      id: row.user_id,
+      username: profileMap.get(row.user_id) || `user_${row.user_id.substring(0, 8)}`,
+      balance: row.balance,
+      has_unlimited_subscription: row.has_unlimited_subscription,
     }));
 
     setUsers(usersData);
   };
-
   const handleTokenAdjustment = async (action: "add" | "subtract" | "set") => {
     if (!selectedUserId) {
       toast({
