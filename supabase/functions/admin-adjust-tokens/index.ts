@@ -1,10 +1,17 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+const requestSchema = z.object({
+  action: z.enum(['add', 'subtract', 'set']),
+  amount: z.number().int().positive().max(100000),
+  userId: z.string().uuid(),
+});
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -39,23 +46,18 @@ serve(async (req) => {
       );
     }
 
-    const { action, amount, userId: targetUserId } = await req.json();
-
-    // Validate target user ID
-    if (!targetUserId) {
+    const body = await req.json();
+    
+    // Validate input
+    const validationResult = requestSchema.safeParse(body);
+    if (!validationResult.success) {
       return new Response(
-        JSON.stringify({ error: "Target user ID is required" }),
+        JSON.stringify({ error: "Invalid input", details: validationResult.error.issues }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
       );
     }
 
-    // Validate UUID format
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetUserId)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid user ID format" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
-      );
-    }
+    const { action, amount, userId: targetUserId } = validationResult.data;
 
     // Get current balance for TARGET user
     const { data: tokenData } = await supabaseClient

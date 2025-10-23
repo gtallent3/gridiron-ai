@@ -1,10 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const requestSchema = z.object({
+  week: z.number().int().min(1).max(18).optional(),
+  season: z.number().int().min(2020).max(2030).optional(),
+  leagueId: z.string().uuid().optional(),
+  playerIds: z.array(z.string()).optional(),
+});
 
 interface PlayerStats {
   passing_yards?: number;
@@ -360,6 +368,21 @@ serve(async (req) => {
 
     const weekNum = (rawWeek !== undefined && rawWeek !== null && rawWeek !== '') ? Number(rawWeek) : undefined;
     const seasonNum = Number(rawSeason) || inferredSeason;
+
+    // Validate input parameters
+    const validationResult = requestSchema.safeParse({
+      week: weekNum,
+      season: seasonNum,
+      leagueId,
+      playerIds,
+    });
+
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid input parameters', details: validationResult.error.issues }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     console.log('Fetching player data:', { week: weekNum, season: seasonNum, leagueId, playerIds });
 

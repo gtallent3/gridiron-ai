@@ -1,10 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
+import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const requestSchema = z.object({
+  feature: z.enum(['ai_assistant', 'start_sit', 'trade_analysis', 'prop_bet']),
+  description: z.string().max(500).optional(),
+});
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -35,14 +41,18 @@ serve(async (req) => {
       );
     }
 
-    const { feature, description } = await req.json();
-
-    if (!feature) {
+    const body = await req.json();
+    
+    // Validate input
+    const validationResult = requestSchema.safeParse(body);
+    if (!validationResult.success) {
       return new Response(
-        JSON.stringify({ error: 'Feature type required' }),
+        JSON.stringify({ error: 'Invalid input', details: validationResult.error.issues }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const { feature, description } = validationResult.data;
 
     // Map feature to transaction type
     const transactionTypeMap: Record<string, string> = {
