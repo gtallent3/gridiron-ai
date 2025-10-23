@@ -389,7 +389,8 @@ serve(async (req) => {
     let actualsQuery = supabase
       .from('player_stats')
       .select('*')
-      .eq('season', seasonNum);
+      .eq('season', seasonNum)
+      .eq('finalized', true);
 
     if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
       actualsQuery = actualsQuery.eq('week', weekNum);
@@ -477,6 +478,21 @@ serve(async (req) => {
     // Then, override with actuals where available (actuals-first)
     if (actuals) {
       for (const actual of actuals) {
+        // Skip placeholder rows (e.g., pre-game) with no meaningful stats
+        const numericFields = [
+          'passing_yards','passing_tds','interceptions','passing_2pt_conversions',
+          'rushing_yards','rushing_tds','rushing_2pt_conversions',
+          'receptions','receiving_yards','receiving_tds','receiving_2pt_conversions',
+          'fg_made','xp_made','sacks','fumbles_recovered','defensive_tds',
+          'interception_tds','fumble_recovery_tds','kick_return_tds','punt_return_tds',
+          'blocked_kicks','safeties','points_allowed','yards_allowed','fumbles_lost'
+        ];
+        const statSum = numericFields.reduce((acc, key) => {
+          const v = Number((actual as any)[key] ?? 0);
+          return acc + (isNaN(v) ? 0 : Math.abs(v));
+        }, 0);
+        if (statSum <= 0) continue;
+
         playerDataMap.set(`${actual.player_id}_${actual.week}`, {
           ...actual,
           source_type: 'actual'
