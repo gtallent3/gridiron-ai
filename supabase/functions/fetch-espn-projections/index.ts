@@ -158,7 +158,7 @@ serve(async (req) => {
             const appliedStats = weekProjection.appliedStats || {};
             const position = normalizedPlayer?.position || player.defaultPositionId?.toString() || 'FLEX';
             const isDST = position === 'D/ST' || position === 'DEF' || position === '16';
-            
+            const isK = position === 'K' || position === '5' || player.defaultPositionId === 5;
             // Check if player is on bye (ESPN marks with specific indicators)
             const isByeWeek = (!rawStats || Object.keys(rawStats).length === 0) && (!appliedStats || Object.keys(appliedStats).length === 0);
             
@@ -168,7 +168,7 @@ serve(async (req) => {
             };
             
             // Add offensive stats for non-DST players
-            if (!isDST) {
+            if (!isDST && !isK) {
               normalizedStats.passing_yards = parseFloat(rawStats['3']) || 0;
               normalizedStats.passing_tds = parseFloat(rawStats['4']) || 0;
               normalizedStats.interceptions = parseFloat(rawStats['20']) || 0;
@@ -205,13 +205,23 @@ serve(async (req) => {
               normalizedStats.yards_allowed = rawStats['127'] !== undefined ? parseFloat(rawStats['127']) : undefined as any;
             }
             
+            // Add kicker stats
+            if (isK) {
+              normalizedStats.fg_made_0_19 = parseFloat(rawStats['80']) || 0;
+              normalizedStats.fg_made_20_29 = parseFloat(rawStats['81']) || 0;
+              normalizedStats.fg_made_30_39 = parseFloat(rawStats['82']) || 0;
+              normalizedStats.fg_made_40_49 = parseFloat(rawStats['83']) || 0;
+              normalizedStats.fg_made_50_plus = parseFloat(rawStats['84']) || 0;
+              normalizedStats.xp_made = parseFloat(rawStats['85']) || 0;
+            }
+            
             // If everything is zero and appliedStats exist, derive estimates from appliedStats (league-scoring based)
             const sumVals = Object.values(normalizedStats).reduce((acc: number, v: any) => acc + (typeof v === 'number' ? Math.abs(v) : 0), 0);
             if (sumVals === 0 && appliedStats && Object.keys(appliedStats).length > 0) {
               // Derive approximate raw counts from applied stat points using common default scoring multipliers
               // Note: This is an approximation; actual league scoring may differ.
               const getNum = (k: string) => typeof appliedStats[k] === 'number' ? appliedStats[k] : parseFloat(appliedStats[k] || '0') || 0;
-              if (!isDST) {
+              if (!isDST && !isK) {
                 normalizedStats.passing_yards = getNum('3') / 0.04;
                 normalizedStats.passing_tds = getNum('4') / 4;
                 normalizedStats.interceptions = Math.abs(getNum('20') / 2);
@@ -230,6 +240,13 @@ serve(async (req) => {
                 normalizedStats.receiving_2pt_conversions = getNum('44') / 2;
                 
                 normalizedStats.fumbles_lost = Math.abs(getNum('72') / 2);
+              } else if (isK) {
+                normalizedStats.fg_made_0_19 = getNum('80') / 3;
+                normalizedStats.fg_made_20_29 = getNum('81') / 3;
+                normalizedStats.fg_made_30_39 = getNum('82') / 3;
+                normalizedStats.fg_made_40_49 = getNum('83') / 4;
+                normalizedStats.fg_made_50_plus = getNum('84') / 5;
+                normalizedStats.xp_made = getNum('85') / 1;
               } else {
                 // DST projections are highly league-dependent; derive simple counts where 1:1 is common
                 normalizedStats.interceptions = getNum('95') / 2;
