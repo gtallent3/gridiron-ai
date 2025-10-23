@@ -246,6 +246,25 @@ serve(async (req) => {
       const projType = scoringType === 'ppr' ? 'ppr' : (scoringType === 'half_ppr' ? 'half_ppr' : 'std');
       const projField = projType === 'ppr' ? 'pts_ppr' : (projType === 'half_ppr' ? 'pts_half_ppr' : 'pts_std');
 
+      // Fetch actual stats for the current week
+      const statsMap = new Map<string, any>();
+      try {
+        const statsUrl = `https://api.sleeper.app/v1/stats/nfl/${currentYear}/${currentWeek}`;
+        console.log('Fetching actual stats:', statsUrl);
+        const statsResp = await fetch(statsUrl);
+        if (statsResp.ok) {
+          const stats = await statsResp.json();
+          if (stats && typeof stats === 'object') {
+            for (const [playerId, playerStats] of Object.entries(stats as Record<string, any>)) {
+              statsMap.set(playerId, playerStats);
+            }
+            console.log(`Loaded ${statsMap.size} player stats`);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching stats:', err);
+      }
+
       // Fetch projections for the current week with robust fallbacks
       const projectionMap = new Map<string, number>();
       try {
@@ -302,6 +321,51 @@ serve(async (req) => {
         }
       } catch (err) {
         console.error('Error fetching projections:', err);
+      }
+
+      // Collect player stats for player_stats table
+      const playerStatsToInsert: any[] = [];
+      for (const [playerId, stats] of statsMap.entries()) {
+        const meta = normalizedMap.get(playerId);
+        if (meta) {
+          playerStatsToInsert.push({
+            player_id: playerId,
+            player_name: meta.player_name,
+            team: meta.team,
+            position: meta.position,
+            week: currentWeek,
+            season: currentYear,
+            passing_yards: stats.pass_yd || 0,
+            passing_tds: stats.pass_td || 0,
+            interceptions: stats.pass_int || 0,
+            passing_completions: stats.pass_cmp || 0,
+            passing_attempts: stats.pass_att || 0,
+            rushing_yards: stats.rush_yd || 0,
+            rushing_tds: stats.rush_td || 0,
+            rushing_attempts: stats.rush_att || 0,
+            receiving_yards: stats.rec_yd || 0,
+            receiving_tds: stats.rec_td || 0,
+            receptions: stats.rec || 0,
+            receiving_targets: stats.rec_tgt || 0,
+            fumbles_lost: stats.fum_lost || 0,
+            passing_2pt_conversions: stats.pass_2pt || 0,
+            rushing_2pt_conversions: stats.rush_2pt || 0,
+            receiving_2pt_conversions: stats.rec_2pt || 0,
+            source: 'sleeper',
+            raw_data: stats,
+          });
+        }
+      }
+
+      // Batch insert player stats
+      if (playerStatsToInsert.length > 0) {
+        console.log(`Inserting ${playerStatsToInsert.length} player stats for week ${currentWeek}`);
+        await supabase
+          .from('player_stats')
+          .upsert(playerStatsToInsert, { 
+            onConflict: 'player_id,week,season,source',
+            ignoreDuplicates: false 
+          });
       }
 
       // Upsert ALL teams in the league so "Other Teams" can be displayed
