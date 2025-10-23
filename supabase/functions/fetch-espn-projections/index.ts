@@ -222,12 +222,13 @@ serve(async (req) => {
             }
             
             // If everything is zero and appliedStats exist, derive estimates from appliedStats (league-scoring based)
+            // IMPORTANT: For kickers (ESPN projections), do NOT derive counts - appliedStats are already scored points
             const sumVals = Object.values(normalizedStats).reduce((acc: number, v: any) => acc + (typeof v === 'number' ? Math.abs(v) : 0), 0);
-            if (sumVals === 0 && appliedStats && Object.keys(appliedStats).length > 0) {
+            if (sumVals === 0 && appliedStats && Object.keys(appliedStats).length > 0 && !isK) {
               // Derive approximate raw counts from applied stat points using common default scoring multipliers
               // Note: This is an approximation; actual league scoring may differ.
               const getNum = (k: string) => typeof appliedStats[k] === 'number' ? appliedStats[k] : parseFloat(appliedStats[k] || '0') || 0;
-              if (!isDST && !isK) {
+              if (!isDST) {
                 normalizedStats.passing_yards = getNum('3') / 0.04;
                 normalizedStats.passing_tds = getNum('4') / 4;
                 normalizedStats.interceptions = Math.abs(getNum('20') / 2);
@@ -246,13 +247,6 @@ serve(async (req) => {
                 normalizedStats.receiving_2pt_conversions = getNum('44') / 2;
                 
                 normalizedStats.fumbles_lost = Math.abs(getNum('72') / 2);
-              } else if (isK) {
-                normalizedStats.fg_made_0_19 = getNum('80') / 3;
-                normalizedStats.fg_made_20_29 = getNum('81') / 3;
-                normalizedStats.fg_made_30_39 = getNum('82') / 3;
-                normalizedStats.fg_made_40_49 = getNum('83') / 4;
-                normalizedStats.fg_made_50_plus = getNum('84') / 5;
-                normalizedStats.xp_made = getNum('85') / 1;
               } else {
                 // DST projections are highly league-dependent; derive simple counts where 1:1 is common
                 normalizedStats.interceptions = getNum('95') / 2;
