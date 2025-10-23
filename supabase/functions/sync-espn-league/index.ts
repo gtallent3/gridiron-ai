@@ -544,6 +544,33 @@ serve(async (req) => {
           });
       }
 
+      // Fetch projections for remaining weeks
+      console.log(`Fetching projections for weeks ${currentWeek} to 18`);
+      try {
+        const projectionResponse = await fetch(`${supabaseUrl}/functions/v1/fetch-espn-projections`, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            leagueId: leagueRecord.id,
+            startWeek: currentWeek,
+            endWeek: 18,
+          }),
+        });
+
+        if (projectionResponse.ok) {
+          const projData = await projectionResponse.json();
+          console.log(`Successfully fetched ${projData.projections_inserted || 0} projections`);
+        } else {
+          console.error('Failed to fetch projections:', await projectionResponse.text());
+        }
+      } catch (projError) {
+        console.error('Error fetching projections:', projError);
+        // Don't fail the sync if projections fail
+      }
+
     return new Response(
       JSON.stringify({
         message: `Successfully synced ESPN league: ${leagueData.settings.name}`,
