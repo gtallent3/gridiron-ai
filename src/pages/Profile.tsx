@@ -9,6 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Loader2, Crown, User, Calendar, Coins } from "lucide-react";
 import { useTokens } from "@/hooks/useTokens";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
+
+const usernameSchema = z.string()
+  .trim()
+  .min(3, "Username must be at least 3 characters")
+  .max(20, "Username must be less than 20 characters")
+  .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores");
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -63,22 +70,43 @@ export default function Profile() {
   };
 
   const handleUpdateUsername = async () => {
+    console.log("handleUpdateUsername called", { newUsername, currentUsername: username });
+    
     if (newUsername === username) {
       setIsEditingUsername(false);
       return;
     }
 
+    // Validate username format
+    const validation = usernameSchema.safeParse(newUsername);
+    if (!validation.success) {
+      const firstError = validation.error.errors[0];
+      toast({
+        title: "Invalid Username",
+        description: firstError.message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setSavingUsername(true);
     try {
+      console.log("Checking if username is taken...");
       // Check if username is taken
-      const { data: existing } = await supabase
+      const { data: existing, error: checkError } = await supabase
         .from("profiles")
         .select("username")
         .eq("username", newUsername)
         .neq("id", user.id)
         .maybeSingle();
 
+      if (checkError) {
+        console.error("Error checking username:", checkError);
+        throw checkError;
+      }
+
       if (existing) {
+        console.log("Username already taken");
         toast({
           title: "Username Taken",
           description: "This username is already in use.",
@@ -88,13 +116,18 @@ export default function Profile() {
         return;
       }
 
+      console.log("Updating username in database...");
       const { error } = await supabase
         .from("profiles")
         .update({ username: newUsername })
         .eq("id", user.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error updating username:", error);
+        throw error;
+      }
 
+      console.log("Username updated successfully");
       setUsername(newUsername);
       setIsEditingUsername(false);
       toast({
@@ -102,6 +135,7 @@ export default function Profile() {
         description: "Your username has been changed successfully.",
       });
     } catch (error: any) {
+      console.error("Failed to update username:", error);
       toast({
         title: "Error",
         description: error.message || "Failed to update username",
@@ -289,15 +323,23 @@ export default function Profile() {
                     <Input
                       value={newUsername}
                       onChange={(e) => setNewUsername(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleUpdateUsername();
+                        }
+                      }}
                       className="w-40"
-                      minLength={3}
-                      maxLength={20}
-                      pattern="[a-zA-Z0-9_]+"
+                      placeholder="Username"
                     />
                     <Button 
                       size="sm" 
-                      onClick={handleUpdateUsername}
-                      disabled={savingUsername}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        console.log("Save button clicked");
+                        handleUpdateUsername();
+                      }}
+                      disabled={savingUsername || newUsername.length < 3}
                     >
                       {savingUsername ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
                     </Button>
