@@ -197,6 +197,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const totalActual = starters.reduce((sum, p) => sum + (p.actualPoints || 0), 0);
   const currentWeek = league.current_week || 7;
   const isHistoricalWeek = selectedWeek < currentWeek;
+  const isFutureWeek = selectedWeek > currentWeek;
+  const maxWeek = 18; // NFL regular season weeks
 
   if (!userTeam) {
     return (
@@ -237,10 +239,12 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                   <SelectTrigger className="w-20 sm:w-24 touch-target">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-card z-50">
-                    {Array.from({ length: currentWeek }, (_, i) => i + 1).map(w => (
+                  <SelectContent className="bg-card z-50 max-h-[300px]">
+                    {Array.from({ length: maxWeek }, (_, i) => i + 1).map(w => (
                       <SelectItem key={w} value={String(w)}>
                         Week {w}
+                        {w === currentWeek && <span className="ml-1 text-xs text-primary">(Current)</span>}
+                        {w > currentWeek && <span className="ml-1 text-xs text-muted-foreground">(Future)</span>}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -253,13 +257,20 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                   <span className="sm:hidden">Historical</span>
                 </div>
               )}
+              
+              {isFutureWeek && (
+                <div className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-md">
+                  <span className="hidden sm:inline">Projected</span>
+                  <span className="sm:hidden">Proj</span>
+                </div>
+              )}
             </div>
 
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleWeekChange('next')}
-              disabled={selectedWeek >= currentWeek || loading}
+              disabled={selectedWeek >= maxWeek || loading}
               className="touch-target"
             >
               <span className="hidden sm:inline">Next Week</span>
