@@ -142,7 +142,7 @@ export default function Admin() {
         user_id, 
         balance, 
         has_unlimited_subscription,
-        profiles!inner(username)
+        profiles(username)
       `)
       .limit(100);
 
@@ -153,7 +153,7 @@ export default function Admin() {
 
     const usersData = (data || []).map(tokenData => ({
       id: tokenData.user_id,
-      username: (tokenData.profiles as any)?.username || "Unknown",
+      username: (tokenData.profiles as any)?.username || `user_${tokenData.user_id.substring(0, 8)}`,
       balance: tokenData.balance,
       has_unlimited_subscription: tokenData.has_unlimited_subscription,
     }));
