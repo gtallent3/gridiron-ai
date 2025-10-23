@@ -84,7 +84,7 @@ export default function Shop() {
       let packageName: string = "";
 
       if (packageId === "unlimited") {
-        priceId = "price_1SKlUaIEGdCnVLfuxenjOiZU";
+        priceId = "price_1SLTG1IEGdCnVLfuWjWUmZ1U";
         packageType = "subscription";
         tokens = 10;
         packageName = "Unlimited Monthly";
@@ -186,7 +186,7 @@ export default function Shop() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="text-4xl font-bold">
-              $29.99<span className="text-lg text-muted-foreground font-normal">/month</span>
+              $14.99<span className="text-lg text-muted-foreground font-normal">/month</span>
             </div>
             <ul className="space-y-2">
               {[
