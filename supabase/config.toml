@@ -41,3 +41,6 @@ verify_jwt = false
 
 [functions.admin-adjust-tokens]
 verify_jwt = true
+
+[functions.get-player-data]
+verify_jwt = true

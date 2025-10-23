@@ -167,6 +167,159 @@ export type Database = {
         }
         Relationships: []
       }
+      player_stats: {
+        Row: {
+          blocked_kicks: number | null
+          created_at: string | null
+          defensive_tds: number | null
+          fg_attempts: number | null
+          fg_made: number | null
+          fg_made_0_19: number | null
+          fg_made_20_29: number | null
+          fg_made_30_39: number | null
+          fg_made_40_49: number | null
+          fg_made_50_plus: number | null
+          fumble_recovery_tds: number | null
+          fumbles_forced: number | null
+          fumbles_lost: number | null
+          fumbles_recovered: number | null
+          id: string
+          interception_tds: number | null
+          interceptions: number | null
+          kick_return_tds: number | null
+          passing_2pt_conversions: number | null
+          passing_attempts: number | null
+          passing_completions: number | null
+          passing_tds: number | null
+          passing_yards: number | null
+          player_id: string
+          player_name: string
+          points_allowed: number | null
+          position: string
+          punt_return_tds: number | null
+          raw_data: Json | null
+          receiving_2pt_conversions: number | null
+          receiving_targets: number | null
+          receiving_tds: number | null
+          receiving_yards: number | null
+          receptions: number | null
+          rushing_2pt_conversions: number | null
+          rushing_attempts: number | null
+          rushing_tds: number | null
+          rushing_yards: number | null
+          sacks: number | null
+          safeties: number | null
+          season: number
+          source: string
+          team: string | null
+          updated_at: string | null
+          week: number
+          xp_attempts: number | null
+          xp_made: number | null
+          yards_allowed: number | null
+        }
+        Insert: {
+          blocked_kicks?: number | null
+          created_at?: string | null
+          defensive_tds?: number | null
+          fg_attempts?: number | null
+          fg_made?: number | null
+          fg_made_0_19?: number | null
+          fg_made_20_29?: number | null
+          fg_made_30_39?: number | null
+          fg_made_40_49?: number | null
+          fg_made_50_plus?: number | null
+          fumble_recovery_tds?: number | null
+          fumbles_forced?: number | null
+          fumbles_lost?: number | null
+          fumbles_recovered?: number | null
+          id?: string
+          interception_tds?: number | null
+          interceptions?: number | null
+          kick_return_tds?: number | null
+          passing_2pt_conversions?: number | null
+          passing_attempts?: number | null
+          passing_completions?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          player_id: string
+          player_name: string
+          points_allowed?: number | null
+          position: string
+          punt_return_tds?: number | null
+          raw_data?: Json | null
+          receiving_2pt_conversions?: number | null
+          receiving_targets?: number | null
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_2pt_conversions?: number | null
+          rushing_attempts?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          sacks?: number | null
+          safeties?: number | null
+          season: number
+          source: string
+          team?: string | null
+          updated_at?: string | null
+          week: number
+          xp_attempts?: number | null
+          xp_made?: number | null
+          yards_allowed?: number | null
+        }
+        Update: {
+          blocked_kicks?: number | null
+          created_at?: string | null
+          defensive_tds?: number | null
+          fg_attempts?: number | null
+          fg_made?: number | null
+          fg_made_0_19?: number | null
+          fg_made_20_29?: number | null
+          fg_made_30_39?: number | null
+          fg_made_40_49?: number | null
+          fg_made_50_plus?: number | null
+          fumble_recovery_tds?: number | null
+          fumbles_forced?: number | null
+          fumbles_lost?: number | null
+          fumbles_recovered?: number | null
+          id?: string
+          interception_tds?: number | null
+          interceptions?: number | null
+          kick_return_tds?: number | null
+          passing_2pt_conversions?: number | null
+          passing_attempts?: number | null
+          passing_completions?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          player_id?: string
+          player_name?: string
+          points_allowed?: number | null
+          position?: string
+          punt_return_tds?: number | null
+          raw_data?: Json | null
+          receiving_2pt_conversions?: number | null
+          receiving_targets?: number | null
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_2pt_conversions?: number | null
+          rushing_attempts?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          sacks?: number | null
+          safeties?: number | null
+          season?: number
+          source?: string
+          team?: string | null
+          updated_at?: string | null
+          week?: number
+          xp_attempts?: number | null
+          xp_made?: number | null
+          yards_allowed?: number | null
+        }
+        Relationships: []
+      }
       player_valuations: {
         Row: {
           championship_weeks_projection: number | null
