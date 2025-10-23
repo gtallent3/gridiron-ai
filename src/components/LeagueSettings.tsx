@@ -6,7 +6,7 @@ import { Switch } from "./ui/switch";
 import { Label } from "./ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, RefreshCw, Trash2, CheckCircle2 } from "lucide-react";
+import { Loader2, RefreshCw, Trash2, CheckCircle2, Download } from "lucide-react";
 
 type League = {
   id: string;
@@ -23,6 +23,7 @@ export const LeagueSettings = () => {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [backfillingId, setBackfillingId] = useState<string | null>(null);
   const [sleeperUsername, setSleeperUsername] = useState<string | null>(null);
   const { toast } = useToast();
 
@@ -183,6 +184,44 @@ export const LeagueSettings = () => {
     }
   };
 
+  const handleBackfill = async (leagueId: string, platform: string) => {
+    if (platform !== 'espn') {
+      toast({
+        title: "Not Supported",
+        description: "Historical stat backfill is only available for ESPN leagues",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setBackfillingId(leagueId);
+    try {
+      const { data, error } = await supabase.functions.invoke('backfill-espn-stats', {
+        body: { 
+          leagueId,
+          startWeek: 1,
+          endWeek: 7
+        }
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "✅ Backfill Complete",
+        description: `Loaded ${data.stats_inserted} historical stats for weeks 1-7`,
+      });
+    } catch (error: any) {
+      console.error('Error backfilling stats:', error);
+      toast({
+        title: "Backfill Failed",
+        description: error.message || "Failed to load historical stats",
+        variant: "destructive",
+      });
+    } finally {
+      setBackfillingId(null);
+    }
+  };
+
   const handleDisconnect = async (leagueId: string) => {
     try {
       const { error } = await supabase
@@ -276,7 +315,7 @@ export const LeagueSettings = () => {
             <div className="flex gap-2">
               <Button
                 onClick={() => handleManualRefresh(league.id, league.platform)}
-                disabled={refreshingId === league.id}
+                disabled={refreshingId === league.id || backfillingId === league.id}
                 variant="outline"
                 size="sm"
               >
@@ -288,10 +327,30 @@ export const LeagueSettings = () => {
                 ) : (
                   <>
                     <RefreshCw className="mr-2 h-4 w-4" />
-                    Sync Raw Stats
+                    Sync Current Week
                   </>
                 )}
               </Button>
+              {league.platform === 'espn' && (
+                <Button
+                  onClick={() => handleBackfill(league.id, league.platform)}
+                  disabled={refreshingId === league.id || backfillingId === league.id}
+                  variant="outline"
+                  size="sm"
+                >
+                  {backfillingId === league.id ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="mr-2 h-4 w-4" />
+                      Load Weeks 1-7
+                    </>
+                  )}
+                </Button>
+              )}
               <Button
                 onClick={() => handleDisconnect(league.id)}
                 variant="destructive"
