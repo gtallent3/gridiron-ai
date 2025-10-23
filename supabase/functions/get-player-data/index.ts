@@ -417,22 +417,30 @@ serve(async (req) => {
       );
     }
 
-    // Prioritize actual stats over projected stats
-    // Group by player_id and prefer actual over projected
-    const playerStatsMap = new Map<string, any>();
+    // Prioritize actual stats over projected stats when fetching specific week
+    // For ROS queries (no week specified), return all stats
+    let stats;
     
-    if (allStats) {
-      for (const stat of allStats) {
-        const existing = playerStatsMap.get(stat.player_id);
-        
-        // If no existing stat, or existing is projected and current is actual, use current
-        if (!existing || (existing.source_type === 'projected' && stat.source_type === 'actual')) {
-          playerStatsMap.set(stat.player_id, stat);
+    if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
+      // For specific week queries, prioritize actual over projected per player
+      const playerStatsMap = new Map<string, any>();
+      
+      if (allStats) {
+        for (const stat of allStats) {
+          const existing = playerStatsMap.get(stat.player_id);
+          
+          // If no existing stat, or existing is projected and current is actual, use current
+          if (!existing || (existing.source_type === 'projected' && stat.source_type === 'actual')) {
+            playerStatsMap.set(stat.player_id, stat);
+          }
         }
       }
+      
+      stats = Array.from(playerStatsMap.values());
+    } else {
+      // For ROS queries, return all stats (all weeks)
+      stats = allStats || [];
     }
-
-    const stats = Array.from(playerStatsMap.values());
 
     if (statsError) {
       console.error('Error fetching stats:', statsError);
