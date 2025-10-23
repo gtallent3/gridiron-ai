@@ -190,6 +190,7 @@ serve(async (req) => {
             
             // Add defensive stats for DST players
             if (isDST) {
+              normalizedStats.interceptions = parseFloat(rawStats['95']) || 0;
               normalizedStats.sacks = parseFloat(rawStats['99']) || 0;
               normalizedStats.fumbles_recovered = parseFloat(rawStats['96']) || 0;
               normalizedStats.interception_tds = parseFloat(rawStats['103']) || 0;
@@ -231,6 +232,7 @@ serve(async (req) => {
                 normalizedStats.fumbles_lost = Math.abs(getNum('72') / 2);
               } else {
                 // DST projections are highly league-dependent; derive simple counts where 1:1 is common
+                normalizedStats.interceptions = getNum('95') / 2;
                 normalizedStats.sacks = getNum('99');
                 normalizedStats.fumbles_recovered = getNum('96') / 2;
                 const intTd = getNum('103') / 6;

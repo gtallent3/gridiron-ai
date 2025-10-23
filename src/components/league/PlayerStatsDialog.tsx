@@ -179,10 +179,11 @@ export function PlayerStatsDialog({ player, open, onOpenChange, week, leagueId }
               <div className="grid grid-cols-2 gap-2">
                 {Object.entries(stats.stats).map(([key, value]) => {
                   if (!value || !statLabels[key]) return null;
+                  const displayValue = typeof value === 'number' ? value.toFixed(2) : value;
                   return (
                     <div key={key} className="flex justify-between text-sm">
                       <span className="text-muted-foreground">{statLabels[key]}</span>
-                      <span className="font-medium">{value}</span>
+                      <span className="font-medium">{displayValue}</span>
                     </div>
                   );
                 })}
