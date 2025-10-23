@@ -44,34 +44,45 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [selectedWeek, setSelectedWeek] = useState<number>(league.current_week || 7);
   const [loading, setLoading] = useState(false);
 
-  // Fetch historical stats for selected week
+  // Fetch stats with calculated fantasy points from player_stats table
   const fetchWeeklyStats = async (week: number) => {
     if (!userTeam?.roster || !Array.isArray(userTeam.roster)) return;
     
     setLoading(true);
     try {
-      // For historical weeks, fetch directly from ESPN
-      const { data: weekScores, error } = await supabase.functions.invoke('get-espn-week-scores', {
-        body: { week, leagueId: league.id }
+      // Extract player IDs from roster
+      const playerIds = userTeam.roster
+        .map((p: any) => String(p.player_id || p.playerId || p.id || ''))
+        .filter(Boolean);
+
+      // Fetch player stats with calculated fantasy points based on league scoring
+      const { data: playerData, error } = await supabase.functions.invoke('get-player-data', {
+        body: { 
+          week, 
+          season: 2024,
+          leagueId: league.id,
+          playerIds 
+        }
       });
 
       if (error) throw error;
 
-      if (!weekScores?.players) {
-        console.error('No player data returned from ESPN');
+      if (!playerData?.players) {
+        console.error('No player data returned');
         return;
       }
 
-      const scoresMap = new Map(
-        weekScores.players.map((p: any) => [p.player_id, p])
+      // Create lookup map by player ID and name
+      const statsMapById = new Map(
+        playerData.players.map((p: any) => [String(p.player_id), p])
+      );
+      const statsMapByName = new Map(
+        playerData.players.map((p: any) => [p.player_name?.toLowerCase().trim(), p])
       );
 
       const starterPlayers: any[] = [];
       const benchPlayers: any[] = [];
-
-      // Slot types for starters vs bench
-      const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
-      const BENCH_SLOT = 20;
+      const currentWeek = league.current_week || 7;
 
       userTeam.roster.forEach((player: any) => {
         const playerIdRaw = player.player_id ?? player.playerId ?? player.id;
@@ -88,38 +99,41 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           isBench = player.starter === false;
         }
 
-        // Get ESPN scores for this player (normalize to string id)
-        let espnScore = scoresMap.get(playerId) as any;
-        // Fallback: try name match if ID mapping fails
-        if (!espnScore && playerName) {
-          const lower = playerName.toLowerCase();
-          espnScore = (weekScores.players as any[]).find((p: any) => p.player_name?.toLowerCase() === lower);
+        // Get stats for this player - try ID first, then name
+        let playerStats = statsMapById.get(playerId) as any;
+        if (!playerStats && playerName) {
+          playerStats = statsMapByName.get(playerName.toLowerCase().trim()) as any;
         }
 
-        const playerData = {
-          id: playerId || playerName, // ensure stable id for UI selection
+        // Determine if we have actual or projected points
+        const isHistorical = week < currentWeek;
+        const isProjection = playerStats?.source_type === 'projection';
+        
+        const playerDataObj = {
+          id: playerId || playerName,
           name: playerName,
           position: positionName,
-          team: espnScore?.team || player.team || 'NFL',
-          projected: espnScore?.projected_points ?? 0,
-          actualPoints: espnScore?.actual_points ?? 0,
+          team: playerStats?.team || player.team || 'NFL',
+          // Use fantasy_points from calculated data
+          projected: !isHistorical || isProjection ? (playerStats?.fantasy_points || 0) : 0,
+          actualPoints: isHistorical && !isProjection ? (playerStats?.fantasy_points || 0) : 0,
           status: isStarter ? 'starter' : 'bench',
-          is_bye_week: espnScore?.is_bye_week ?? false,
-          injury_status: espnScore?.injury_status ?? null,
+          is_bye_week: player.is_bye_week || false,
+          injury_status: player.injury_status || null,
           week: week,
         };
 
         if (isStarter) {
-          starterPlayers.push(playerData);
+          starterPlayers.push(playerDataObj);
         } else if (isBench) {
-          benchPlayers.push(playerData);
+          benchPlayers.push(playerDataObj);
         }
       });
 
       setStarters(starterPlayers);
       setBench(benchPlayers);
     } catch (err) {
-      console.error('Error fetching week scores:', err);
+      console.error('Error fetching player stats:', err);
     } finally {
       setLoading(false);
     }
