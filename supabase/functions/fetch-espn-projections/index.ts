@@ -164,44 +164,44 @@ serve(async (req) => {
             
             // Build normalized stats object from raw stats first
             const normalizedStats: any = {
-              fumbles_lost: parseInt(rawStats['72']) || 0,
+              fumbles_lost: parseFloat(rawStats['72']) || 0,
             };
             
             // Add offensive stats for non-DST players
             if (!isDST) {
-              normalizedStats.passing_yards = Math.round(parseFloat(rawStats['3']) || 0);
-              normalizedStats.passing_tds = parseInt(rawStats['4']) || 0;
-              normalizedStats.interceptions = parseInt(rawStats['20']) || 0;
-              normalizedStats.passing_completions = parseInt(rawStats['1']) || 0;
-              normalizedStats.passing_attempts = parseInt(rawStats['0']) || 0;
-              normalizedStats.passing_2pt_conversions = parseInt(rawStats['19']) || 0;
+              normalizedStats.passing_yards = parseFloat(rawStats['3']) || 0;
+              normalizedStats.passing_tds = parseFloat(rawStats['4']) || 0;
+              normalizedStats.interceptions = parseFloat(rawStats['20']) || 0;
+              normalizedStats.passing_completions = parseFloat(rawStats['1']) || 0;
+              normalizedStats.passing_attempts = parseFloat(rawStats['0']) || 0;
+              normalizedStats.passing_2pt_conversions = parseFloat(rawStats['19']) || 0;
               
-              normalizedStats.rushing_yards = Math.round(parseFloat(rawStats['24']) || 0);
-              normalizedStats.rushing_tds = parseInt(rawStats['25']) || 0;
-              normalizedStats.rushing_attempts = parseInt(rawStats['23']) || 0;
-              normalizedStats.rushing_2pt_conversions = parseInt(rawStats['26']) || 0;
+              normalizedStats.rushing_yards = parseFloat(rawStats['24']) || 0;
+              normalizedStats.rushing_tds = parseFloat(rawStats['25']) || 0;
+              normalizedStats.rushing_attempts = parseFloat(rawStats['23']) || 0;
+              normalizedStats.rushing_2pt_conversions = parseFloat(rawStats['26']) || 0;
               
-              normalizedStats.receiving_yards = Math.round(parseFloat(rawStats['42']) || 0);
-              normalizedStats.receiving_tds = parseInt(rawStats['43']) || 0;
-              normalizedStats.receptions = parseInt(rawStats['53']) || 0;
-              normalizedStats.receiving_targets = parseInt(rawStats['58']) || 0;
-              normalizedStats.receiving_2pt_conversions = parseInt(rawStats['44']) || 0;
+              normalizedStats.receiving_yards = parseFloat(rawStats['42']) || 0;
+              normalizedStats.receiving_tds = parseFloat(rawStats['43']) || 0;
+              normalizedStats.receptions = parseFloat(rawStats['53']) || 0;
+              normalizedStats.receiving_targets = parseFloat(rawStats['58']) || 0;
+              normalizedStats.receiving_2pt_conversions = parseFloat(rawStats['44']) || 0;
             }
             
             // Add defensive stats for DST players
             if (isDST) {
               normalizedStats.sacks = parseFloat(rawStats['99']) || 0;
-              normalizedStats.fumbles_recovered = parseInt(rawStats['96']) || 0;
-              normalizedStats.interception_tds = parseInt(rawStats['103']) || 0;
-              normalizedStats.fumble_recovery_tds = parseInt(rawStats['104']) || 0;
-              normalizedStats.defensive_tds = (parseInt(rawStats['103']) || 0) + (parseInt(rawStats['104']) || 0);
-              normalizedStats.kick_return_tds = parseInt(rawStats['101']) || 0;
-              normalizedStats.punt_return_tds = parseInt(rawStats['102']) || 0;
-              normalizedStats.safeties = parseInt(rawStats['98']) || 0;
-              normalizedStats.blocked_kicks = parseInt(rawStats['97']) || 0;
+              normalizedStats.fumbles_recovered = parseFloat(rawStats['96']) || 0;
+              normalizedStats.interception_tds = parseFloat(rawStats['103']) || 0;
+              normalizedStats.fumble_recovery_tds = parseFloat(rawStats['104']) || 0;
+              normalizedStats.defensive_tds = (parseFloat(rawStats['103']) || 0) + (parseFloat(rawStats['104']) || 0);
+              normalizedStats.kick_return_tds = parseFloat(rawStats['101']) || 0;
+              normalizedStats.punt_return_tds = parseFloat(rawStats['102']) || 0;
+              normalizedStats.safeties = parseFloat(rawStats['98']) || 0;
+              normalizedStats.blocked_kicks = parseFloat(rawStats['97']) || 0;
               // ESPN uses category-based scoring for PA/YA; raw counts may be missing in projections
-              normalizedStats.points_allowed = parseInt(rawStats['120']) || undefined as any;
-              normalizedStats.yards_allowed = parseInt(rawStats['127']) || undefined as any;
+              normalizedStats.points_allowed = rawStats['120'] !== undefined ? parseFloat(rawStats['120']) : undefined as any;
+              normalizedStats.yards_allowed = rawStats['127'] !== undefined ? parseFloat(rawStats['127']) : undefined as any;
             }
             
             // If everything is zero and appliedStats exist, derive estimates from appliedStats (league-scoring based)
@@ -211,37 +211,37 @@ serve(async (req) => {
               // Note: This is an approximation; actual league scoring may differ.
               const getNum = (k: string) => typeof appliedStats[k] === 'number' ? appliedStats[k] : parseFloat(appliedStats[k] || '0') || 0;
               if (!isDST) {
-                normalizedStats.passing_yards = Math.round(getNum('3') / 0.04);
-                normalizedStats.passing_tds = Math.round(getNum('4') / 4);
-                normalizedStats.interceptions = Math.round(Math.abs(getNum('20') / 2));
-                normalizedStats.passing_2pt_conversions = Math.round(getNum('19') / 2);
+                normalizedStats.passing_yards = getNum('3') / 0.04;
+                normalizedStats.passing_tds = getNum('4') / 4;
+                normalizedStats.interceptions = Math.abs(getNum('20') / 2);
+                normalizedStats.passing_2pt_conversions = getNum('19') / 2;
                 
-                normalizedStats.rushing_yards = Math.round(getNum('24') / 0.1);
-                normalizedStats.rushing_tds = Math.round(getNum('25') / 6);
-                normalizedStats.rushing_2pt_conversions = Math.round(getNum('26') / 2);
+                normalizedStats.rushing_yards = getNum('24') / 0.1;
+                normalizedStats.rushing_tds = getNum('25') / 6;
+                normalizedStats.rushing_2pt_conversions = getNum('26') / 2;
                 
                 // Receptions are often 1 point in PPR (fallback to 0.5 if looks like half PPR)
                 const recPts = getNum('53');
                 const recPer = recPts >= 0.5 && recPts < 1 ? 0.5 : 1;
-                normalizedStats.receptions = Math.round(recPts / (recPer || 1));
-                normalizedStats.receiving_yards = Math.round(getNum('42') / 0.1);
-                normalizedStats.receiving_tds = Math.round(getNum('43') / 6);
-                normalizedStats.receiving_2pt_conversions = Math.round(getNum('44') / 2);
+                normalizedStats.receptions = recPts / (recPer || 1);
+                normalizedStats.receiving_yards = getNum('42') / 0.1;
+                normalizedStats.receiving_tds = getNum('43') / 6;
+                normalizedStats.receiving_2pt_conversions = getNum('44') / 2;
                 
-                normalizedStats.fumbles_lost = Math.round(Math.abs(getNum('72') / 2));
+                normalizedStats.fumbles_lost = Math.abs(getNum('72') / 2);
               } else {
                 // DST projections are highly league-dependent; derive simple counts where 1:1 is common
-                normalizedStats.sacks = Math.round(getNum('99'));
-                normalizedStats.fumbles_recovered = Math.round(getNum('96') / 2);
-                const intTd = Math.round(getNum('103') / 6);
-                const fumTd = Math.round(getNum('104') / 6);
+                normalizedStats.sacks = getNum('99');
+                normalizedStats.fumbles_recovered = getNum('96') / 2;
+                const intTd = getNum('103') / 6;
+                const fumTd = getNum('104') / 6;
                 normalizedStats.interception_tds = intTd;
                 normalizedStats.fumble_recovery_tds = fumTd;
                 normalizedStats.defensive_tds = intTd + fumTd;
-                normalizedStats.kick_return_tds = Math.round(getNum('101') / 6);
-                normalizedStats.punt_return_tds = Math.round(getNum('102') / 6);
-                normalizedStats.safeties = Math.round(getNum('98') / 2);
-                normalizedStats.blocked_kicks = Math.round(getNum('97') / 2);
+                normalizedStats.kick_return_tds = getNum('101') / 6;
+                normalizedStats.punt_return_tds = getNum('102') / 6;
+                normalizedStats.safeties = getNum('98') / 2;
+                normalizedStats.blocked_kicks = getNum('97') / 2;
                 // We cannot reliably derive points/yards allowed; leave undefined
                 normalizedStats.points_allowed = undefined as any;
                 normalizedStats.yards_allowed = undefined as any;
