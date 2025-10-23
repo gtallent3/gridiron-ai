@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import logo from "@/assets/logo.png";
 import { TokenBalance } from "./TokenBalance";
+import { MobileMenu } from "./MobileMenu";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,11 +23,11 @@ export const Header = ({ user }: HeaderProps) => {
     await supabase.auth.signOut();
   };
   return <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
-      <div className="container mx-auto px-4">
+      <div className="container mx-auto px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src={logo} alt="Gridiron GM Logo" className="h-10 w-10" />
-            <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Gridiron GM</h1>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <img src={logo} alt="Gridiron GM Logo" className="h-8 w-8 sm:h-10 sm:w-10" />
+            <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Gridiron GM</h1>
           </div>
           
           <nav className="hidden md:flex items-center gap-6">
@@ -89,20 +90,43 @@ export const Header = ({ user }: HeaderProps) => {
             )}
           </nav>
 
-          {user ? (
-            <div className="flex items-center gap-3">
-              <TokenBalance />
-              <Button variant="outline" size="sm" onClick={handleSignOut}>
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Mobile Menu */}
+            <MobileMenu user={user} />
+
+            {/* Desktop Actions */}
+            {user ? (
+              <div className="hidden md:flex items-center gap-3">
+                <TokenBalance />
+                <Button variant="outline" size="sm" onClick={handleSignOut}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  <span className="hidden lg:inline">Sign Out</span>
+                  <span className="lg:hidden">Out</span>
+                </Button>
+              </div>
+            ) : (
+              <Button variant="hero" size="sm" onClick={() => navigate('/auth')} className="hidden md:flex">
+                <LogIn className="h-4 w-4 mr-2" />
+                Sign In
               </Button>
+            )}
+
+            {/* Mobile Token Balance & Auth */}
+            <div className="flex md:hidden items-center gap-2">
+              {user ? (
+                <>
+                  <TokenBalance />
+                  <Button variant="ghost" size="sm" onClick={handleSignOut} className="touch-target">
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </>
+              ) : (
+                <Button variant="hero" size="sm" onClick={() => navigate('/auth')} className="touch-target">
+                  <LogIn className="h-4 w-4" />
+                </Button>
+              )}
             </div>
-          ) : (
-            <Button variant="hero" size="sm" onClick={() => navigate('/auth')}>
-              <LogIn className="h-4 w-4 mr-2" />
-              Sign In
-            </Button>
-          )}
+          </div>
         </div>
       </div>
     </header>;

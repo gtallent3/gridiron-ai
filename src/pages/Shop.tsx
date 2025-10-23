@@ -135,16 +135,16 @@ export default function Shop() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="container mx-auto py-4 sm:py-6 lg:py-8 px-4 sm:px-6 mt-16">
+      <div className="max-w-6xl mx-auto spacing-mobile">
         {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
+        <div className="text-center spacing-mobile">
+          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-amber-500/10 border border-amber-500/20">
             <Sparkles className="h-4 w-4 text-amber-400" />
-            <span className="text-sm font-medium text-amber-400">Token Shop</span>
+            <span className="text-xs sm:text-sm font-medium text-amber-400">Token Shop</span>
           </div>
-          <h1 className="text-4xl font-bold">Power Up Your Game</h1>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          <h1 className="text-3xl sm:text-4xl font-bold">Power Up Your Game</h1>
+          <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto px-4">
             Get tokens to unlock premium AI features and weekly props betting
           </p>
         </div>
@@ -217,8 +217,8 @@ export default function Shop() {
 
         {/* Token Packages */}
         <div>
-          <h2 className="text-2xl font-bold mb-6 text-center">Or Buy Token Packages</h2>
-          <div className="grid md:grid-cols-2 gap-6">
+          <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-center">Or Buy Token Packages</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
             {packages.map((pkg) => (
               <Card key={pkg.id} className="relative overflow-hidden border-amber-500/30 hover:border-amber-500/50 transition-colors">
                 {pkg.bonus_percentage > 0 && (

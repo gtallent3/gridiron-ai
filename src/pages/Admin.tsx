@@ -538,12 +538,12 @@ export default function Admin() {
     <div className="min-h-screen bg-background">
       <Header user={user} />
       
-      <main className="container mx-auto px-4 pt-24 pb-12">
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
+      <main className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
+        <div className="spacing-mobile">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-              <p className="text-muted-foreground">Manage users, props, and view analytics</p>
+              <h1 className="text-2xl sm:text-3xl font-bold">Admin Dashboard</h1>
+              <p className="text-sm sm:text-base text-muted-foreground">Manage users, props, and view analytics</p>
             </div>
             <Badge variant="default" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
@@ -552,7 +552,7 @@ export default function Admin() {
           </div>
 
           {/* Analytics Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -603,23 +603,36 @@ export default function Admin() {
           </div>
 
           {/* Main Admin Tabs */}
-          <Tabs defaultValue="users" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="users">User Management</TabsTrigger>
-              <TabsTrigger value="props">Props Management</TabsTrigger>
-              <TabsTrigger value="transactions">Transactions</TabsTrigger>
+          <Tabs defaultValue="users" className="spacing-mobile">
+            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto">
+              <TabsTrigger value="users" className="text-sm py-2 sm:py-3">User Management</TabsTrigger>
+              <TabsTrigger value="props" className="text-sm py-2 sm:py-3">Props Management</TabsTrigger>
+              <TabsTrigger value="transactions" className="text-sm py-2 sm:py-3">Transactions</TabsTrigger>
             </TabsList>
 
             {/* User Management Tab */}
-            <TabsContent value="users" className="space-y-4">
+            <TabsContent value="users" className="spacing-mobile">
               <Card>
                 <CardHeader>
-                  <CardTitle>Adjust User Tokens</CardTitle>
-                  <CardDescription>Manually adjust token balances for users</CardDescription>
+                  <CardTitle className="text-lg sm:text-xl">Adjust User Tokens</CardTitle>
+                  <CardDescription className="text-sm">Manually adjust token balances for users</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="spacing-mobile">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Search Users</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search by username or ID..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                  </div>
+
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                    <SelectTrigger>
+                    <SelectTrigger className="touch-target">
                       <SelectValue placeholder="Select a user" />
                     </SelectTrigger>
                     <SelectContent>
@@ -638,16 +651,17 @@ export default function Admin() {
                     placeholder="Token amount"
                     value={tokenAmount}
                     onChange={(e) => setTokenAmount(parseInt(e.target.value) || 0)}
+                    className="touch-target"
                   />
 
-                  <div className="flex gap-2">
-                    <Button onClick={() => handleTokenAdjustment("add")} disabled={adjusting}>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Button onClick={() => handleTokenAdjustment("add")} disabled={adjusting} className="w-full sm:w-auto touch-target">
                       Add Tokens
                     </Button>
-                    <Button onClick={() => handleTokenAdjustment("subtract")} variant="destructive" disabled={adjusting}>
+                    <Button onClick={() => handleTokenAdjustment("subtract")} variant="destructive" disabled={adjusting} className="w-full sm:w-auto touch-target">
                       Remove Tokens
                     </Button>
-                    <Button onClick={() => handleTokenAdjustment("set")} variant="outline" disabled={adjusting}>
+                    <Button onClick={() => handleTokenAdjustment("set")} variant="outline" disabled={adjusting} className="w-full sm:w-auto touch-target">
                       Set Balance
                     </Button>
                   </div>
@@ -656,12 +670,12 @@ export default function Admin() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>Grant Subscriber Status</CardTitle>
-                  <CardDescription>Give users unlimited access with 10 bonus tokens</CardDescription>
+                  <CardTitle className="text-lg sm:text-xl">Grant Subscriber Status</CardTitle>
+                  <CardDescription className="text-sm">Give users unlimited access with 10 bonus tokens</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="spacing-mobile">
                   <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-                    <SelectTrigger>
+                    <SelectTrigger className="touch-target">
                       <SelectValue placeholder="Select a user" />
                     </SelectTrigger>
                     <SelectContent>
@@ -674,22 +688,25 @@ export default function Admin() {
                     </SelectContent>
                   </Select>
 
-                  <Button onClick={() => handleGrantSubscription(1)} disabled={adjusting}>
-                    Grant 1 Month
-                  </Button>
-                  <Button onClick={() => handleGrantSubscription(3)} disabled={adjusting}>
-                    Grant 3 Months
-                  </Button>
-                  <Button onClick={() => handleGrantSubscription(12)} disabled={adjusting}>
-                    Grant 1 Year
-                  </Button>
-                  <Button 
-                    onClick={handleRemoveSubscription} 
-                    disabled={adjusting}
-                    variant="destructive"
-                  >
-                    Remove Subscription
-                  </Button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Button onClick={() => handleGrantSubscription(1)} disabled={adjusting} className="touch-target">
+                      Grant 1 Month
+                    </Button>
+                    <Button onClick={() => handleGrantSubscription(3)} disabled={adjusting} className="touch-target">
+                      Grant 3 Months
+                    </Button>
+                    <Button onClick={() => handleGrantSubscription(12)} disabled={adjusting} className="touch-target">
+                      Grant 1 Year
+                    </Button>
+                    <Button 
+                      onClick={handleRemoveSubscription} 
+                      disabled={adjusting}
+                      variant="destructive"
+                      className="touch-target"
+                    >
+                      Remove Subscription
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -886,17 +903,17 @@ export default function Admin() {
             </TabsContent>
 
             {/* Transactions Tab */}
-            <TabsContent value="transactions" className="space-y-4">
+            <TabsContent value="transactions" className="spacing-mobile">
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
+                  <div className="space-y-4 sm:space-y-0 sm:flex sm:items-center sm:justify-between">
                     <div>
-                      <CardTitle>Transaction Log</CardTitle>
-                      <CardDescription>View all token transactions</CardDescription>
+                      <CardTitle className="text-lg sm:text-xl">Transaction Log</CardTitle>
+                      <CardDescription className="text-sm">View all token transactions</CardDescription>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
                       <Select value={transactionFilter} onValueChange={setTransactionFilter}>
-                        <SelectTrigger className="w-[180px]">
+                        <SelectTrigger className="w-full sm:w-[180px] touch-target">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -909,9 +926,10 @@ export default function Admin() {
                           <SelectItem value="weekly_reward">Weekly Rewards</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button onClick={exportTransactions} variant="outline">
+                      <Button onClick={exportTransactions} variant="outline" className="touch-target">
                         <Download className="mr-2 h-4 w-4" />
-                        Export CSV
+                        <span className="hidden sm:inline">Export CSV</span>
+                        <span className="sm:hidden">Export</span>
                       </Button>
                     </div>
                   </div>
@@ -919,16 +937,16 @@ export default function Admin() {
                 <CardContent>
                   <div className="space-y-2">
                     {transactions.map(transaction => (
-                      <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div key={transaction.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-2">
                         <div className="flex-1">
-                          <div className="font-medium">{transaction.description}</div>
+                          <div className="font-medium text-sm sm:text-base">{transaction.description}</div>
                           <div className="text-xs text-muted-foreground">
                             {new Date(transaction.created_at).toLocaleString()}
                           </div>
                         </div>
-                        <div className="flex items-center gap-4">
-                          <Badge variant="outline">{transaction.transaction_type}</Badge>
-                          <div className={`font-semibold ${transaction.amount > 0 ? "text-green-500" : "text-red-500"}`}>
+                        <div className="flex items-center gap-2 sm:gap-4 justify-between sm:justify-end">
+                          <Badge variant="outline" className="text-xs">{transaction.transaction_type}</Badge>
+                          <div className={`font-semibold text-sm sm:text-base ${transaction.amount > 0 ? "text-green-500" : "text-red-500"}`}>
                             {transaction.amount > 0 ? "+" : ""}{transaction.amount}
                           </div>
                           <div className="text-sm text-muted-foreground min-w-[80px] text-right">

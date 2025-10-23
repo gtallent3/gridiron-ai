@@ -136,16 +136,16 @@ export default function Props() {
   }
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <div className="container mx-auto py-4 sm:py-6 lg:py-8 px-4 sm:px-6 mt-16">
+      <div className="max-w-7xl mx-auto spacing-mobile">
         {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
+        <div className="text-center spacing-mobile">
+          <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
             <Trophy className="h-4 w-4 text-primary" />
-            <span className="text-sm font-medium text-primary">Weekly Props</span>
+            <span className="text-xs sm:text-sm font-medium text-primary">Weekly Props</span>
           </div>
-          <h1 className="text-4xl font-bold">Props Betting</h1>
-          <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+          <h1 className="text-3xl sm:text-4xl font-bold">Props Betting</h1>
+          <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto px-4">
             No vig. No juice. 100% fair lines on player props
           </p>
         </div>
@@ -180,7 +180,7 @@ export default function Props() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {props.map((prop) => (
               <Card key={prop.id} className="border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/50 transition-colors">
                 <CardHeader>
@@ -238,9 +238,9 @@ export default function Props() {
 
         {/* Bet Slip */}
         {selectedProp && (
-          <Card className="sticky bottom-4 border-2 border-primary shadow-xl">
-            <CardContent className="pt-6">
-              <div className="space-y-4">
+          <Card className="fixed bottom-0 left-0 right-0 sm:sticky sm:bottom-4 border-2 border-primary shadow-xl rounded-t-lg sm:rounded-lg z-40">
+            <CardContent className="pt-4 sm:pt-6 pb-4 sm:pb-6">
+              <div className="space-y-3 sm:space-y-4">
                 <h3 className="font-semibold text-lg">Place Your Bet</h3>
                 
                 <div className="space-y-2">
@@ -264,18 +264,18 @@ export default function Props() {
                   </span>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-2 sm:gap-3">
                   <Button
                     onClick={() => setSelectedProp(null)}
                     variant="outline"
-                    className="flex-1"
+                    className="flex-1 touch-target"
                   >
                     Cancel
                   </Button>
                   <Button
                     onClick={handlePlaceBet}
                     disabled={placing || wagerAmount < 1}
-                    className="flex-1"
+                    className="flex-1 touch-target"
                   >
                     {placing ? (
                       <>
