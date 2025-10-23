@@ -153,15 +153,16 @@ serve(async (req) => {
 
           console.log(`Player ${player.fullName}: found ${player.stats?.length || 0} stat entries, projection for week ${week}: ${weekProjection ? 'YES' : 'NO'}`);
 
-          if (weekProjection?.stats) {
-            const rawStats = weekProjection.stats;
+          if (weekProjection?.stats || weekProjection?.appliedStats) {
+            const rawStats = weekProjection.stats || {};
+            const appliedStats = weekProjection.appliedStats || {};
             const position = normalizedPlayer?.position || player.defaultPositionId?.toString() || 'FLEX';
             const isDST = position === 'D/ST' || position === 'DEF' || position === '16';
             
             // Check if player is on bye (ESPN marks with specific indicators)
-            const isByeWeek = !rawStats || Object.keys(rawStats).length === 0;
+            const isByeWeek = (!rawStats || Object.keys(rawStats).length === 0) && (!appliedStats || Object.keys(appliedStats).length === 0);
             
-            // Build normalized stats object
+            // Build normalized stats object from raw stats first
             const normalizedStats: any = {
               fumbles_lost: parseInt(rawStats['72']) || 0,
             };
@@ -198,8 +199,56 @@ serve(async (req) => {
               normalizedStats.punt_return_tds = parseInt(rawStats['102']) || 0;
               normalizedStats.safeties = parseInt(rawStats['98']) || 0;
               normalizedStats.blocked_kicks = parseInt(rawStats['97']) || 0;
-              normalizedStats.points_allowed = parseInt(rawStats['120']) || 0;
-              normalizedStats.yards_allowed = parseInt(rawStats['127']) || 0;
+              // ESPN uses category-based scoring for PA/YA; raw counts may be missing in projections
+              normalizedStats.points_allowed = parseInt(rawStats['120']) || undefined as any;
+              normalizedStats.yards_allowed = parseInt(rawStats['127']) || undefined as any;
+            }
+            
+            // If everything is zero and appliedStats exist, derive estimates from appliedStats (league-scoring based)
+            const sumVals = Object.values(normalizedStats).reduce((acc: number, v: any) => acc + (typeof v === 'number' ? Math.abs(v) : 0), 0);
+            if (sumVals === 0 && appliedStats && Object.keys(appliedStats).length > 0) {
+              // Derive approximate raw counts from applied stat points using common default scoring multipliers
+              // Note: This is an approximation; actual league scoring may differ.
+              const getNum = (k: string) => typeof appliedStats[k] === 'number' ? appliedStats[k] : parseFloat(appliedStats[k] || '0') || 0;
+              if (!isDST) {
+                normalizedStats.passing_yards = Math.round(getNum('3') / 0.04);
+                normalizedStats.passing_tds = Math.round(getNum('4') / 4);
+                normalizedStats.interceptions = Math.round(Math.abs(getNum('20') / 2));
+                normalizedStats.passing_2pt_conversions = Math.round(getNum('19') / 2);
+                
+                normalizedStats.rushing_yards = Math.round(getNum('24') / 0.1);
+                normalizedStats.rushing_tds = Math.round(getNum('25') / 6);
+                normalizedStats.rushing_2pt_conversions = Math.round(getNum('26') / 2);
+                
+                // Receptions are often 1 point in PPR (fallback to 0.5 if looks like half PPR)
+                const recPts = getNum('53');
+                const recPer = recPts >= 0.5 && recPts < 1 ? 0.5 : 1;
+                normalizedStats.receptions = Math.round(recPts / (recPer || 1));
+                normalizedStats.receiving_yards = Math.round(getNum('42') / 0.1);
+                normalizedStats.receiving_tds = Math.round(getNum('43') / 6);
+                normalizedStats.receiving_2pt_conversions = Math.round(getNum('44') / 2);
+                
+                normalizedStats.fumbles_lost = Math.round(Math.abs(getNum('72') / 2));
+              } else {
+                // DST projections are highly league-dependent; derive simple counts where 1:1 is common
+                normalizedStats.sacks = Math.round(getNum('99'));
+                normalizedStats.fumbles_recovered = Math.round(getNum('96') / 2);
+                const intTd = Math.round(getNum('103') / 6);
+                const fumTd = Math.round(getNum('104') / 6);
+                normalizedStats.interception_tds = intTd;
+                normalizedStats.fumble_recovery_tds = fumTd;
+                normalizedStats.defensive_tds = intTd + fumTd;
+                normalizedStats.kick_return_tds = Math.round(getNum('101') / 6);
+                normalizedStats.punt_return_tds = Math.round(getNum('102') / 6);
+                normalizedStats.safeties = Math.round(getNum('98') / 2);
+                normalizedStats.blocked_kicks = Math.round(getNum('97') / 2);
+                // We cannot reliably derive points/yards allowed; leave undefined
+                normalizedStats.points_allowed = undefined as any;
+                normalizedStats.yards_allowed = undefined as any;
+              }
+              // Preserve applied total and breakdown for consumers that rely on league-specific scoring
+              (normalizedStats as any).__applied_total = typeof weekProjection.appliedTotal === 'number' ? weekProjection.appliedTotal : undefined;
+              (normalizedStats as any).__applied_breakdown = appliedStats;
             }
             
             // Create projection entry
