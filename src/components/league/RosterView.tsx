@@ -56,9 +56,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         .filter(Boolean);
 
 
-      // Infer NFL season (Aug-Dec -> current year, Jan-Jul -> previous year)
+      // Infer NFL season (Sep-Dec -> current year, Jan-Aug -> previous year)
       const now = new Date();
-      const inferredSeason = (now.getMonth() + 1) >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+      const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
       // Fetch player stats with calculated fantasy points based on league scoring
       const { data: playerData, error } = await supabase.functions.invoke('get-player-data', {

@@ -350,7 +350,8 @@ serve(async (req) => {
     const json = await req.json().catch(() => ({}));
     const url = new URL(req.url);
     const now = new Date();
-    const inferredSeason = (now.getMonth() + 1) >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+    // NFL season runs Sep-Feb: Sep-Dec = current year, Jan-Aug = previous year
+    const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
     const rawWeek = json.week ?? url.searchParams.get('week');
     const rawSeason = json.season ?? url.searchParams.get('season') ?? inferredSeason;
@@ -415,6 +416,8 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    console.log(`Found ${stats?.length || 0} stat records for week ${weekNum}, season ${seasonNum}`);
 
     // Calculate fantasy points for each player
     const playersWithPoints = stats.map(player => {

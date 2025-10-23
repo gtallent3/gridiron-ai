@@ -85,6 +85,7 @@ serve(async (req) => {
     const { espn_s2, swid } = credentials;
 
     const now = new Date();
+    // NFL season runs Sep-Feb, so if we're in Sep-Dec use current year, if Jan-Aug use previous year
     const currentSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
     // Build normalized player map
