@@ -82,16 +82,16 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
       // Create lookup maps separated by source type
       const projById = new Map(
-        playerData.players.filter((p: any) => p.source_type === 'projection').map((p: any) => [String(p.player_id), p])
+        playerData.players.filter((p: any) => p.source_type === 'projected').map((p: any) => [String(p.player_id), p])
       );
       const actualById = new Map(
-        playerData.players.filter((p: any) => p.source_type !== 'projection').map((p: any) => [String(p.player_id), p])
+        playerData.players.filter((p: any) => p.source_type !== 'projected').map((p: any) => [String(p.player_id), p])
       );
       const projByName = new Map(
-        playerData.players.filter((p: any) => p.source_type === 'projection').map((p: any) => [p.player_name?.toLowerCase().trim(), p])
+        playerData.players.filter((p: any) => p.source_type === 'projected').map((p: any) => [p.player_name?.toLowerCase().trim(), p])
       );
       const actualByName = new Map(
-        playerData.players.filter((p: any) => p.source_type !== 'projection').map((p: any) => [p.player_name?.toLowerCase().trim(), p])
+        playerData.players.filter((p: any) => p.source_type !== 'projected').map((p: any) => [p.player_name?.toLowerCase().trim(), p])
       );
 
       const starterPlayers: any[] = [];
@@ -126,8 +126,14 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           name: playerName,
           position: positionName,
           team: chosenStats?.team || player.team || 'NFL',
-          // Use fantasy_points from calculated data
-          projected: !isHistorical ? ((projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0)) : 0,
+          // Use fantasy_points from calculated data, but for K projected use projected_fp if available
+          projected: !isHistorical
+            ? (positionName === 'K'
+                ? (typeof (projStats?.stats as any)?.projected_fp === 'number'
+                    ? (projStats!.stats as any).projected_fp
+                    : (projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0))
+                : (projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0))
+            : 0,
           actualPoints: isHistorical ? ((actualStats?.fantasy_points ?? projStats?.fantasy_points ?? 0)) : 0,
           status: isStarter ? 'starter' : 'bench',
           is_bye_week: player.is_bye_week || false,

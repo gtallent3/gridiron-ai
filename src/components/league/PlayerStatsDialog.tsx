@@ -93,11 +93,19 @@ export function PlayerStatsDialog({ player, open, onOpenChange, week, leagueId }
           );
 
           if (projections.length > 0) {
-            const totalPoints = projections.reduce((sum: number, p: any) => sum + p.fantasy_points, 0);
-            const weeklyData = projections.map((p: any) => ({
-              week: p.week,
-              projected_points: p.fantasy_points,
-            })).sort((a: any, b: any) => a.week - b.week);
+            const pointsFor = (p: any) => {
+              const isK = player.position === 'K';
+              if (isK && p.source_type !== 'actual') {
+                const pf = (p.stats as any)?.projected_fp;
+                return typeof pf === 'number' ? pf : (p.fantasy_points || 0);
+              }
+              return p.fantasy_points || 0;
+            };
+
+            const totalPoints = projections.reduce((sum: number, p: any) => sum + pointsFor(p), 0);
+            const weeklyData = projections
+              .map((p: any) => ({ week: p.week, projected_points: pointsFor(p) }))
+              .sort((a: any, b: any) => a.week - b.week);
 
             setRosProjection({
               total_projected_points: totalPoints,
@@ -169,7 +177,15 @@ export function PlayerStatsDialog({ player, open, onOpenChange, week, leagueId }
                   </span>
                 )}
               </div>
-              <span className="text-2xl font-bold">{stats.fantasy_points.toFixed(2)} pts</span>
+              {(() => {
+                const isK = player.position === 'K';
+                const displayedWeekPoints = isK && stats.source_type !== 'actual'
+                  ? (typeof (stats.stats as any)?.projected_fp === 'number' ? (stats.stats as any).projected_fp : stats.fantasy_points)
+                  : stats.fantasy_points;
+                return (
+                  <span className="text-2xl font-bold">{displayedWeekPoints.toFixed(2)} pts</span>
+                );
+              })()}
             </div>
 
             {player.position !== 'K' && (
