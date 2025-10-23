@@ -348,6 +348,40 @@ serve(async (req) => {
               source: 'espn',
               raw_data: currentWeekActual,
             });
+          } else {
+            // Fallback: use current week projection stats if actuals are unavailable
+            const projWeek = player.stats.find((stat: any) => 
+              stat.statSourceId === 1 && stat.scoringPeriodId === currentWeek
+            );
+            const projStats = projWeek?.appliedStats || projWeek?.stats;
+            if (projStats) {
+              playerStatsToInsert.push({
+                player_id: normalizedPlayer?.player_id || espnId || 'unknown',
+                player_name: normalizedPlayer?.player_name || player?.fullName || 'Unknown',
+                team: normalizedPlayer?.team || (player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
+                position: normalizedPlayer?.position || player?.defaultPositionId?.toString() || 'FLEX',
+                week: currentWeek,
+                season: currentYear,
+                passing_yards: projStats['5'] || 0,
+                passing_tds: projStats['4'] || 0,
+                interceptions: projStats['20'] || 0,
+                passing_completions: projStats['3'] || 0,
+                passing_attempts: projStats['0'] || 0,
+                rushing_yards: projStats['24'] || 0,
+                rushing_tds: projStats['25'] || 0,
+                rushing_attempts: projStats['23'] || 0,
+                receiving_yards: projStats['42'] || 0,
+                receiving_tds: projStats['43'] || 0,
+                receptions: projStats['53'] || 0,
+                receiving_targets: projStats['58'] || 0,
+                fumbles_lost: projStats['72'] || 0,
+                passing_2pt_conversions: projStats['19'] || 0,
+                rushing_2pt_conversions: projStats['29'] || 0,
+                receiving_2pt_conversions: projStats['44'] || 0,
+                source: 'espn_projection',
+                raw_data: projWeek,
+              });
+            }
           }
           
           // Remaining-week projections available from ESPN (often just current week)
