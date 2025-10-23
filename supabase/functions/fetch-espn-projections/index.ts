@@ -123,6 +123,18 @@ serve(async (req) => {
       const weekData = await response.json();
       const projectionStatsToInsert: any[] = [];
 
+      console.log(`Week ${week} response has ${weekData.teams?.length || 0} teams`);
+      
+      // Log first player's stat structure to debug
+      if (weekData.teams?.[0]?.roster?.entries?.[0]) {
+        const firstEntry = weekData.teams[0].roster.entries[0];
+        const firstPlayer = firstEntry.playerPoolEntry?.player;
+        console.log(`First player: ${firstPlayer?.fullName}, stats array length: ${firstPlayer?.stats?.length || 0}`);
+        if (firstPlayer?.stats?.length > 0) {
+          console.log(`First stat entry:`, JSON.stringify(firstPlayer.stats[0]));
+        }
+      }
+
       // Process all teams
       for (const team of weekData.teams || []) {
         for (const entry of team.roster?.entries || []) {
@@ -138,6 +150,8 @@ serve(async (req) => {
             stat.statSplitTypeId === 1 && 
             stat.scoringPeriodId === week
           );
+
+          console.log(`Player ${player.fullName}: found ${player.stats?.length || 0} stat entries, projection for week ${week}: ${weekProjection ? 'YES' : 'NO'}`);
 
           if (weekProjection?.stats) {
             const rawStats = weekProjection.stats;
