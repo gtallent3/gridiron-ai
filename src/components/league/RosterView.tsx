@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { PlayerStatsDialog } from "./PlayerStatsDialog";
 
 type League = {
   id: string;
@@ -43,6 +44,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [bench, setBench] = useState<any[]>([]);
   const [selectedWeek, setSelectedWeek] = useState<number>(league.current_week || 7);
   const [loading, setLoading] = useState(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
+  const [statsDialogOpen, setStatsDialogOpen] = useState(false);
 
   // Fetch stats with calculated fantasy points from player_stats table
   const fetchWeeklyStats = async (week: number) => {
@@ -166,6 +169,11 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         ? prev.filter(id => id !== playerId)
         : [...prev, playerId]
     );
+  };
+
+  const handlePlayerClick = (player: any) => {
+    setSelectedPlayer(player);
+    setStatsDialogOpen(true);
   };
 
   const handleSubstitution = (starterId: string, benchId: string) => {
@@ -297,13 +305,14 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {starters.map(player => (
-                <PlayerCard
-                  key={player.id}
-                  player={player}
-                  isSelected={selectedPlayers.includes(player.id)}
-                  onSelect={handlePlayerSelect}
-                  showActual={isHistoricalWeek}
-                />
+                <div key={player.id} onClick={() => handlePlayerClick(player)} className="cursor-pointer">
+                  <PlayerCard
+                    player={player}
+                    isSelected={selectedPlayers.includes(player.id)}
+                    onSelect={handlePlayerSelect}
+                    showActual={isHistoricalWeek}
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -324,18 +333,27 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {bench.map(player => (
-                <PlayerCard
-                  key={player.id}
-                  player={player}
-                  isSelected={selectedPlayers.includes(player.id)}
-                  onSelect={handlePlayerSelect}
-                  showActual={isHistoricalWeek}
-                />
+                <div key={player.id} onClick={() => handlePlayerClick(player)} className="cursor-pointer">
+                  <PlayerCard
+                    player={player}
+                    isSelected={selectedPlayers.includes(player.id)}
+                    onSelect={handlePlayerSelect}
+                    showActual={isHistoricalWeek}
+                  />
+                </div>
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <PlayerStatsDialog
+        player={selectedPlayer}
+        open={statsDialogOpen}
+        onOpenChange={setStatsDialogOpen}
+        week={selectedWeek}
+        leagueId={league.id}
+      />
     </div>
   );
 }
