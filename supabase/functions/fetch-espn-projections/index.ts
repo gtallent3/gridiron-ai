@@ -107,7 +107,7 @@ serve(async (req) => {
     for (let week = startWeek; week <= endWeek; week++) {
       console.log(`Fetching projections for week ${week}...`);
 
-      const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=kona_player_info`;
+      const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=mRoster&view=kona_player_info`;
 
       const response = await fetch(leagueUrl, {
         headers: {
