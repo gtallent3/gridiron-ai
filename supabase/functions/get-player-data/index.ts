@@ -346,11 +346,12 @@ serve(async (req) => {
       );
     }
 
-    const url = new URL(req.url);
-    const week = url.searchParams.get('week');
-    const season = url.searchParams.get('season') || '2024';
-    const leagueId = url.searchParams.get('leagueId');
-    const playerIds = url.searchParams.get('playerIds')?.split(',');
+    // Parse request body
+    const body = await req.json();
+    const week = body.week;
+    const season = body.season || '2024';
+    const leagueId = body.leagueId;
+    const playerIds = body.playerIds;
 
     console.log('Fetching player data:', { week, season, leagueId, playerIds });
 
@@ -408,6 +409,7 @@ serve(async (req) => {
         position: player.position,
         week: player.week,
         season: player.season,
+        source_type: player.source_type,
         stats: {
           passing_yards: player.passing_yards,
           passing_tds: player.passing_tds,
@@ -417,7 +419,6 @@ serve(async (req) => {
           receptions: player.receptions,
           receiving_yards: player.receiving_yards,
           receiving_tds: player.receiving_tds,
-          // Include all other stats...
         },
         fantasy_points: total,
         points_breakdown: breakdown,
