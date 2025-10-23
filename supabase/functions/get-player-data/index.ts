@@ -407,7 +407,32 @@ serve(async (req) => {
       query = query.in('player_id', Array.from(variants));
     }
 
-    const { data: stats, error: statsError } = await query;
+    const { data: allStats, error: statsError } = await query;
+
+    if (statsError) {
+      console.error('Error fetching stats:', statsError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch player stats' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Prioritize actual stats over projected stats
+    // Group by player_id and prefer actual over projected
+    const playerStatsMap = new Map<string, any>();
+    
+    if (allStats) {
+      for (const stat of allStats) {
+        const existing = playerStatsMap.get(stat.player_id);
+        
+        // If no existing stat, or existing is projected and current is actual, use current
+        if (!existing || (existing.source_type === 'projected' && stat.source_type === 'actual')) {
+          playerStatsMap.set(stat.player_id, stat);
+        }
+      }
+    }
+
+    const stats = Array.from(playerStatsMap.values());
 
     if (statsError) {
       console.error('Error fetching stats:', statsError);
