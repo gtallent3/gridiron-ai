@@ -172,40 +172,44 @@ export function PlayerStatsDialog({ player, open, onOpenChange, week, leagueId }
               <span className="text-2xl font-bold">{stats.fantasy_points.toFixed(2)} pts</span>
             </div>
 
-            <Separator />
+            {player.position !== 'K' && (
+              <>
+                <Separator />
 
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">Stats</h4>
-              <div className="grid grid-cols-2 gap-2">
-                {Object.entries(stats.stats).map(([key, value]) => {
-                  if (!value || !statLabels[key]) return null;
-                  const displayValue = typeof value === 'number' ? value.toFixed(2) : value;
-                  return (
-                    <div key={key} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{statLabels[key]}</span>
-                      <span className="font-medium">{displayValue}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm">Stats</h4>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.entries(stats.stats).map(([key, value]) => {
+                      if (!value || !statLabels[key]) return null;
+                      const displayValue = typeof value === 'number' ? value.toFixed(2) : value;
+                      return (
+                        <div key={key} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">{statLabels[key]}</span>
+                          <span className="font-medium">{displayValue}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
 
-            <Separator />
+                <Separator />
 
-            <div className="space-y-2">
-              <h4 className="font-semibold text-sm">Points Breakdown</h4>
-              <div className="space-y-1">
-                {Object.entries(stats.points_breakdown).map(([key, value]) => {
-                  if (!value) return null;
-                  return (
-                    <div key={key} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">{statLabels[key] || key}</span>
-                      <span className="font-medium">{value.toFixed(2)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm">Points Breakdown</h4>
+                  <div className="space-y-1">
+                    {Object.entries(stats.points_breakdown).map(([key, value]) => {
+                      if (!value) return null;
+                      return (
+                        <div key={key} className="flex justify-between text-sm">
+                          <span className="text-muted-foreground">{statLabels[key] || key}</span>
+                          <span className="font-medium">{value.toFixed(2)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
 
             {rosProjection && rosProjection.weekly_projections.length > 0 && (
               <>
