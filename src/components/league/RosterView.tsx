@@ -178,33 +178,35 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="spacing-mobile">
       {/* Week Navigation */}
       <Card>
-        <CardContent className="py-4">
-          <div className="flex items-center justify-between">
+        <CardContent className="py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleWeekChange('prev')}
               disabled={selectedWeek <= 1 || loading}
+              className="touch-target"
             >
               <ChevronLeft className="h-4 w-4" />
-              Previous Week
+              <span className="hidden sm:inline">Previous Week</span>
+              <span className="sm:hidden">Prev</span>
             </Button>
             
-            <div className="flex items-center gap-4">
+            <div className="flex items-center justify-center gap-2 sm:gap-4">
               <div className="text-center">
-                <p className="text-sm text-muted-foreground">Viewing Week</p>
+                <p className="text-xs sm:text-sm text-muted-foreground">Viewing Week</p>
                 <Select 
                   value={String(selectedWeek)} 
                   onValueChange={(v) => setSelectedWeek(Number(v))}
                   disabled={loading}
                 >
-                  <SelectTrigger className="w-24">
+                  <SelectTrigger className="w-20 sm:w-24 touch-target">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-card z-50">
                     {Array.from({ length: currentWeek }, (_, i) => i + 1).map(w => (
                       <SelectItem key={w} value={String(w)}>
                         Week {w}
@@ -215,8 +217,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
               </div>
               
               {isHistoricalWeek && (
-                <div className="text-sm px-3 py-1 bg-secondary rounded-md">
-                  Historical Data
+                <div className="text-xs sm:text-sm px-2 sm:px-3 py-1 bg-secondary rounded-md">
+                  <span className="hidden sm:inline">Historical Data</span>
+                  <span className="sm:hidden">Historical</span>
                 </div>
               )}
             </div>
@@ -226,8 +229,10 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
               size="sm"
               onClick={() => handleWeekChange('next')}
               disabled={selectedWeek >= currentWeek || loading}
+              className="touch-target"
             >
-              Next Week
+              <span className="hidden sm:inline">Next Week</span>
+              <span className="sm:hidden">Next</span>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -244,18 +249,18 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Starting Lineup</CardTitle>
-            <div className="text-right">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <CardTitle className="text-lg sm:text-xl">Starting Lineup</CardTitle>
+            <div className="text-left sm:text-right">
               {isHistoricalWeek ? (
                 <>
-                  <p className="text-sm text-muted-foreground">Actual Points Scored</p>
-                  <p className="text-2xl font-bold text-primary">{totalActual.toFixed(1)}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Actual Points Scored</p>
+                  <p className="text-xl sm:text-2xl font-bold text-primary">{totalActual.toFixed(1)}</p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-muted-foreground">Total Projected</p>
-                  <p className="text-2xl font-bold text-primary">{totalProjected.toFixed(1)}</p>
+                  <p className="text-xs sm:text-sm text-muted-foreground">Total Projected</p>
+                  <p className="text-xl sm:text-2xl font-bold text-primary">{totalProjected.toFixed(1)}</p>
                 </>
               )}
             </div>
@@ -267,7 +272,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           ) : starters.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No starters found</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {starters.map(player => (
                 <PlayerCard
                   key={player.id}
@@ -286,7 +291,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Bench</CardTitle>
+          <CardTitle className="text-lg sm:text-xl">Bench</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -294,7 +299,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           ) : bench.length === 0 ? (
             <p className="text-center py-8 text-muted-foreground">No bench players found</p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
               {bench.map(player => (
                 <PlayerCard
                   key={player.id}

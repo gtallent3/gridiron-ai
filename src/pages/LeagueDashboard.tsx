@@ -197,15 +197,16 @@ export default function LeagueDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
-      <div className="container mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 mt-16">
+      <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
         <Button
           variant="ghost"
           onClick={() => navigate('/')}
-          className="mb-6"
+          className="mb-4 sm:mb-6 touch-target"
         >
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Leagues
+          <span className="hidden sm:inline">Back to Leagues</span>
+          <span className="sm:hidden">Back</span>
         </Button>
 
         <LeagueHeader 
@@ -213,36 +214,54 @@ export default function LeagueDashboard() {
           userTeam={userTeam}
         />
 
-        <Tabs defaultValue="roster" className="mt-8">
-          <TabsList className="grid w-full grid-cols-6 max-w-4xl mx-auto">
-            <TabsTrigger value="roster">My Team</TabsTrigger>
-            <TabsTrigger value="matchup">Matchup</TabsTrigger>
-            <TabsTrigger value="trade">Trade Analyzer</TabsTrigger>
-            <TabsTrigger value="waiver">Waiver Wire</TabsTrigger>
-            <TabsTrigger value="ai">AI Assistant</TabsTrigger>
-            <TabsTrigger value="teams">Other Teams</TabsTrigger>
+        <Tabs defaultValue="roster" className="mt-4 sm:mt-8">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 max-w-4xl mx-auto h-auto">
+            <TabsTrigger value="roster" className="text-xs sm:text-sm py-2">
+              <span className="hidden sm:inline">My Team</span>
+              <span className="sm:hidden">Team</span>
+            </TabsTrigger>
+            <TabsTrigger value="matchup" className="text-xs sm:text-sm py-2">
+              <span className="hidden sm:inline">Matchup</span>
+              <span className="sm:hidden">Match</span>
+            </TabsTrigger>
+            <TabsTrigger value="trade" className="text-xs sm:text-sm py-2">
+              <span className="hidden sm:inline">Trade Analyzer</span>
+              <span className="sm:hidden">Trade</span>
+            </TabsTrigger>
+            <TabsTrigger value="waiver" className="text-xs sm:text-sm py-2">
+              <span className="hidden sm:inline">Waiver Wire</span>
+              <span className="sm:hidden">Waiver</span>
+            </TabsTrigger>
+            <TabsTrigger value="ai" className="text-xs sm:text-sm py-2">
+              <span className="hidden sm:inline">AI Assistant</span>
+              <span className="sm:hidden">AI</span>
+            </TabsTrigger>
+            <TabsTrigger value="teams" className="text-xs sm:text-sm py-2">
+              <span className="hidden sm:inline">Other Teams</span>
+              <span className="sm:hidden">Teams</span>
+            </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="roster" className="mt-6">
+          <TabsContent value="roster" className="mt-4 sm:mt-6">
             <RosterView 
               league={league} 
               userTeam={userTeam}
             />
           </TabsContent>
 
-          <TabsContent value="matchup" className="mt-6">
+          <TabsContent value="matchup" className="mt-4 sm:mt-6">
             <MatchupInsight 
               league={league}
               userTeam={userTeam}
             />
           </TabsContent>
 
-          <TabsContent value="trade" className="mt-6">
-            <Tabs defaultValue="analyzer" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-3 max-w-2xl mx-auto">
-                <TabsTrigger value="analyzer">Grade Trade</TabsTrigger>
-                <TabsTrigger value="finder">Find Trades</TabsTrigger>
-                <TabsTrigger value="improve">Improve Position</TabsTrigger>
+          <TabsContent value="trade" className="mt-4 sm:mt-6">
+            <Tabs defaultValue="analyzer" className="spacing-mobile">
+              <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 max-w-2xl mx-auto h-auto">
+                <TabsTrigger value="analyzer" className="text-sm py-2 sm:py-3">Grade Trade</TabsTrigger>
+                <TabsTrigger value="finder" className="text-sm py-2 sm:py-3">Find Trades</TabsTrigger>
+                <TabsTrigger value="improve" className="text-sm py-2 sm:py-3">Improve Position</TabsTrigger>
               </TabsList>
 
               <TabsContent value="analyzer">
@@ -259,20 +278,20 @@ export default function LeagueDashboard() {
             </Tabs>
           </TabsContent>
 
-          <TabsContent value="waiver" className="mt-6">
+          <TabsContent value="waiver" className="mt-4 sm:mt-6">
             <WaiverWire 
               league={league}
             />
           </TabsContent>
 
-          <TabsContent value="ai" className="mt-6">
+          <TabsContent value="ai" className="mt-4 sm:mt-6">
             <LeagueAIAssistant 
               league={league}
               userTeam={userTeam}
             />
           </TabsContent>
 
-          <TabsContent value="teams" className="mt-6">
+          <TabsContent value="teams" className="mt-4 sm:mt-6">
             <OtherTeams 
               league={league}
               currentTeamId={userTeam?.team_id}

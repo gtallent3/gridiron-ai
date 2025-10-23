@@ -107,21 +107,21 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
 
   return (
     <Card className="border-2 border-primary/50 bg-gradient-to-r from-primary/5 to-accent/5">
-      <CardContent className="p-6">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <CardContent className="p-4 sm:p-6">
+        <div className="flex flex-col gap-4 sm:gap-6">
           <div className="space-y-2">
-            <div className="flex items-center gap-3">
-              <h1 className="text-3xl font-bold">{league.league_name}</h1>
-              <Badge variant="outline" className="uppercase">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">{league.league_name}</h1>
+              <Badge variant="outline" className="uppercase w-fit">
                 {league.platform}
               </Badge>
             </div>
             {userTeam && (
-              <p className="text-xl text-muted-foreground">
+              <p className="text-base sm:text-lg lg:text-xl text-muted-foreground">
                 {userTeam.team_name}
               </p>
             )}
-            <div className="flex items-center gap-4 text-sm">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm">
               <div className="flex items-center gap-2">
                 <Trophy className="h-4 w-4 text-primary" />
                 <span className="font-semibold">
@@ -139,22 +139,22 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
             </div>
           </div>
 
-          <div className="flex gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <Card className="bg-background/50">
-              <CardContent className="p-4 text-center min-w-[140px]">
-                <p className="text-sm text-muted-foreground mb-1">Projected Points</p>
-                <p className="text-3xl font-bold text-primary">
+              <CardContent className="p-3 sm:p-4 text-center">
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Projected Points</p>
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-primary">
                   {projectedPoints > 0 ? projectedPoints.toFixed(1) : 'N/A'}
                 </p>
               </CardContent>
             </Card>
 
             <Card className="bg-background/50">
-              <CardContent className="p-4 text-center min-w-[140px]">
-                <p className="text-sm text-muted-foreground mb-1">Win Probability</p>
-                <div className="flex items-center justify-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-green-500" />
-                  <p className="text-3xl font-bold text-green-500">{winProbability}%</p>
+              <CardContent className="p-3 sm:p-4 text-center">
+                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Win Probability</p>
+                <div className="flex items-center justify-center gap-1 sm:gap-2">
+                  <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5 text-green-500" />
+                  <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-500">{winProbability}%</p>
                 </div>
               </CardContent>
             </Card>
