@@ -162,17 +162,17 @@ serve(async (req) => {
             
             // Add offensive stats for non-DST players
             if (!isDST) {
-              statEntry.passing_yards = Math.round(parseFloat(rawStats['5']) || 0);
+              statEntry.passing_yards = Math.round(parseFloat(rawStats['3']) || 0);
               statEntry.passing_tds = parseInt(rawStats['4']) || 0;
               statEntry.interceptions = parseInt(rawStats['20']) || 0;
-              statEntry.passing_completions = parseInt(rawStats['3']) || 0;
+              statEntry.passing_completions = parseInt(rawStats['1']) || 0;
               statEntry.passing_attempts = parseInt(rawStats['0']) || 0;
               statEntry.passing_2pt_conversions = parseInt(rawStats['19']) || 0;
               
               statEntry.rushing_yards = Math.round(parseFloat(rawStats['24']) || 0);
               statEntry.rushing_tds = parseInt(rawStats['25']) || 0;
               statEntry.rushing_attempts = parseInt(rawStats['23']) || 0;
-              statEntry.rushing_2pt_conversions = parseInt(rawStats['26']) || 0; // Corrected stat ID
+              statEntry.rushing_2pt_conversions = parseInt(rawStats['26']) || 0;
               
               statEntry.receiving_yards = Math.round(parseFloat(rawStats['42']) || 0);
               statEntry.receiving_tds = parseInt(rawStats['43']) || 0;
@@ -185,15 +185,15 @@ serve(async (req) => {
             if (isDST) {
               statEntry.sacks = parseFloat(rawStats['99']) || 0;
               statEntry.fumbles_recovered = parseInt(rawStats['96']) || 0;
-              statEntry.interception_tds = parseInt(rawStats['102']) || 0; // Pick-6
-              statEntry.fumble_recovery_tds = parseInt(rawStats['103']) || 0;
-              statEntry.defensive_tds = (parseInt(rawStats['102']) || 0) + (parseInt(rawStats['103']) || 0);
+              statEntry.interception_tds = parseInt(rawStats['103']) || 0;
+              statEntry.fumble_recovery_tds = parseInt(rawStats['104']) || 0;
+              statEntry.defensive_tds = (parseInt(rawStats['103']) || 0) + (parseInt(rawStats['104']) || 0);
               statEntry.kick_return_tds = parseInt(rawStats['101']) || 0;
-              statEntry.punt_return_tds = parseInt(rawStats['104']) || 0;
-              statEntry.safeties = parseInt(rawStats['93']) || 0;
+              statEntry.punt_return_tds = parseInt(rawStats['102']) || 0;
+              statEntry.safeties = parseInt(rawStats['98']) || 0;
               statEntry.blocked_kicks = parseInt(rawStats['97']) || 0;
               statEntry.points_allowed = parseInt(rawStats['120']) || 0;
-              statEntry.yards_allowed = parseInt(rawStats['123']) || 0;
+              statEntry.yards_allowed = parseInt(rawStats['127']) || 0;
             }
             
             playerStatsToInsert.push(statEntry);
