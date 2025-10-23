@@ -25,6 +25,8 @@ interface PlayerStats {
   points_breakdown: Record<string, number>;
   stats: Record<string, number>;
   source_type: string;
+  provenance: string;
+  projection_in_use: boolean;
   week: number;
   season: number;
 }
@@ -157,9 +159,16 @@ export function PlayerStatsDialog({ player, open, onOpenChange, week, leagueId }
         ) : stats ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">
-                Week {stats.week} • {stats.source_type === 'actual' ? 'Actual' : 'Projected'}
-              </span>
+              <div className="flex flex-col gap-1">
+                <span className="text-sm text-muted-foreground">
+                  Week {stats.week} • {stats.source_type === 'actual' ? 'Actual' : 'Projected'}
+                </span>
+                {stats.projection_in_use && (
+                  <span className="text-xs text-amber-600 dark:text-amber-400">
+                    ⚠️ Using projection (actuals not yet available)
+                  </span>
+                )}
+              </div>
               <span className="text-2xl font-bold">{stats.fantasy_points.toFixed(2)} pts</span>
             </div>
 

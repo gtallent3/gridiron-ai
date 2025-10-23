@@ -363,6 +363,9 @@ serve(async (req) => {
 
     console.log('Fetching player data:', { week: weekNum, season: seasonNum, leagueId, playerIds });
 
+    // Get current week to determine if we should use actuals or projections
+    const currentWeek = weekNum !== undefined ? weekNum : undefined;
+
     // Get league scoring settings if leagueId provided
     let scoringSettings = DEFAULT_SCORING;
     if (leagueId) {
@@ -382,14 +385,14 @@ serve(async (req) => {
       }
     }
 
-    // Build query for player stats
-    let query = supabase
+    // Build query for player stats (actuals)
+    let actualsQuery = supabase
       .from('player_stats')
       .select('*')
       .eq('season', seasonNum);
 
     if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
-      query = query.eq('week', weekNum);
+      actualsQuery = actualsQuery.eq('week', weekNum);
     }
 
     if (playerIds && playerIds.length > 0) {
@@ -404,59 +407,95 @@ serve(async (req) => {
         const n = String(id).match(/^\-?\d+$/);
         if (n) variants.add(`espn_${id}`);
       }
-      query = query.in('player_id', Array.from(variants));
+      actualsQuery = actualsQuery.in('player_id', Array.from(variants));
     }
 
-    const { data: allStats, error: statsError } = await query;
+    // Build query for projected stats
+    let projectionsQuery = supabase
+      .from('projected_player_stats')
+      .select('*')
+      .eq('season', seasonNum);
 
-    if (statsError) {
-      console.error('Error fetching stats:', statsError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch player stats' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Prioritize actual stats over projected stats when fetching specific week
-    // For ROS queries (no week specified), return all stats
-    let stats;
-    
     if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
-      // For specific week queries, prioritize actual over projected per player
-      const playerStatsMap = new Map<string, any>();
-      
-      if (allStats) {
-        for (const stat of allStats) {
-          const existing = playerStatsMap.get(stat.player_id);
-          
-          // If no existing stat, or existing is projected and current is actual, use current
-          if (!existing || (existing.source_type === 'projected' && stat.source_type === 'actual')) {
-            playerStatsMap.set(stat.player_id, stat);
-          }
-        }
-      }
-      
-      stats = Array.from(playerStatsMap.values());
-    } else {
-      // For ROS queries, return all stats (all weeks)
-      stats = allStats || [];
+      projectionsQuery = projectionsQuery.eq('week', weekNum);
     }
 
-    if (statsError) {
-      console.error('Error fetching stats:', statsError);
+    if (playerIds && playerIds.length > 0) {
+      const variants = new Set<string>();
+      for (const id of playerIds) {
+        if (!id) continue;
+        variants.add(String(id));
+        const m = String(id).match(/^espn_(\-?\d+)$/);
+        if (m) variants.add(m[1]);
+        const n = String(id).match(/^\-?\d+$/);
+        if (n) variants.add(`espn_${id}`);
+      }
+      projectionsQuery = projectionsQuery.in('player_id', Array.from(variants));
+    }
+
+    // Fetch both actuals and projections
+    const [{ data: actuals, error: actualsError }, { data: projections, error: projectionsError }] = 
+      await Promise.all([
+        actualsQuery,
+        projectionsQuery
+      ]);
+
+    if (actualsError) {
+      console.error('Error fetching actuals:', actualsError);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch player stats' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    if (projectionsError) {
+      console.error('Error fetching projections:', projectionsError);
+    }
+
+    // Implement actuals-first selection logic
+    const playerDataMap = new Map<string, any>();
+    
+    // First, add all projections
+    if (projections) {
+      for (const proj of projections) {
+        const normalizedStats = {
+          ...proj.stats,
+          player_id: proj.player_id,
+          player_name: proj.player_name,
+          team: proj.team,
+          position: proj.position,
+          week: proj.week,
+          season: proj.season,
+          source: proj.source,
+          source_type: 'projected',
+          updated_at: proj.last_updated,
+        };
+        playerDataMap.set(`${proj.player_id}_${proj.week}`, normalizedStats);
+      }
+    }
+    
+    // Then, override with actuals where available (actuals-first)
+    if (actuals) {
+      for (const actual of actuals) {
+        playerDataMap.set(`${actual.player_id}_${actual.week}`, {
+          ...actual,
+          source_type: 'actual'
+        });
+      }
+    }
+
+    const stats = Array.from(playerDataMap.values());
 
     console.log(`Found ${stats?.length || 0} stat records for week ${weekNum}, season ${seasonNum}`);
 
     // Calculate fantasy points for each player
     const playersWithPoints = stats.map(player => {
+      // Handle both old format (columns) and new format (stats jsonb)
+      const playerStats = player.stats || player;
+      
       // Only apply defensive scoring to DST positions
       const isDST = player.position === 'D/ST' || player.position === 'DEF' || player.position === '16';
-      const adjustedStats = { ...player };
+      const adjustedStats = { ...playerStats };
       
       // Zero out defensive stats for non-DST players to prevent incorrect scoring
       if (!isDST) {
@@ -483,35 +522,37 @@ serve(async (req) => {
         week: player.week,
         season: player.season,
         source_type: player.source_type,
+        provenance: player.source_type === 'actual' ? 'player_stats' : 'espn_projection',
+        projection_in_use: player.source_type !== 'actual',
         stats: isDST ? {
-          sacks: player.sacks,
-          fumbles_recovered: player.fumbles_recovered,
-          interception_tds: player.interception_tds,
-          fumble_recovery_tds: player.fumble_recovery_tds,
-          defensive_tds: player.defensive_tds,
-          kick_return_tds: player.kick_return_tds,
-          punt_return_tds: player.punt_return_tds,
-          safeties: player.safeties,
-          blocked_kicks: player.blocked_kicks,
-          points_allowed: player.points_allowed,
-          yards_allowed: player.yards_allowed,
+          sacks: playerStats.sacks,
+          fumbles_recovered: playerStats.fumbles_recovered,
+          interception_tds: playerStats.interception_tds,
+          fumble_recovery_tds: playerStats.fumble_recovery_tds,
+          defensive_tds: playerStats.defensive_tds,
+          kick_return_tds: playerStats.kick_return_tds,
+          punt_return_tds: playerStats.punt_return_tds,
+          safeties: playerStats.safeties,
+          blocked_kicks: playerStats.blocked_kicks,
+          points_allowed: playerStats.points_allowed,
+          yards_allowed: playerStats.yards_allowed,
         } : {
-          passing_yards: player.passing_yards,
-          passing_tds: player.passing_tds,
-          interceptions: player.interceptions,
-          passing_2pt_conversions: player.passing_2pt_conversions,
-          rushing_yards: player.rushing_yards,
-          rushing_tds: player.rushing_tds,
-          rushing_2pt_conversions: player.rushing_2pt_conversions,
-          receptions: player.receptions,
-          receiving_yards: player.receiving_yards,
-          receiving_tds: player.receiving_tds,
-          receiving_2pt_conversions: player.receiving_2pt_conversions,
-          fumbles_lost: player.fumbles_lost,
+          passing_yards: playerStats.passing_yards,
+          passing_tds: playerStats.passing_tds,
+          interceptions: playerStats.interceptions,
+          passing_2pt_conversions: playerStats.passing_2pt_conversions,
+          rushing_yards: playerStats.rushing_yards,
+          rushing_tds: playerStats.rushing_tds,
+          rushing_2pt_conversions: playerStats.rushing_2pt_conversions,
+          receptions: playerStats.receptions,
+          receiving_yards: playerStats.receiving_yards,
+          receiving_tds: playerStats.receiving_tds,
+          receiving_2pt_conversions: playerStats.receiving_2pt_conversions,
+          fumbles_lost: playerStats.fumbles_lost,
         },
         fantasy_points: total,
         points_breakdown: breakdown,
-        source: player.source,
+        source: player.source || 'espn',
         last_updated: player.updated_at,
       };
     });

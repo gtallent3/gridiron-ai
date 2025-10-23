@@ -455,6 +455,57 @@ export type Database = {
         }
         Relationships: []
       }
+      projected_player_stats: {
+        Row: {
+          confidence: number | null
+          created_at: string | null
+          id: string
+          last_updated: string
+          player_id: string
+          player_name: string
+          position: string
+          provider_ids: Json | null
+          season: number
+          source: string
+          stats: Json
+          status_flags: Json | null
+          team: string | null
+          week: number
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string | null
+          id?: string
+          last_updated?: string
+          player_id: string
+          player_name: string
+          position: string
+          provider_ids?: Json | null
+          season: number
+          source?: string
+          stats?: Json
+          status_flags?: Json | null
+          team?: string | null
+          week: number
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string | null
+          id?: string
+          last_updated?: string
+          player_id?: string
+          player_name?: string
+          position?: string
+          provider_ids?: Json | null
+          season?: number
+          source?: string
+          stats?: Json
+          status_flags?: Json | null
+          team?: string | null
+          week?: number
+        }
+        Relationships: []
+      }
       prop_bets: {
         Row: {
           created_at: string
