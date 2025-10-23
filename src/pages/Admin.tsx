@@ -712,42 +712,48 @@ export default function Admin() {
 
               <Card>
                 <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>All Users</CardTitle>
-                    <div className="w-64">
-                      <Input
-                        placeholder="Search by username or ID..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                      />
+                  <div className="flex flex-col gap-4">
+                    <CardTitle className="text-lg sm:text-xl">All Users</CardTitle>
+                    <div className="w-full">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search by username or ID..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="pl-9 touch-target"
+                        />
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {filteredUsers.length === 0 ? (
-                      <p className="text-center text-muted-foreground py-8">
+                      <p className="text-center text-muted-foreground py-8 text-sm">
                         No users found
                       </p>
                     ) : (
                       filteredUsers.map(rowUser => (
-                        <div key={rowUser.id} className="flex items-center justify-between p-3 border rounded-lg">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <div className="font-medium">{rowUser.username}</div>
+                        <div key={rowUser.id} className="flex flex-col sm:flex-row gap-3 p-3 sm:p-4 border rounded-lg">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <div className="font-medium break-words">{rowUser.username}</div>
                               {userRoles.get(rowUser.id) && (
                                 <Badge variant="destructive" className="text-xs">Admin</Badge>
                               )}
                             </div>
-                            <div className="text-sm text-muted-foreground">{rowUser.id}</div>
+                            <div className="text-xs sm:text-sm text-muted-foreground truncate">{rowUser.id}</div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={rowUser.has_unlimited_subscription ? "default" : "outline"}>
-                              {rowUser.balance} tokens
-                            </Badge>
-                            {rowUser.has_unlimited_subscription && (
-                              <Badge>Unlimited</Badge>
-                            )}
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant={rowUser.has_unlimited_subscription ? "default" : "outline"} className="text-xs">
+                                {rowUser.balance} tokens
+                              </Badge>
+                              {rowUser.has_unlimited_subscription && (
+                                <Badge className="text-xs">Unlimited</Badge>
+                              )}
+                            </div>
                             {rowUser.id !== user?.id && (
                               userRoles.get(rowUser.id) ? (
                                 <Button
@@ -755,6 +761,7 @@ export default function Admin() {
                                   variant="outline"
                                   onClick={() => handleManageRole(rowUser.id, "revoke")}
                                   disabled={adjusting}
+                                  className="w-full sm:w-auto touch-target text-xs"
                                 >
                                   Revoke Admin
                                 </Button>
@@ -764,6 +771,7 @@ export default function Admin() {
                                   variant="outline"
                                   onClick={() => handleManageRole(rowUser.id, "grant")}
                                   disabled={adjusting}
+                                  className="w-full sm:w-auto touch-target text-xs"
                                 >
                                   Make Admin
                                 </Button>

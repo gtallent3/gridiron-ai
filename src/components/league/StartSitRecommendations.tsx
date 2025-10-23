@@ -100,13 +100,13 @@ export function StartSitRecommendations({ starters, bench, onSubstitution }: Sta
   return (
     <Card className="border-2 border-accent/50 bg-gradient-to-br from-accent/5 to-primary/5">
       <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="flex items-center gap-2">
+        <div className="flex flex-col gap-4">
+          <div className="space-y-2">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <Sparkles className="h-5 w-5 text-primary" />
               AI Start/Sit Recommendations
             </CardTitle>
-            <CardDescription className="flex items-center gap-2">
+            <CardDescription className="flex flex-wrap items-center gap-2 text-sm">
               Optimize your lineup with AI-powered suggestions
               <Badge variant="outline" className="text-xs flex items-center gap-1">
                 <Coins className="h-3 w-3" />
@@ -118,16 +118,17 @@ export function StartSitRecommendations({ starters, bench, onSubstitution }: Sta
             onClick={analyzeLineup} 
             disabled={isAnalyzing}
             variant="glow"
+            className="w-full sm:w-auto touch-target"
           >
             {isAnalyzing ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Analyzing...
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="ml-2">Analyzing...</span>
               </>
             ) : (
               <>
-                <Sparkles className="mr-2 h-4 w-4" />
-                Analyze Lineup
+                <Sparkles className="h-4 w-4" />
+                <span className="ml-2">Analyze Lineup</span>
               </>
             )}
           </Button>
