@@ -31,13 +31,13 @@ export const Header = ({ user }: HeaderProps) => {
           </div>
           
           <nav className="hidden md:flex items-center gap-6">
-            <a href="/" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+            <a href="/" className="flex items-center h-9 text-sm text-muted-foreground hover:text-primary transition-colors">
               Dashboard
             </a>
             
             {/* Betting Dropdown */}
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors outline-none">
+              <DropdownMenuTrigger className="flex items-center gap-1 h-9 text-sm text-muted-foreground hover:text-primary transition-colors outline-none">
                 Betting <ChevronDown className="h-3 w-3" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-card border-border z-50">
@@ -53,13 +53,13 @@ export const Header = ({ user }: HeaderProps) => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <a href="/shop" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+            <a href="/shop" className="flex items-center h-9 text-sm text-muted-foreground hover:text-primary transition-colors">
               Token Shop
             </a>
 
             {/* Account Dropdown */}
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary transition-colors outline-none">
+              <DropdownMenuTrigger className="flex items-center gap-1 h-9 text-sm text-muted-foreground hover:text-primary transition-colors outline-none">
                 Account <ChevronDown className="h-3 w-3" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-card border-border z-50">
@@ -79,12 +79,12 @@ export const Header = ({ user }: HeaderProps) => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <a href="/contact" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+            <a href="/contact" className="flex items-center h-9 text-sm text-muted-foreground hover:text-primary transition-colors">
               Contact Us
             </a>
 
             {user && (
-              <a href="/admin" className="text-sm text-muted-foreground hover:text-primary transition-colors">
+              <a href="/admin" className="flex items-center h-9 text-sm text-muted-foreground hover:text-primary transition-colors">
                 Admin
               </a>
             )}
