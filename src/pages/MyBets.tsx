@@ -90,34 +90,36 @@ export default function MyBets() {
 
     return (
       <Card className="border-border/50">
-        <CardContent className="pt-6">
-          <div className="space-y-4">
+        <CardContent className="pt-4 sm:pt-6 p-3 sm:p-6">
+          <div className="spacing-mobile">
             {/* Header */}
-            <div className="flex items-start justify-between">
-              <div>
-                <h3 className="font-semibold text-lg">{bet.prop.player_name}</h3>
-                <div className="flex items-center gap-2 mt-1">
-                  <Badge variant="secondary">{bet.prop.team}</Badge>
-                  <Badge variant="outline">{bet.prop.stat_type}</Badge>
+            <div className="flex flex-col sm:flex-row items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <h3 className="font-semibold text-base sm:text-lg break-words">{bet.prop.player_name}</h3>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <Badge variant="secondary" className="text-xs">{bet.prop.team}</Badge>
+                  <Badge variant="outline" className="text-xs">{bet.prop.stat_type}</Badge>
                 </div>
               </div>
-              {isPending && <Badge variant="default"><Clock className="h-3 w-3 mr-1" />Pending</Badge>}
-              {isWon && <Badge className="bg-green-500"><CheckCircle className="h-3 w-3 mr-1" />Won</Badge>}
-              {isLost && <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" />Lost</Badge>}
+              <div className="shrink-0">
+                {isPending && <Badge variant="default" className="text-xs"><Clock className="h-3 w-3 mr-1" />Pending</Badge>}
+                {isWon && <Badge className="bg-green-500 text-xs"><CheckCircle className="h-3 w-3 mr-1" />Won</Badge>}
+                {isLost && <Badge variant="destructive" className="text-xs"><XCircle className="h-3 w-3 mr-1" />Lost</Badge>}
+              </div>
             </div>
 
             {/* Bet Details */}
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 text-xs sm:text-sm">
               <div>
                 <p className="text-muted-foreground">Selection</p>
-                <p className="font-semibold flex items-center gap-1">
-                  {bet.selection === "over" ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                <p className="font-semibold flex items-center gap-1 break-words">
+                  {bet.selection === "over" ? <TrendingUp className="h-4 w-4 shrink-0" /> : <TrendingDown className="h-4 w-4 shrink-0" />}
                   {bet.selection.toUpperCase()} {bet.prop.line}
                 </p>
               </div>
               <div>
                 <p className="text-muted-foreground">Wagered</p>
-                <p className="font-semibold">{bet.tokens_wagered} tokens</p>
+                <p className="font-semibold break-words">{bet.tokens_wagered} tokens</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Multiplier</p>
@@ -127,7 +129,7 @@ export default function MyBets() {
                 <p className="text-muted-foreground">
                   {isPending ? "Potential" : isWon ? "Won" : "Lost"}
                 </p>
-                <p className={`font-semibold ${isWon ? "text-green-500" : isLost ? "text-red-500" : ""}`}>
+                <p className={`font-semibold break-words ${isWon ? "text-green-500" : isLost ? "text-red-500" : ""}`}>
                   {isPending ? bet.potential_payout : isWon ? bet.payout_amount : 0} tokens
                 </p>
               </div>
@@ -136,14 +138,14 @@ export default function MyBets() {
             {/* Result */}
             {!isPending && bet.prop.actual_value !== null && (
               <div className="pt-2 border-t">
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground break-words">
                   Actual Result: <span className="font-semibold text-foreground">{bet.prop.actual_value}</span>
                 </p>
               </div>
             )}
 
             {/* Date */}
-            <div className="pt-2 border-t text-xs text-muted-foreground">
+            <div className="pt-2 border-t text-xs text-muted-foreground break-words">
               Placed: {new Date(bet.created_at).toLocaleString()}
               {bet.settled_at && (
                 <> • Settled: {new Date(bet.settled_at).toLocaleString()}</>
@@ -167,39 +169,39 @@ export default function MyBets() {
     <div className="min-h-screen bg-background">
       <Header user={user} />
       
-      <main className="container mx-auto px-4 pt-24 pb-12">
-        <div className="max-w-6xl mx-auto space-y-6">
+      <main className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
+        <div className="max-w-6xl mx-auto spacing-mobile">
           <div>
-            <h1 className="text-3xl font-bold">My Bets</h1>
-            <p className="text-muted-foreground">View your betting history and active bets</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">My Bets</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">View your betting history and active bets</p>
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Active Bets</CardTitle>
+              <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
+                <CardTitle className="text-xs sm:text-sm font-medium break-words">Active Bets</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{pendingBets.length}</div>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-xl sm:text-2xl font-bold">{pendingBets.length}</div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Total Bets</CardTitle>
+              <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
+                <CardTitle className="text-xs sm:text-sm font-medium break-words">Total Bets</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{bets.length}</div>
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-xl sm:text-2xl font-bold">{bets.length}</div>
               </CardContent>
             </Card>
 
             <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
+              <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
+                <CardTitle className="text-xs sm:text-sm font-medium break-words">Win Rate</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
+              <CardContent className="p-3 sm:p-6 pt-0">
+                <div className="text-xl sm:text-2xl font-bold">
                   {settledBets.length > 0 
                     ? `${Math.round((settledBets.filter(b => b.status === "settled_won").length / settledBets.length) * 100)}%`
                     : "N/A"}
@@ -209,13 +211,19 @@ export default function MyBets() {
           </div>
 
           {/* Bets List */}
-          <Tabs defaultValue="pending" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="pending">Active Bets ({pendingBets.length})</TabsTrigger>
-              <TabsTrigger value="history">History ({settledBets.length})</TabsTrigger>
+          <Tabs defaultValue="pending" className="spacing-mobile">
+            <TabsList className="grid w-full grid-cols-2 h-auto">
+              <TabsTrigger value="pending" className="text-xs sm:text-sm py-2 sm:py-3">
+                <span className="hidden sm:inline">Active Bets ({pendingBets.length})</span>
+                <span className="sm:hidden">Active ({pendingBets.length})</span>
+              </TabsTrigger>
+              <TabsTrigger value="history" className="text-xs sm:text-sm py-2 sm:py-3">
+                <span className="hidden sm:inline">History ({settledBets.length})</span>
+                <span className="sm:hidden">History ({settledBets.length})</span>
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="pending" className="space-y-4">
+            <TabsContent value="pending" className="spacing-mobile">
               {pendingBets.length === 0 ? (
                 <Card>
                   <CardContent className="py-12 text-center text-muted-foreground">
@@ -227,7 +235,7 @@ export default function MyBets() {
               )}
             </TabsContent>
 
-            <TabsContent value="history" className="space-y-4">
+            <TabsContent value="history" className="spacing-mobile">
               {settledBets.length === 0 ? (
                 <Card>
                   <CardContent className="py-12 text-center text-muted-foreground">

@@ -938,19 +938,19 @@ export default function Admin() {
                   <div className="space-y-2">
                     {transactions.map(transaction => (
                       <div key={transaction.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 border rounded-lg gap-2">
-                        <div className="flex-1">
-                          <div className="font-medium text-sm sm:text-base">{transaction.description}</div>
-                          <div className="text-xs text-muted-foreground">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-medium text-sm sm:text-base break-words">{transaction.description}</div>
+                          <div className="text-xs text-muted-foreground break-words">
                             {new Date(transaction.created_at).toLocaleString()}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2 sm:gap-4 justify-between sm:justify-end">
+                        <div className="flex items-center gap-2 sm:gap-4 justify-between sm:justify-end shrink-0 flex-wrap">
                           <Badge variant="outline" className="text-xs">{transaction.transaction_type}</Badge>
                           <div className={`font-semibold text-sm sm:text-base ${transaction.amount > 0 ? "text-green-500" : "text-red-500"}`}>
                             {transaction.amount > 0 ? "+" : ""}{transaction.amount}
                           </div>
-                          <div className="text-sm text-muted-foreground min-w-[80px] text-right">
-                            Balance: {transaction.balance_after}
+                          <div className="text-xs sm:text-sm text-muted-foreground text-right whitespace-nowrap">
+                            Bal: {transaction.balance_after}
                           </div>
                         </div>
                       </div>

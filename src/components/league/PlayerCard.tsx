@@ -99,8 +99,8 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly, showActual 
         </div>
 
         <div>
-          <h4 className="font-semibold text-sm leading-tight">{player.name}</h4>
-          <p className="text-xs text-muted-foreground">{player.team}</p>
+          <h4 className="font-semibold text-sm leading-tight break-words line-clamp-2">{player.name}</h4>
+          <p className="text-xs text-muted-foreground truncate">{player.team}</p>
         </div>
 
         <div className="pt-2 border-t border-border/50">

@@ -162,19 +162,19 @@ export const ConnectedLeagues = () => {
         {leagues.map((league) => (
           <div
             key={league.id}
-            className="flex items-center justify-between p-4 rounded-lg border border-border/50 hover:border-primary/50 transition-colors cursor-pointer"
+            className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-lg border border-border/50 hover:border-primary/50 transition-colors cursor-pointer"
             onClick={() => navigate(`/league/${league.id}`)}
           >
-            <div className="space-y-1 flex-1">
-              <div className="flex items-center gap-2">
-                <h4 className="font-semibold">{league.league_name}</h4>
-                <Badge variant="outline">{league.platform.toUpperCase()}</Badge>
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <div className="space-y-1 flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="font-semibold break-words">{league.league_name}</h4>
+                <Badge variant="outline" className="shrink-0">{league.platform.toUpperCase()}</Badge>
+                <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
               </div>
-              <p className="text-sm text-muted-foreground">
-                {league.league_size} teams • {getDisplayScoringType(league).replace('_', ' ').toUpperCase()}
+              <p className="text-sm text-muted-foreground break-words">
+                {league.league_size} teams • {getDisplayScoringType(league).replace("_", " ").toUpperCase()}
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-muted-foreground break-words">
                 Last synced: {new Date(league.last_synced_at).toLocaleString()}
               </p>
             </div>
@@ -183,12 +183,18 @@ export const ConnectedLeagues = () => {
               size="sm"
               onClick={(e) => handleQuickResync(e, league.id, league.platform)}
               disabled={refreshingId === league.id}
-              className="ml-4"
+              className="shrink-0 self-end sm:self-center touch-target"
             >
               {refreshingId === league.id ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <span className="text-xs">Syncing...</span>
+                </>
               ) : (
-                <RefreshCw className="h-4 w-4" />
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  <span className="text-xs sm:text-sm">Resync</span>
+                </>
               )}
             </Button>
           </div>

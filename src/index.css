@@ -99,4 +99,34 @@ All colors MUST be HSL.
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
   }
+
+  /* Text overflow prevention */
+  .text-wrap-balance {
+    text-wrap: balance;
+  }
+
+  .break-words-safe {
+    @apply break-words overflow-wrap-anywhere;
+  }
+}
+
+/* Global text overflow fixes */
+@layer base {
+  /* Prevent text overflow in all containers */
+  h1, h2, h3, h4, h5, h6, p, span, div {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* Ensure long URLs and emails break properly */
+  a {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+  }
+
+  /* Fix table cell overflow */
+  td, th {
+    word-break: break-word;
+    max-width: 100%;
+  }
 }
