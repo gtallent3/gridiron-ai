@@ -5,6 +5,8 @@ import { usePlayerValues } from '@/hooks/usePlayerValues';
 import { usePositionalStrengths } from '@/hooks/usePositionalStrengths';
 import { Badge } from '@/components/ui/badge';
 import { formatDistanceToNow } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface ComputeValuesCardProps {
   leagueId: string;
@@ -15,8 +17,19 @@ export function ComputeValuesCard({ leagueId }: ComputeValuesCardProps) {
   const positionalStrengths = usePositionalStrengths(leagueId);
 
   const handleComputeAll = async () => {
-    await playerValues.computeValues();
-    await positionalStrengths.computeStrengths();
+    try {
+      toast.info('Computing player values and positional rankings...', { duration: 2000 });
+      const { data, error } = await supabase.functions.invoke('post-sync-compute', {
+        body: { leagueId },
+      });
+      if (error) throw error;
+      await playerValues.refetch();
+      await positionalStrengths.refetch();
+      toast.success('Trade intelligence refreshed');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to refresh trade intelligence');
+    }
   };
 
   const isComputing = playerValues.isLoading || positionalStrengths.isLoading;
