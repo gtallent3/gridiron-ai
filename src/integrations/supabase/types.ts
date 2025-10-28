@@ -167,6 +167,63 @@ export type Database = {
         }
         Relationships: []
       }
+      player_pool: {
+        Row: {
+          created_at: string | null
+          espn_league_id: string
+          id: string
+          is_owned: boolean
+          league_id: string
+          percent_owned: number | null
+          percent_started: number | null
+          player_id: string
+          player_name: string
+          position: string
+          provider_ids: Json | null
+          season: number
+          team: string | null
+          updated_at: string | null
+          waiver_status: string | null
+          week: number
+        }
+        Insert: {
+          created_at?: string | null
+          espn_league_id: string
+          id?: string
+          is_owned?: boolean
+          league_id: string
+          percent_owned?: number | null
+          percent_started?: number | null
+          player_id: string
+          player_name: string
+          position: string
+          provider_ids?: Json | null
+          season: number
+          team?: string | null
+          updated_at?: string | null
+          waiver_status?: string | null
+          week: number
+        }
+        Update: {
+          created_at?: string | null
+          espn_league_id?: string
+          id?: string
+          is_owned?: boolean
+          league_id?: string
+          percent_owned?: number | null
+          percent_started?: number | null
+          player_id?: string
+          player_name?: string
+          position?: string
+          provider_ids?: Json | null
+          season?: number
+          team?: string | null
+          updated_at?: string | null
+          waiver_status?: string | null
+          week?: number
+        }
+        Relationships: []
+      }
       player_stats: {
         Row: {
           blocked_kicks: number | null

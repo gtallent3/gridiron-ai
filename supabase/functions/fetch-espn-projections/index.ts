@@ -67,7 +67,7 @@ serve(async (req) => {
     // Get league info
     const { data: league, error: leagueError } = await supabase
       .from('connected_leagues')
-      .select('league_id, platform')
+      .select('id, league_id, platform')
       .eq('league_id', leagueId)
       .eq('user_id', user.id)
       .single();
@@ -144,6 +144,7 @@ serve(async (req) => {
 
       const weekData = await response.json();
       const projectionStatsToInsert: any[] = [];
+      const poolRows: any[] = [];
 
       // Also fetch waiver/FA players for complete pool
       const waiverFilter = {
@@ -374,8 +375,25 @@ serve(async (req) => {
             };
             
             projectionStatsToInsert.push(projectionEntry);
-
-            // Add normalized player if missing
+            
+            if (espnId) {
+              poolRows.push({
+                league_id: league.id,
+                espn_league_id: league.league_id,
+                player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
+                player_name: normalizedPlayer?.player_name || player.fullName || 'Unknown',
+                position,
+                team: normalizedPlayer?.team || (player.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
+                season: currentSeason,
+                week,
+                is_owned: true,
+                waiver_status: 'ROSTERED',
+                percent_owned: 100,
+                percent_started: 0,
+                provider_ids: espnId ? { espn: espnId } : {},
+                updated_at: new Date().toISOString(),
+              });
+            }
             if (!normalizedPlayer && espnId) {
               const newPlayer = {
                 player_id: `espn_${espnId}`,
@@ -511,6 +529,25 @@ serve(async (req) => {
           };
           
           projectionStatsToInsert.push(projectionEntry);
+          
+          if (espnId) {
+            poolRows.push({
+              league_id: league.id,
+              espn_league_id: league.league_id,
+              player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
+              player_name: normalizedPlayer?.player_name || player.fullName || 'Unknown',
+              position,
+              team: normalizedPlayer?.team || (player.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
+              season: currentSeason,
+              week,
+              is_owned: false,
+              waiver_status: waiverStatus,
+              percent_owned: ownership.percentOwned || 0,
+              percent_started: ownership.percentStarted || 0,
+              provider_ids: espnId ? { espn: espnId } : {},
+              updated_at: new Date().toISOString(),
+            });
+          }
 
           // Add normalized player if missing
           if (!normalizedPlayer && espnId) {
