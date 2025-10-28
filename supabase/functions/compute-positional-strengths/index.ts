@@ -77,6 +77,17 @@ serve(async (req) => {
     const teamPSS: Map<string, Map<string, number>> = new Map();
 
     const normPos = (pos: any) => {
+      if (typeof pos === 'number') {
+        switch (pos) {
+          case 1: return 'QB';
+          case 2: return 'RB';
+          case 3: return 'WR';
+          case 4: return 'TE';
+          case 5: return 'K';
+          case 16: return 'DST';
+          default: return String(pos).toUpperCase();
+        }
+      }
       const s = String(pos || '').toUpperCase();
       if (s === 'D/ST' || s === 'DST' || s === 'DEF') return 'DST';
       if (s === 'PK' || s === 'K') return 'K';
