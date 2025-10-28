@@ -89,65 +89,125 @@ serve(async (req) => {
 
     if (teamsError) throw teamsError;
 
-    // Group projections by player
-    const playerProjections = new Map<string, any[]>();
-    for (const proj of projections || []) {
-      const key = proj.player_id;
-      if (!playerProjections.has(key)) {
-        playerProjections.set(key, []);
-      }
-      playerProjections.get(key)!.push(proj);
-    }
-
-    // Group actuals by player
-    const playerActuals = new Map<string, any[]>();
-    for (const act of actuals || []) {
-      const key = act.player_id;
-      if (!playerActuals.has(key)) {
-        playerActuals.set(key, []);
-      }
-      playerActuals.get(key)!.push(act);
-    }
-
     // Compute value scores
     const valueCache = [];
 
-    for (const [playerId, projs] of playerProjections.entries()) {
-      if (projs.length === 0) continue;
+    if ((projections?.length || 0) > 0) {
+      // Group projections by player
+      const playerProjections = new Map<string, any[]>();
+      for (const proj of projections || []) {
+        const key = proj.player_id;
+        if (!playerProjections.has(key)) {
+          playerProjections.set(key, []);
+        }
+        playerProjections.get(key)!.push(proj);
+      }
 
-      const player = projs[0];
-      const position = player.position;
-      const posWeight = POSITION_WEIGHTS[position] || 1.0;
+      // Group actuals by player
+      const playerActuals = new Map<string, any[]>();
+      for (const act of actuals || []) {
+        const key = act.player_id;
+        if (!playerActuals.has(key)) {
+          playerActuals.set(key, []);
+        }
+        playerActuals.get(key)!.push(act);
+      }
 
-      // Calculate ROS projected points
-      const projectedFpRos = projs.reduce((sum, p) => sum + (p.projected_fp || 0), 0);
+      for (const [playerId, projs] of playerProjections.entries()) {
+        if (projs.length === 0) continue;
 
-      // Consistency multiplier (based on recent actuals variance)
-      const recentActuals = playerActuals.get(playerId) || [];
-      const consistencyMultiplier = calculateConsistency(recentActuals);
+        const player = projs[0];
+        const position = player.position;
+        const posWeight = POSITION_WEIGHTS[position] || 1.0;
 
-      // Schedule factor (simplified - default 1.0, could be enhanced with opponent data)
-      const scheduleFactor = 1.0;
+        // Calculate ROS projected points
+        const projectedFpRos = projs.reduce((sum, p) => sum + (Number(p.projected_fp) || 0), 0);
 
-      // Risk adjustment (based on team context - simplified for now)
-      const riskAdjustment = 1.0;
+        // Consistency multiplier (based on recent actuals variance)
+        const recentActuals = playerActuals.get(playerId) || [];
+        const consistencyMultiplier = calculateConsistency(recentActuals);
 
-      // Final value score
-      const valueScore = projectedFpRos * posWeight * consistencyMultiplier * scheduleFactor * riskAdjustment;
+        // Schedule factor (simplified - default 1.0, could be enhanced with opponent data)
+        const scheduleFactor = 1.0;
 
-      valueCache.push({
-        league_id: leagueId,
-        player_id: playerId,
-        player_name: player.player_name,
-        position: position,
-        team: player.team,
-        value_score: valueScore,
-        projected_fp_ros: projectedFpRos,
-        consistency_multiplier: consistencyMultiplier,
-        schedule_factor: scheduleFactor,
-        risk_adjustment: riskAdjustment,
-        updated_at: new Date().toISOString(),
-      });
+        // Risk adjustment (based on team context - simplified for now)
+        const riskAdjustment = 1.0;
+
+        // Final value score
+        const valueScore = projectedFpRos * posWeight * consistencyMultiplier * scheduleFactor * riskAdjustment;
+
+        valueCache.push({
+          league_id: leagueId,
+          player_id: playerId,
+          player_name: player.player_name,
+          position: position,
+          team: player.team,
+          value_score: valueScore,
+          projected_fp_ros: projectedFpRos,
+          consistency_multiplier: consistencyMultiplier,
+          schedule_factor: scheduleFactor,
+          risk_adjustment: riskAdjustment,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    } else {
+      // Fallback: use latest player_valuations (ROS) if weekly projections are unavailable
+      console.log('No weekly projections found; falling back to player_valuations ROS');
+
+      // Find latest season and week available in player_valuations
+      const { data: latestSeasonRow } = await supabase
+        .from('player_valuations')
+        .select('season')
+        .order('season', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const latestSeason = latestSeasonRow?.season ?? season;
+
+      const { data: latestWeekRow } = await supabase
+        .from('player_valuations')
+        .select('week')
+        .eq('season', latestSeason)
+        .order('week', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const latestWeek = latestWeekRow?.week ?? currentWeek;
+
+      const { data: valuations, error: valError } = await supabase
+        .from('player_valuations')
+        .select('player_id, player_name, position, team, ros_projection, ppg_projection')
+        .eq('season', latestSeason)
+        .eq('week', latestWeek);
+
+      if (valError) throw valError;
+
+      for (const v of valuations || []) {
+        const position = v.position as string;
+        const posWeight = POSITION_WEIGHTS[position] || 1.0;
+        const projectedFpRos = Number(v.ros_projection) || 0;
+
+        // Use neutral multipliers without recent actuals data
+        const consistencyMultiplier = 1.0;
+        const scheduleFactor = 1.0;
+        const riskAdjustment = 1.0;
+
+        const valueScore = projectedFpRos * posWeight * consistencyMultiplier * scheduleFactor * riskAdjustment;
+
+        valueCache.push({
+          league_id: leagueId,
+          player_id: v.player_id,
+          player_name: v.player_name,
+          position: position,
+          team: v.team,
+          value_score: valueScore,
+          projected_fp_ros: projectedFpRos,
+          consistency_multiplier: consistencyMultiplier,
+          schedule_factor: scheduleFactor,
+          risk_adjustment: riskAdjustment,
+          updated_at: new Date().toISOString(),
+        });
+      }
     }
 
     // Upsert to cache
