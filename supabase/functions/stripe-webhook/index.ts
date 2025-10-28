@@ -87,10 +87,43 @@ serve(async (req) => {
         const packageType = session.metadata?.package_type;
         const tokens = parseInt(session.metadata?.tokens || "0");
         const packageName = session.metadata?.package_name || "";
+        const customerId = session.customer as string;
 
         if (!userId) {
           throw new Error("No user_id in session metadata");
         }
+
+        // Store payment method fingerprint if available
+        if (session.payment_intent) {
+          try {
+            const paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent as string);
+            if (paymentIntent.charges?.data?.[0]?.payment_method_details?.card?.fingerprint) {
+              const cardFingerprint = paymentIntent.charges.data[0].payment_method_details.card.fingerprint;
+              
+              await supabaseClient
+                .from("payment_fingerprints")
+                .upsert({
+                  user_id: userId,
+                  fingerprint: cardFingerprint,
+                  stripe_payment_method_id: paymentIntent.payment_method as string,
+                  last_used: new Date().toISOString(),
+                }, { 
+                  onConflict: 'user_id,fingerprint',
+                  ignoreDuplicates: false 
+                });
+              
+              logStep("Payment fingerprint stored", { fingerprint: cardFingerprint.slice(0, 8) + '...' });
+            }
+          } catch (fpError) {
+            logStep("Failed to store payment fingerprint", { error: fpError });
+          }
+        }
+
+        // Update app_users with Stripe customer ID
+        await supabaseClient
+          .from("app_users")
+          .update({ stripe_customer_id: customerId })
+          .eq("user_id", userId);
 
         if (packageType === "subscription") {
           // Handle subscription signup

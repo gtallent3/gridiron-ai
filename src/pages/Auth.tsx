@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 import { z } from "zod";
+import { generateDeviceFingerprint } from "@/lib/deviceFingerprint";
 
 const authSchema = z.object({
   email: z.string().trim().email("Please enter a valid email address").max(255, "Email is too long"),
@@ -26,6 +27,7 @@ export default function Auth() {
   const [username, setUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [riskWarning, setRiskWarning] = useState<string | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -72,6 +74,32 @@ export default function Auth() {
       const { email: validEmail, password: validPassword, username: validUsername } = validationResult.data;
 
       if (isSignUp) {
+        // Generate device fingerprint
+        const fingerprint = await generateDeviceFingerprint();
+        
+        // Check signup risk
+        const { data: riskCheck, error: riskError } = await supabase.functions.invoke('check-signup-risk', {
+          body: {
+            email: validEmail,
+            provider: 'email',
+            provider_uid: validEmail,
+            fingerprint,
+            ip: 'client',
+          },
+        });
+
+        if (riskError || riskCheck?.blocked) {
+          setRiskWarning(riskCheck?.reasons?.[0] || 'Account creation blocked for security reasons. Please contact support if you believe this is an error.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (riskCheck?.requires_verification) {
+          setRiskWarning('Additional verification required. Please contact support to complete signup.');
+          setIsLoading(false);
+          return;
+        }
+
         // Check if username already exists
         if (validUsername) {
           const { data: existingUser } = await supabase
@@ -91,7 +119,7 @@ export default function Auth() {
           }
         }
 
-        const { error } = await supabase.auth.signUp({
+        const { data: authData, error } = await supabase.auth.signUp({
           email: validEmail,
           password: validPassword,
           options: {
@@ -104,12 +132,27 @@ export default function Auth() {
 
         if (error) throw error;
 
+        // Link identity after successful signup
+        if (authData?.user) {
+          await supabase.functions.invoke('link-user-identity', {
+            body: {
+              user_id: authData.user.id,
+              email: validEmail,
+              provider: 'email',
+              provider_uid: validEmail,
+              fingerprint,
+              ip: 'client',
+            },
+          });
+        }
+
         toast({
           title: "Account created!",
           description: "You can now sign in.",
         });
         setIsSignUp(false);
         setUsername("");
+        setRiskWarning(null);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email: validEmail,
@@ -146,6 +189,12 @@ export default function Auth() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          {riskWarning && (
+            <div className="mb-4 p-3 bg-destructive/10 border border-destructive/30 rounded-md flex gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-destructive">{riskWarning}</div>
+            </div>
+          )}
           <form onSubmit={handleAuth} className="space-y-4">
             {isSignUp && (
               <div className="space-y-2">

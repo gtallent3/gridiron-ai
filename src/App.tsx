@@ -16,6 +16,7 @@ import MyBets from "./pages/MyBets";
 import Leaderboard from "./pages/Leaderboard";
 import ContactUs from "./pages/ContactUs";
 import NotFound from "./pages/NotFound";
+import RiskAdmin from "./pages/RiskAdmin";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/my-bets" element={<MyBets />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/contact" element={<ContactUs />} />
+          <Route path="/risk-admin" element={<RiskAdmin />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
