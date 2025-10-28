@@ -575,7 +575,13 @@ serve(async (req) => {
         }
         const ownership = playerData.ownership || {};
         const waiverStatus = playerData.status === 'FREEAGENT' ? 'FREEAGENT' : 'WAIVERS';
-        waiverRows.push({
+        
+        // Extract projection data from the player stats
+        const weekProjection = player.stats?.find((stat: any) =>
+          stat.statSourceId === 1 && stat.scoringPeriodId === currentWeek && stat.seasonId === currentYear
+        );
+        
+        const waiverRow: any = {
           league_id: updatedLeague.id,
           espn_league_id: leagueData.league_id,
           player_id: normalizedPlayer.player_id,
@@ -589,7 +595,19 @@ serve(async (req) => {
           percent_started: ownership.percentStarted || 0,
           provider_ids: { espn: espnId },
           updated_at: new Date().toISOString(),
-        });
+        };
+        
+        // Add projection stats if available
+        if (weekProjection?.stats || weekProjection?.appliedStats) {
+          waiverRow.stats = weekProjection.stats || {};
+          waiverRow.applied_breakdown = weekProjection.appliedStats || {};
+          waiverRow.projected_fp = weekProjection.appliedTotal || 0;
+          waiverRow.confidence = 0.8;
+          waiverRow.source = 'espn_projection';
+          waiverRow.last_updated = new Date().toISOString();
+        }
+        
+        waiverRows.push(waiverRow);
       }
       if (waiverRows.length > 0) {
         await supabase.from('waiver_wire_players').upsert(waiverRows, { onConflict: 'league_id,season,week,player_id', ignoreDuplicates: false });
