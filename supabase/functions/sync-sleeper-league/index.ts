@@ -513,6 +513,22 @@ serve(async (req) => {
         console.error('Error populating waiver wire:', err);
       }
 
+      // Compute player values and positional strengths for rankings
+      try {
+        console.log(`Computing player values and positional strengths for league ${connectedLeague.id}`);
+        const { error: computeError } = await supabase.functions.invoke('post-sync-compute', {
+          body: { leagueId: connectedLeague.id }
+        });
+        
+        if (computeError) {
+          console.error('Error computing player values and strengths:', computeError);
+        } else {
+          console.log(`Successfully computed player values and strengths for league ${connectedLeague.id}`);
+        }
+      } catch (err) {
+        console.error('Error invoking post-sync-compute:', err);
+      }
+
       syncedLeagues.push({
         league_id: league.league_id,
         league_name: league.name,
