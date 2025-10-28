@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TradeRosterPanel } from "./TradeRosterPanel";
 import { TradeEvaluation } from "./TradeEvaluation";
+import { TradeEvaluationV3 } from "./TradeEvaluationV3";
 import { enrichRosterWithValuations } from "@/lib/enrichRoster";
 import { useTokens } from "@/hooks/useTokens";
 import { useNavigate } from "react-router-dom";
@@ -229,20 +230,17 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
       const myPlayers = myRoster.filter(p => mySelectedPlayers.includes(p.id));
       const theirPlayers = theirRoster.filter(p => theirSelectedPlayers.includes(p.id));
 
-      const { data, error } = await supabase.functions.invoke('evaluate-trade-v2', {
+      // Extract player IDs for the new API
+      const teamAGives = myPlayers.map(p => p.id);
+      const teamBGives = theirPlayers.map(p => p.id);
+
+      const { data, error } = await supabase.functions.invoke('evaluate-trade-v3', {
         body: {
           leagueId: league.id,
-          myTeam: {
-            team_id: userTeam?.team_id || '',
-            roster: myRoster,
-          },
-          theirTeam: {
-            team_id: selectedTeam?.team_id || '',
-            roster: theirRoster,
-          },
-          myPlayers,
-          theirPlayers,
-          scoringType: league.scoring_type,
+          teamAId: userTeam?.team_id || '',
+          teamBId: selectedTeam?.team_id || '',
+          teamAGives,
+          teamBGives,
         }
       });
 
@@ -418,7 +416,13 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
 
       {/* Trade Result */}
       {tradeResult && (
-        <TradeEvaluation result={tradeResult} />
+        <>
+          {tradeResult.trade_grade ? (
+            <TradeEvaluationV3 result={tradeResult} myTeamId={userTeam.team_id} />
+          ) : (
+            <TradeEvaluation result={tradeResult} />
+          )}
+        </>
       )}
 
       {/* Roster Comparison */}

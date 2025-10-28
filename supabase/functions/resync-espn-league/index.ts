@@ -617,6 +617,19 @@ serve(async (req) => {
       console.error('Resync: waiver sync error', waiverErr);
     }
 
+    // Trigger post-sync compute for trade intelligence
+    try {
+      console.log('Triggering post-sync compute for trade intelligence...');
+      await supabase.functions.invoke('post-sync-compute', {
+        body: { leagueId: leagueId },
+        headers: { Authorization: req.headers.get('Authorization')! },
+      });
+      console.log('Post-sync compute triggered successfully');
+    } catch (computeErr) {
+      // Don't fail the resync if compute fails
+      console.error('Post-sync compute failed (non-critical):', computeErr);
+    }
+
     return new Response(
       JSON.stringify({
         message: `Successfully resynced ${espnLeagueData.settings.name}`,

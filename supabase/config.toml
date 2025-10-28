@@ -74,3 +74,6 @@ verify_jwt = true
 
 [functions.evaluate-trade-v3]
 verify_jwt = true
+
+[functions.post-sync-compute]
+verify_jwt = true
