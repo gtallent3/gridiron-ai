@@ -92,34 +92,49 @@ export type Database = {
       app_users: {
         Row: {
           auth_provider: string | null
+          cancel_at: string | null
           created_at: string | null
+          current_plan: string | null
           email: string | null
           is_banned: boolean | null
+          period_end: string | null
           phone: string | null
+          renewed_at: string | null
           risk_score: number | null
           stripe_customer_id: string | null
+          sub_status: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
           auth_provider?: string | null
+          cancel_at?: string | null
           created_at?: string | null
+          current_plan?: string | null
           email?: string | null
           is_banned?: boolean | null
+          period_end?: string | null
           phone?: string | null
+          renewed_at?: string | null
           risk_score?: number | null
           stripe_customer_id?: string | null
+          sub_status?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
           auth_provider?: string | null
+          cancel_at?: string | null
           created_at?: string | null
+          current_plan?: string | null
           email?: string | null
           is_banned?: boolean | null
+          period_end?: string | null
           phone?: string | null
+          renewed_at?: string | null
           risk_score?: number | null
           stripe_customer_id?: string | null
+          sub_status?: string | null
           updated_at?: string | null
           user_id?: string
         }
@@ -210,6 +225,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "devices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          amount_due: number
+          amount_paid: number
+          created_at: string | null
+          currency: string | null
+          hosted_invoice_url: string | null
+          id: string
+          invoice_pdf: string | null
+          status: string
+          stripe_invoice_id: string
+          user_id: string | null
+        }
+        Insert: {
+          amount_due: number
+          amount_paid: number
+          created_at?: string | null
+          currency?: string | null
+          hosted_invoice_url?: string | null
+          id?: string
+          invoice_pdf?: string | null
+          status: string
+          stripe_invoice_id: string
+          user_id?: string | null
+        }
+        Update: {
+          amount_due?: number
+          amount_paid?: number
+          created_at?: string | null
+          currency?: string | null
+          hosted_invoice_url?: string | null
+          id?: string
+          invoice_pdf?: string | null
+          status?: string
+          stripe_invoice_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "app_users"
@@ -932,6 +994,56 @@ export type Database = {
           window_start?: string | null
         }
         Relationships: []
+      }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string | null
+          current_period_end: string | null
+          current_period_start: string | null
+          id: string
+          plan_id: string
+          status: string
+          stripe_subscription_id: string
+          trial_end: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id: string
+          status: string
+          stripe_subscription_id: string
+          trial_end?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string | null
+          current_period_end?: string | null
+          current_period_start?: string | null
+          id?: string
+          plan_id?: string
+          status?: string
+          stripe_subscription_id?: string
+          trial_end?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       team_positional_strengths: {
         Row: {

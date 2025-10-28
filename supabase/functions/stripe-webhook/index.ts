@@ -293,24 +293,141 @@ serve(async (req) => {
         break;
       }
 
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        const subscription = event.data.object;
+        logStep("Subscription event", { 
+          type: event.type,
+          subscriptionId: subscription.id 
+        });
+
+        const userId = subscription.metadata?.user_id;
+        if (userId) {
+          const periodStart = new Date(subscription.current_period_start * 1000);
+          const periodEnd = new Date(subscription.current_period_end * 1000);
+          const productId = subscription.items.data[0]?.price?.product as string;
+
+          // Upsert subscription
+          await supabaseClient
+            .from("subscriptions")
+            .upsert({
+              user_id: userId,
+              stripe_subscription_id: subscription.id,
+              plan_id: productId || 'unknown',
+              status: subscription.status,
+              cancel_at_period_end: subscription.cancel_at_period_end,
+              current_period_start: periodStart.toISOString(),
+              current_period_end: periodEnd.toISOString(),
+              trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
+              updated_at: new Date().toISOString(),
+            }, { onConflict: 'stripe_subscription_id' });
+
+          // Update app_users
+          await supabaseClient
+            .from("app_users")
+            .update({
+              current_plan: productId,
+              sub_status: subscription.status,
+              period_end: periodEnd.toISOString(),
+              cancel_at: subscription.cancel_at_period_end && subscription.cancel_at 
+                ? new Date(subscription.cancel_at * 1000).toISOString()
+                : null,
+              renewed_at: subscription.status === 'active' && event.type === 'customer.subscription.updated'
+                ? new Date().toISOString()
+                : null,
+            })
+            .eq("user_id", userId);
+
+          logStep("Subscription synced to DB");
+        }
+        break;
+      }
+
       case "customer.subscription.deleted": {
         const subscription = event.data.object;
         logStep("Subscription deleted", { subscriptionId: subscription.id });
 
         const userId = subscription.metadata?.user_id;
         if (userId) {
-          // Disable unlimited subscription
-          const { error: updateError } = await supabaseClient
-            .from("user_tokens")
+          await supabaseClient
+            .from("subscriptions")
+            .update({ status: 'canceled' })
+            .eq("stripe_subscription_id", subscription.id);
+
+          await supabaseClient
+            .from("app_users")
             .update({
-              has_unlimited_subscription: false,
-              updated_at: new Date().toISOString(),
+              sub_status: 'canceled',
+              cancel_at: new Date().toISOString(),
             })
             .eq("user_id", userId);
 
-          if (updateError) throw updateError;
+          logStep("Subscription cancellation synced");
+        }
+        break;
+      }
 
-          logStep("Subscription cancelled successfully");
+      case "invoice.paid":
+      case "invoice.payment_succeeded": {
+        const invoice = event.data.object;
+        logStep("Invoice paid", { invoiceId: invoice.id });
+
+        // Find user by customer
+        const { data: appUser } = await supabaseClient
+          .from("app_users")
+          .select("user_id")
+          .eq("stripe_customer_id", invoice.customer)
+          .maybeSingle();
+
+        if (appUser) {
+          await supabaseClient
+            .from("invoices")
+            .upsert({
+              user_id: appUser.user_id,
+              stripe_invoice_id: invoice.id,
+              amount_due: invoice.amount_due,
+              amount_paid: invoice.amount_paid,
+              currency: invoice.currency,
+              status: invoice.status || 'paid',
+              hosted_invoice_url: invoice.hosted_invoice_url,
+              invoice_pdf: invoice.invoice_pdf,
+            }, { onConflict: 'stripe_invoice_id' });
+
+          logStep("Invoice synced to DB");
+        }
+        break;
+      }
+
+      case "invoice.payment_failed": {
+        const invoice = event.data.object;
+        logStep("Invoice payment failed", { invoiceId: invoice.id });
+
+        const { data: appUser } = await supabaseClient
+          .from("app_users")
+          .select("user_id")
+          .eq("stripe_customer_id", invoice.customer)
+          .maybeSingle();
+
+        if (appUser) {
+          await supabaseClient
+            .from("invoices")
+            .upsert({
+              user_id: appUser.user_id,
+              stripe_invoice_id: invoice.id,
+              amount_due: invoice.amount_due,
+              amount_paid: invoice.amount_paid || 0,
+              currency: invoice.currency,
+              status: 'failed',
+              hosted_invoice_url: invoice.hosted_invoice_url,
+              invoice_pdf: invoice.invoice_pdf,
+            }, { onConflict: 'stripe_invoice_id' });
+
+          await supabaseClient
+            .from("app_users")
+            .update({ sub_status: 'past_due' })
+            .eq("user_id", appUser.user_id);
+
+          logStep("Payment failure synced");
         }
         break;
       }
