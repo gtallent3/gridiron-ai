@@ -53,17 +53,54 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
     
     setLoading(true);
     try {
-      // Extract player IDs from roster
+      const leagueCurrentWeek = league.current_week || 7;
+      const isHistorical = week < leagueCurrentWeek;
+      
+      // For Sleeper, use projected values from roster directly (already synced)
+      if (league.platform === 'sleeper') {
+        const starterPlayers: any[] = [];
+        const benchPlayers: any[] = [];
+        
+        userTeam.roster.forEach((player: any) => {
+          const playerId = String(player.player_id ?? '');
+          const playerName = player.player_name || 'Unknown Player';
+          const positionName = player.position || 'FLEX';
+          const isStarter = player.starter !== false;
+          
+          const playerDataObj = {
+            id: playerId || playerName,
+            name: playerName,
+            position: positionName,
+            team: player.team || 'NFL',
+            projected: !isHistorical ? (player.projected || 0) : 0,
+            actualPoints: isHistorical ? (player.projected || 0) : 0, // Use projected as fallback for historical
+            status: isStarter ? 'starter' : 'bench',
+            is_bye_week: player.is_bye_week || false,
+            injury_status: player.injury_status || null,
+            week: week,
+          };
+          
+          if (isStarter) {
+            starterPlayers.push(playerDataObj);
+          } else {
+            benchPlayers.push(playerDataObj);
+          }
+        });
+        
+        setStarters(starterPlayers);
+        setBench(benchPlayers);
+        setLoading(false);
+        return;
+      }
+      
+      // For ESPN and other platforms, fetch from get-player-data
       const playerIds = userTeam.roster
         .map((p: any) => String(p.player_id || p.playerId || p.id || ''))
         .filter(Boolean);
 
-
-      // Infer NFL season (Sep-Dec -> current year, Jan-Aug -> previous year)
       const now = new Date();
       const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
-      // Fetch player stats with calculated fantasy points based on league scoring
       const { data: playerData, error } = await supabase.functions.invoke('get-player-data', {
         body: { 
           week: Number(week), 
