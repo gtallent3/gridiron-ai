@@ -958,6 +958,60 @@ export type Database = {
         }
         Relationships: []
       }
+      waiver_wire_players: {
+        Row: {
+          created_at: string | null
+          espn_league_id: string
+          id: string
+          league_id: string
+          percent_owned: number | null
+          percent_started: number | null
+          player_id: string
+          player_name: string
+          position: string
+          provider_ids: Json | null
+          season: number
+          team: string | null
+          updated_at: string | null
+          waiver_status: string
+          week: number
+        }
+        Insert: {
+          created_at?: string | null
+          espn_league_id: string
+          id?: string
+          league_id: string
+          percent_owned?: number | null
+          percent_started?: number | null
+          player_id: string
+          player_name: string
+          position: string
+          provider_ids?: Json | null
+          season: number
+          team?: string | null
+          updated_at?: string | null
+          waiver_status?: string
+          week: number
+        }
+        Update: {
+          created_at?: string | null
+          espn_league_id?: string
+          id?: string
+          league_id?: string
+          percent_owned?: number | null
+          percent_started?: number | null
+          player_id?: string
+          player_name?: string
+          position?: string
+          provider_ids?: Json | null
+          season?: number
+          team?: string | null
+          updated_at?: string | null
+          waiver_status?: string
+          week?: number
+        }
+        Relationships: []
+      }
       weekly_props: {
         Row: {
           actual_value: number | null
