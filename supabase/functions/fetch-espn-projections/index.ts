@@ -40,12 +40,24 @@ serve(async (req) => {
 
     console.log(`Fetching ESPN projections for league ${leagueId}, weeks ${startWeek}-${endWeek}`);
 
-    const { data: league, error: leagueError } = await supabase
+    // Support both DB row id (uuid) and ESPN league_id (text)
+    let { data: league, error: leagueError } = await supabase
       .from('connected_leagues')
       .select('id, league_id, platform')
-      .eq('league_id', leagueId)
+      .eq('id', leagueId)
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
+
+    if (!league) {
+      const byLeagueId = await supabase
+        .from('connected_leagues')
+        .select('id, league_id, platform')
+        .eq('league_id', leagueId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      league = byLeagueId.data as any;
+      leagueError = byLeagueId.error as any;
+    }
 
     if (leagueError || !league) throw new Error('League not found');
     if (league.platform !== 'espn') throw new Error('This function only supports ESPN leagues');
@@ -148,31 +160,32 @@ serve(async (req) => {
             stat.statSourceId === 1 && stat.statSplitTypeId === 1 && stat.scoringPeriodId === week
           );
 
+          // Always add to player pool regardless of projection
+          if (espnId) {
+            poolRows.push({
+              league_id: league.id,
+              espn_league_id: league.league_id,
+              player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
+              player_name: normalizedPlayer?.player_name || player.fullName || 'Unknown',
+              position: normalizedPlayer?.position || mapPosition(player.defaultPositionId),
+              team: normalizedPlayer?.team || (player.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
+              season: currentSeason,
+              week,
+              is_owned: true,
+              waiver_status: 'ROSTERED',
+              percent_owned: 100,
+              percent_started: 0,
+              provider_ids: { espn: espnId },
+              updated_at: new Date().toISOString(),
+            });
+          }
+
           if (weekProjection?.stats || weekProjection?.appliedStats) {
             const projectionEntry = processPlayerStats(
               player, weekProjection, normalizedPlayer, week, currentSeason, espnId, 'ROSTERED', {}
             );
             projectionStatsToInsert.push(projectionEntry);
             
-            if (espnId) {
-              poolRows.push({
-                league_id: league.id,
-                espn_league_id: league.league_id,
-                player_id: projectionEntry.player_id,
-                player_name: projectionEntry.player_name,
-                position: projectionEntry.position,
-                team: projectionEntry.team,
-                season: currentSeason,
-                week,
-                is_owned: true,
-                waiver_status: 'ROSTERED',
-                percent_owned: 100,
-                percent_started: 0,
-                provider_ids: { espn: espnId },
-                updated_at: new Date().toISOString(),
-              });
-            }
-
             if (!normalizedPlayer && espnId) {
               const newPlayer = {
                 player_id: `espn_${espnId}`,
@@ -205,31 +218,32 @@ serve(async (req) => {
           stat.statSourceId === 1 && stat.scoringPeriodId === week && stat.seasonId === currentSeason
         );
 
+        // Always add to player pool regardless of projection
+        if (espnId) {
+          poolRows.push({
+            league_id: league.id,
+            espn_league_id: league.league_id,
+            player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
+            player_name: normalizedPlayer?.player_name || player.fullName || 'Unknown',
+            position: normalizedPlayer?.position || mapPosition(player.defaultPositionId),
+            team: normalizedPlayer?.team || (player.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
+            season: currentSeason,
+            week,
+            is_owned: false,
+            waiver_status: waiverStatus,
+            percent_owned: ownership.percentOwned || 0,
+            percent_started: ownership.percentStarted || 0,
+            provider_ids: { espn: espnId },
+            updated_at: new Date().toISOString(),
+          });
+        }
+
         if (weekProjection?.stats || weekProjection?.appliedStats) {
           const projectionEntry = processPlayerStats(
             player, weekProjection, normalizedPlayer, week, currentSeason, espnId, waiverStatus, ownership
           );
           projectionStatsToInsert.push(projectionEntry);
           
-          if (espnId) {
-            poolRows.push({
-              league_id: league.id,
-              espn_league_id: league.league_id,
-              player_id: projectionEntry.player_id,
-              player_name: projectionEntry.player_name,
-              position: projectionEntry.position,
-              team: projectionEntry.team,
-              season: currentSeason,
-              week,
-              is_owned: false,
-              waiver_status: waiverStatus,
-              percent_owned: ownership.percentOwned || 0,
-              percent_started: ownership.percentStarted || 0,
-              provider_ids: { espn: espnId },
-              updated_at: new Date().toISOString(),
-            });
-          }
-
           if (!normalizedPlayer && espnId) {
             const newPlayer = {
               player_id: `espn_${espnId}`,
