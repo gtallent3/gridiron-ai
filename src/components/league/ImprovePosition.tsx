@@ -163,18 +163,6 @@ export function ImprovePosition({
                         <Users className="w-4 h-4" />
                         Trade with {pkg.partner_team_name}
                       </CardTitle>
-                      {pkg.grade && (
-                        <Badge 
-                          variant={
-                            pkg.grade.startsWith('A') ? 'default' : 
-                            pkg.grade.startsWith('B') ? 'secondary' : 
-                            'outline'
-                          }
-                          className="text-base px-2 py-0.5"
-                        >
-                          {pkg.grade}
-                        </Badge>
-                      )}
                       {pkg.mutual_benefit && (
                         <Badge variant="default" className="bg-green-500 text-xs">
                           ✓ Fair Deal
