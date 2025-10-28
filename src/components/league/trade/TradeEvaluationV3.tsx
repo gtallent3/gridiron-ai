@@ -1,7 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, AlertCircle, TrendingUp, TrendingDown } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, TrendingUp, TrendingDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface TradeResultV3 {
   trade_grade: string;
@@ -11,6 +17,16 @@ interface TradeResultV3 {
   best_player_received_by: string;
   best_player_bonus: number;
   positional_fit_notes: string[];
+  rank_changes?: Array<{
+    team: string;
+    position: string;
+    beforeRank: number;
+    beforeZ: number;
+    player: string;
+    action: string;
+  }>;
+  positional_fit_bonus_a?: number;
+  positional_fit_bonus_b?: number;
   explanation: string;
   audit: {
     teamA_out: number;
@@ -118,6 +134,100 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
                   <span>{note}</span>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Rank Changes with Visual Indicators */}
+          {result.rank_changes && result.rank_changes.length > 0 && (
+            <div className="space-y-3 pt-3 border-t">
+              <p className="text-sm font-medium">Positional Rank Impact:</p>
+              <div className="grid gap-2">
+                {result.rank_changes
+                  .filter(change => change.action === 'receiving')
+                  .map((change, idx) => (
+                    <TooltipProvider key={idx}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="flex items-center justify-between p-2 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors cursor-help">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono">
+                                {change.position}
+                              </Badge>
+                              <span className="text-sm">
+                                {change.team === 'A' ? 'You' : 'Opponent'} • {change.player}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">
+                                Rank {change.beforeRank}
+                              </span>
+                              {change.beforeRank > 6 ? (
+                                <ArrowUp className="w-4 h-4 text-green-500" />
+                              ) : change.beforeRank <= 3 ? (
+                                <ArrowDown className="w-4 h-4 text-red-500" />
+                              ) : null}
+                            </div>
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div className="space-y-1 text-xs">
+                            <p>Current Rank: {change.beforeRank}</p>
+                            <p>Z-Score: {change.beforeZ.toFixed(2)}</p>
+                            <p className="text-muted-foreground">
+                              {change.beforeRank > 6 ? 'Weak position - likely improves rank' : 
+                               change.beforeRank <= 3 ? 'Strong position - may worsen with trade' :
+                               'Average position'}
+                            </p>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Positional Fit Bonuses */}
+          {(result.positional_fit_bonus_a || result.positional_fit_bonus_b) && (
+            <div className="grid sm:grid-cols-2 gap-3 pt-3 border-t">
+              {result.positional_fit_bonus_a && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 cursor-help">
+                        <p className="text-sm font-medium">
+                          Your Position Fit: {result.positional_fit_bonus_a >= 0 ? '+' : ''}
+                          {result.positional_fit_bonus_a.toFixed(1)}
+                        </p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">
+                        Bonus/penalty based on how this trade addresses your positional needs
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
+              {result.positional_fit_bonus_b && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="p-3 rounded-lg bg-muted/50 border cursor-help">
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Opponent Position Fit: {result.positional_fit_bonus_b >= 0 ? '+' : ''}
+                          {result.positional_fit_bonus_b.toFixed(1)}
+                        </p>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">
+                        Bonus/penalty for opponent based on their positional needs
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
           )}
         </CardContent>

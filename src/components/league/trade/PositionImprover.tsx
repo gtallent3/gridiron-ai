@@ -7,6 +7,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TradeProposalCard } from "./TradeProposalCard";
 import { Badge } from "@/components/ui/badge";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type PositionImproverProps = {
   league: any;
@@ -135,31 +141,81 @@ export function PositionImprover({ league, userTeam, allTeams }: PositionImprove
         <>
           <Card>
             <CardHeader>
-              <CardTitle>{targetPosition} Analysis</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>{targetPosition} Analysis</span>
+                <Badge 
+                  variant={result.currentRank <= 3 ? "default" : result.currentRank > 6 ? "destructive" : "secondary"}
+                  className="text-base px-3 py-1"
+                >
+                  Rank {result.currentRank}
+                </Badge>
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-4 text-center">
-                <div>
-                  <div className="text-sm text-muted-foreground">Your Strength</div>
-                  <div className="text-2xl font-bold">{result.myPosStrength}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">League Average</div>
-                  <div className="text-2xl font-bold">{result.leagueAvgPos}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Gap</div>
-                  <div className={`text-2xl font-bold ${parseFloat(result.posStrengthGap) > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                    {result.posStrengthGap}
-                  </div>
-                </div>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="cursor-help">
+                        <div className="text-sm text-muted-foreground">Your PSS</div>
+                        <div className="text-2xl font-bold">{result.currentPSS}</div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Position Strength Score - higher is better</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="cursor-help">
+                        <div className="text-sm text-muted-foreground">Z-Score</div>
+                        <div className={`text-2xl font-bold ${parseFloat(result.currentZScore) < 0 ? 'text-red-500' : 'text-green-500'}`}>
+                          {result.currentZScore}
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Standard deviations from league average. Negative means below average.</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="cursor-help">
+                        <div className="text-sm text-muted-foreground">vs Median</div>
+                        <div className={`text-2xl font-bold ${parseFloat(result.deltaVsMedian) < 0 ? 'text-red-500' : 'text-green-500'}`}>
+                          {parseFloat(result.deltaVsMedian) >= 0 ? '+' : ''}{result.deltaVsMedian}
+                        </div>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="text-xs">Points difference vs league median at this position</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
               
               {result.needsUpgrade && (
                 <div className="mt-4">
-                  <Badge variant="destructive">Upgrade Recommended</Badge>
+                  <Badge variant={result.isVeryWeak ? "destructive" : "secondary"}>
+                    {result.isVeryWeak ? '⚠️ Urgent Upgrade Needed' : 'Upgrade Recommended'}
+                  </Badge>
                   <p className="text-sm text-muted-foreground mt-2">
-                    Your {targetPosition} strength is below league average. Consider these trades:
+                    Your {targetPosition} strength is {result.isVeryWeak ? 'significantly' : ''} below league average. Consider these trades:
+                  </p>
+                </div>
+              )}
+
+              {!result.needsUpgrade && (
+                <div className="mt-4">
+                  <Badge variant="default">✓ Strong Position</Badge>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Your {targetPosition} is performing well relative to the league. Trades below are optional depth moves.
                   </p>
                 </div>
               )}
@@ -168,7 +224,10 @@ export function PositionImprover({ league, userTeam, allTeams }: PositionImprove
 
           {result.proposals && result.proposals.length > 0 && (
             <div className="space-y-4">
-              <h3 className="font-semibold">Recommended Trades ({result.proposals.length})</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Recommended Trades ({result.proposals.length})</h3>
+                <p className="text-xs text-muted-foreground">Sorted by strategic fit & rank impact</p>
+              </div>
               {result.proposals.map((proposal: any, idx: number) => (
                 <TradeProposalCard key={idx} proposal={proposal} league={league} userTeam={userTeam} />
               ))}

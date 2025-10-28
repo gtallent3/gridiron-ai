@@ -116,27 +116,44 @@ serve(async (req) => {
 
     // Enhanced Positional fit adjustments based on z_score and rank
     const positionalFitNotes: string[] = [];
+    const rankChanges: any[] = [];
     let teamAFitBonus = 0;
     let teamBFitBonus = 0;
 
-    // Helper to calculate positional fit bonus based on weakness severity
-    const getPositionalFitBonus = (posStrength: any, playerValue: number): number => {
+    // Helper to calculate positional fit bonus based on weakness severity AND rank improvement
+    const getPositionalFitBonus = (posStrength: any, playerValue: number, isReceiving: boolean): number => {
       if (!posStrength) return 0;
       
       const zScore = posStrength.z_score;
       const rank = posStrength.rank;
       
-      // Scale bonus by how weak the position is
-      // z_score < -1.5: Very weak (bottom 10%) - 8% bonus
-      // z_score < -1.0: Weak (bottom 20%) - 5% bonus  
-      // z_score < -0.5: Below average - 3% bonus
-      // z_score < 0: Slightly below average - 1.5% bonus
+      // Base bonus by position weakness
+      let baseBonus = 0;
+      if (zScore < -1.5) baseBonus = playerValue * 0.08; // Very weak: 8%
+      else if (zScore < -1.0) baseBonus = playerValue * 0.05; // Weak: 5%
+      else if (zScore < -0.5) baseBonus = playerValue * 0.03; // Below average: 3%
+      else if (zScore < 0) baseBonus = playerValue * 0.015; // Slightly below: 1.5%
       
-      if (zScore < -1.5) return playerValue * 0.08;
-      if (zScore < -1.0) return playerValue * 0.05;
-      if (zScore < -0.5) return playerValue * 0.03;
-      if (zScore < 0) return playerValue * 0.015;
+      // Additional bonus for improving bottom 4 positions
+      if (isReceiving && rank >= 7) {
+        baseBonus += playerValue * 0.10; // +10% for fixing bottom 4
+      }
       
+      // Penalty for trading from top 3 positions
+      if (!isReceiving && rank <= 3) {
+        baseBonus -= playerValue * 0.10; // -10% for weakening top 3
+      }
+      
+      return baseBonus;
+    };
+
+    // Helper to calculate z-score movement bonus
+    const getZScoreMovementBonus = (currentZ: number, playerValue: number, isAdding: boolean): number => {
+      // Each 0.5 increase in z-score at position of need = +5% bonus
+      const zMovement = isAdding ? (playerValue * 0.05) : 0;
+      if (currentZ < 0 && isAdding) {
+        return zMovement * Math.abs(currentZ) * 2; // Scale by how far below average
+      }
       return 0;
     };
 
@@ -145,28 +162,51 @@ serve(async (req) => {
       const value = valueMap.get(playerId);
       if (value) {
         const posStrength = teamAStrengths.get(value.position);
-        const bonus = getPositionalFitBonus(posStrength, value.value_score);
-        if (bonus > 0) {
-          teamAFitBonus += bonus;
-          const zScore = posStrength.z_score.toFixed(2);
-          positionalFitNotes.push(
-            `Team A significantly improves ${value.position} (rank ${posStrength.rank}, z-score ${zScore}) by adding ${value.player_name}`
-          );
+        if (posStrength) {
+          const bonus = getPositionalFitBonus(posStrength, value.value_score, true);
+          const zBonus = getZScoreMovementBonus(posStrength.z_score, value.value_score, true);
+          teamAFitBonus += bonus + zBonus;
+          
+          if (bonus > 0 || zBonus > 0) {
+            const zScore = posStrength.z_score.toFixed(2);
+            rankChanges.push({
+              team: 'A',
+              position: value.position,
+              beforeRank: posStrength.rank,
+              beforeZ: posStrength.z_score,
+              player: value.player_name,
+              action: 'receiving',
+            });
+            positionalFitNotes.push(
+              `Team A improves ${value.position} (rank ${posStrength.rank}, z-score ${zScore}) by adding ${value.player_name}`
+            );
+          }
         }
       }
     }
 
-    // Check if Team A is trading away from positions of strength
+    // Check if Team A is trading away from positions
     for (const playerId of teamAGives) {
       const value = valueMap.get(playerId);
       if (value) {
         const posStrength = teamAStrengths.get(value.position);
-        // If trading from a position of strength (z_score > 0.5), minor penalty
-        if (posStrength && posStrength.z_score > 0.5) {
-          teamAFitBonus -= value.value_score * 0.01; // 1% penalty for trading from strength
-          positionalFitNotes.push(
-            `Team A trades from ${value.position} strength (rank ${posStrength.rank})`
-          );
+        if (posStrength) {
+          const penalty = getPositionalFitBonus(posStrength, value.value_score, false);
+          teamAFitBonus += penalty;
+          
+          if (posStrength.rank <= 3) {
+            rankChanges.push({
+              team: 'A',
+              position: value.position,
+              beforeRank: posStrength.rank,
+              beforeZ: posStrength.z_score,
+              player: value.player_name,
+              action: 'giving',
+            });
+            positionalFitNotes.push(
+              `Team A trades from ${value.position} strength (rank ${posStrength.rank})`
+            );
+          }
         }
       }
     }
@@ -176,27 +216,51 @@ serve(async (req) => {
       const value = valueMap.get(playerId);
       if (value) {
         const posStrength = teamBStrengths.get(value.position);
-        const bonus = getPositionalFitBonus(posStrength, value.value_score);
-        if (bonus > 0) {
-          teamBFitBonus += bonus;
-          const zScore = posStrength.z_score.toFixed(2);
-          positionalFitNotes.push(
-            `Team B significantly improves ${value.position} (rank ${posStrength.rank}, z-score ${zScore}) by adding ${value.player_name}`
-          );
+        if (posStrength) {
+          const bonus = getPositionalFitBonus(posStrength, value.value_score, true);
+          const zBonus = getZScoreMovementBonus(posStrength.z_score, value.value_score, true);
+          teamBFitBonus += bonus + zBonus;
+          
+          if (bonus > 0 || zBonus > 0) {
+            const zScore = posStrength.z_score.toFixed(2);
+            rankChanges.push({
+              team: 'B',
+              position: value.position,
+              beforeRank: posStrength.rank,
+              beforeZ: posStrength.z_score,
+              player: value.player_name,
+              action: 'receiving',
+            });
+            positionalFitNotes.push(
+              `Team B improves ${value.position} (rank ${posStrength.rank}, z-score ${zScore}) by adding ${value.player_name}`
+            );
+          }
         }
       }
     }
 
-    // Check if Team B is trading away from positions of strength
+    // Check if Team B is trading away from positions
     for (const playerId of teamBGives) {
       const value = valueMap.get(playerId);
       if (value) {
         const posStrength = teamBStrengths.get(value.position);
-        if (posStrength && posStrength.z_score > 0.5) {
-          teamBFitBonus -= value.value_score * 0.01;
-          positionalFitNotes.push(
-            `Team B trades from ${value.position} strength (rank ${posStrength.rank})`
-          );
+        if (posStrength) {
+          const penalty = getPositionalFitBonus(posStrength, value.value_score, false);
+          teamBFitBonus += penalty;
+          
+          if (posStrength.rank <= 3) {
+            rankChanges.push({
+              team: 'B',
+              position: value.position,
+              beforeRank: posStrength.rank,
+              beforeZ: posStrength.z_score,
+              player: value.player_name,
+              action: 'giving',
+            });
+            positionalFitNotes.push(
+              `Team B trades from ${value.position} strength (rank ${posStrength.rank})`
+            );
+          }
         }
       }
     }
@@ -232,6 +296,7 @@ serve(async (req) => {
       bestPlayer,
       positionalFitNotes,
       percentDiff,
+      rankChanges,
     });
 
     const result = {
@@ -242,6 +307,9 @@ serve(async (req) => {
       best_player_received_by: bestPlayerReceivedBy,
       best_player_bonus: bestPlayerBonus,
       positional_fit_notes: positionalFitNotes,
+      rank_changes: rankChanges,
+      positional_fit_bonus_a: teamAFitBonus,
+      positional_fit_bonus_b: teamBFitBonus,
       explanation,
       audit: {
         teamA_out: sumAOut,
@@ -294,7 +362,7 @@ serve(async (req) => {
 });
 
 function buildExplanation(params: any): string {
-  const { teamANet, teamBNet, advantageTeam, bestPlayer, positionalFitNotes, percentDiff } = params;
+  const { teamANet, teamBNet, advantageTeam, bestPlayer, positionalFitNotes, percentDiff, rankChanges } = params;
   
   let explanation = '';
   
@@ -308,8 +376,22 @@ function buildExplanation(params: any): string {
     explanation += `The best player in the trade is ${bestPlayer.player_name} (${bestPlayer.value_score.toFixed(1)} value), going to ${advantageTeam}. `;
   }
 
+  // Add rank improvement context
+  const teamARankChanges = rankChanges?.filter((r: any) => r.team === 'A' && r.action === 'receiving') || [];
+  const teamBRankChanges = rankChanges?.filter((r: any) => r.team === 'B' && r.action === 'receiving') || [];
+  
+  if (teamARankChanges.length > 0) {
+    const topChange = teamARankChanges[0];
+    explanation += `Team A addresses a positional need at ${topChange.position} (currently rank ${topChange.beforeRank}). `;
+  }
+  
+  if (teamBRankChanges.length > 0) {
+    const topChange = teamBRankChanges[0];
+    explanation += `Team B addresses a positional need at ${topChange.position} (currently rank ${topChange.beforeRank}). `;
+  }
+
   if (positionalFitNotes.length > 0) {
-    explanation += positionalFitNotes.join('. ') + '. ';
+    explanation += positionalFitNotes.slice(0, 2).join('. ') + '. '; // Limit to top 2 notes
   }
 
   return explanation.trim();

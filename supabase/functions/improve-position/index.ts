@@ -181,6 +181,13 @@ serve(async (req) => {
       return b.positionGain - a.positionGain;
     });
 
+    // Enrich proposals with rank improvement estimates
+    const enrichedProposals = tradeTargets.slice(0, 10).map(t => ({
+      ...t,
+      estimatedRankImprovement: Math.max(1, Math.floor(t.positionGain / 20)), // Rough estimate
+      improvementContext: `Would improve ${targetPosition} from rank ${targetPosStrength.rank} (z-score ${targetPosStrength.z_score.toFixed(2)})`,
+    }));
+
     return new Response(
       JSON.stringify({ 
         targetPosition,
@@ -190,7 +197,7 @@ serve(async (req) => {
         deltaVsMedian: targetPosStrength.delta_vs_median.toFixed(1),
         needsUpgrade: targetPosStrength.z_score < -0.3 || targetPosStrength.rank > 6,
         isVeryWeak: targetPosStrength.z_score < -1.0,
-        proposals: tradeTargets.slice(0, 10),
+        proposals: enrichedProposals,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

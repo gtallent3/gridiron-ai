@@ -1,7 +1,13 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeftRight, TrendingUp, TrendingDown } from "lucide-react";
+import { ArrowLeftRight, TrendingUp, TrendingDown, ArrowUp } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type TradeProposalCardProps = {
   proposal: any;
@@ -66,13 +72,76 @@ export function TradeProposalCard({ proposal }: TradeProposalCardProps) {
           </div>
         )}
 
-        {proposal.positionGain !== undefined && (
-          <div className="mt-2 flex items-center gap-2 text-sm">
+        <div className="mt-3 flex flex-wrap gap-2">
+          {proposal.positionGain !== undefined && (
             <Badge variant="secondary">
               Position Gain: +{proposal.positionGain.toFixed(1)} pts
             </Badge>
-          </div>
-        )}
+          )}
+          
+          {proposal.improvesWeakPosition && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="default" className="flex items-center gap-1 cursor-help">
+                    <ArrowUp className="w-3 h-3" />
+                    Addresses Weakness
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">This trade improves a weak position on your roster</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {proposal.targetRank && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="cursor-help">
+                    Current Rank: {proposal.targetRank}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <div className="text-xs space-y-1">
+                    <p>Position Rank: {proposal.targetRank}</p>
+                    {proposal.targetZScore && (
+                      <p>Z-Score: {proposal.targetZScore.toFixed(2)}</p>
+                    )}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {proposal.tradeFitScore !== undefined && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge 
+                    variant={proposal.tradeFitScore > 0.6 ? "default" : "secondary"}
+                    className="cursor-help"
+                  >
+                    Fit Score: {proposal.tradeFitScore.toFixed(2)}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">
+                    Trade fit score based on rank improvement, z-score gain, and value efficiency
+                  </p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+
+          {proposal.estimatedRankImprovement && (
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <ArrowUp className="w-3 h-3 text-green-500" />
+              Est. +{proposal.estimatedRankImprovement} rank
+            </Badge>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

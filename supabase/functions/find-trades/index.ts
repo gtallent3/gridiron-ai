@@ -90,12 +90,36 @@ serve(async (req) => {
       
       const value = getPlayerValue(player);
       const zScore = strength.z_score;
+      const rank = strength.rank;
       
       // Stronger bonus for weaker positions
-      if (zScore < -1.5) return value * 0.15; // Very weak position
-      if (zScore < -1.0) return value * 0.10; // Weak position
-      if (zScore < -0.5) return value * 0.05; // Below average
-      return 0;
+      let bonus = 0;
+      if (zScore < -1.5) bonus = value * 0.15; // Very weak position
+      else if (zScore < -1.0) bonus = value * 0.10; // Weak position
+      else if (zScore < -0.5) bonus = value * 0.05; // Below average
+      
+      // Extra bonus for fixing bottom 4 positions
+      if (rank >= 7) bonus += value * 0.10;
+      
+      return bonus;
+    };
+
+    // Calculate trade fit score: rank_gain * 0.6 + z_score_gain * 0.3 + value_efficiency * 0.1
+    const calculateTradeFitScore = (
+      targetPlayer: any,
+      givingPlayers: any[],
+      position: string,
+      posStrength: any
+    ): number => {
+      if (!posStrength) return 0;
+      
+      const rankGain = Math.max(0, (10 - posStrength.rank) / 10); // Normalize to 0-1, higher for worse ranks
+      const zScoreGain = Math.max(0, -posStrength.z_score); // Higher for negative z-scores
+      const targetValue = getPlayerValue(targetPlayer);
+      const givingValue = givingPlayers.reduce((sum, p) => sum + getPlayerValue(p), 0);
+      const valueEfficiency = givingValue > 0 ? targetValue / givingValue : 0;
+      
+      return rankGain * 0.6 + zScoreGain * 0.3 + valueEfficiency * 0.1;
     };
 
     const tradeProposals: any[] = [];
@@ -120,6 +144,7 @@ serve(async (req) => {
       
       // Calculate positional fit for target
       const targetPos = normPos(targetPlayer.position);
+      const targetPosStrength = myStrengthsMap.get(targetPos);
       const targetPosBonus = getPositionalFitBonus(targetPlayer);
       const targetIsWeakPos = weakPositions.includes(targetPos);
       
@@ -133,6 +158,7 @@ serve(async (req) => {
           const myPos = normPos(p.position);
           const myPosStrength = myStrengthsMap.get(myPos);
           const tradingFromStrength = myPosStrength && myPosStrength.z_score > 0.5;
+          const fitScore = calculateTradeFitScore(targetPlayer, [p], targetPos, targetPosStrength);
           
           return {
             myPlayers: [p],
@@ -141,9 +167,12 @@ serve(async (req) => {
             positionalFitBonus: targetPosBonus,
             tradingFromStrength,
             improvesWeakPosition: targetIsWeakPos,
+            tradeFitScore: fitScore,
+            targetRank: targetPosStrength?.rank,
+            targetZScore: targetPosStrength?.z_score,
             type: '1-for-1',
             rationale: targetIsWeakPos 
-              ? `Improves your weak ${targetPos} position (rank ${myStrengthsMap.get(targetPos)?.rank})` 
+              ? `Improves your weak ${targetPos} position (rank ${targetPosStrength?.rank}, z-score ${targetPosStrength?.z_score.toFixed(2)})` 
               : `Adds ${targetPlayer.player_name || 'player'} to your roster`,
           };
         });
@@ -155,25 +184,35 @@ serve(async (req) => {
           const combo = [myRoster[i], myRoster[j]];
           const comboValue = combo.reduce((sum, p) => sum + getPlayerValue(p), 0);
           if (comboValue >= targetValue * 0.85 && comboValue <= targetValue * 1.15) {
+            const fitScore = calculateTradeFitScore(targetPlayer, combo, targetPos, targetPosStrength);
             twoForOne.push({
               myPlayers: combo,
               theirPlayers: [targetPlayer],
               valueDiff: comboValue - targetValue,
               positionalFitBonus: targetPosBonus,
               improvesWeakPosition: targetIsWeakPos,
+              tradeFitScore: fitScore,
+              targetRank: targetPosStrength?.rank,
+              targetZScore: targetPosStrength?.z_score,
               type: '2-for-1',
               rationale: targetIsWeakPos 
-                ? `Consolidates depth to improve weak ${targetPos} position` 
+                ? `Consolidates depth to improve weak ${targetPos} position (rank ${targetPosStrength?.rank})` 
                 : `2-for-1 consolidation trade`,
             });
           }
         }
       }
 
-      // Sort by positional fit first, then value fairness
+      // Sort by trade fit score first, then positional fit, then value fairness
       const sortByFit = (a: any, b: any) => {
+        // Prioritize by trade fit score
+        if (Math.abs((a.tradeFitScore || 0) - (b.tradeFitScore || 0)) > 0.1) {
+          return (b.tradeFitScore || 0) - (a.tradeFitScore || 0);
+        }
+        // Then by weak position improvement
         if (a.improvesWeakPosition && !b.improvesWeakPosition) return -1;
         if (!a.improvesWeakPosition && b.improvesWeakPosition) return 1;
+        // Finally by value fairness
         return Math.abs(a.valueDiff) - Math.abs(b.valueDiff);
       };
 
@@ -209,8 +248,10 @@ serve(async (req) => {
           })
           .map((p: any) => {
             const targetPos = normPos(p.position);
+            const targetPosStrength = myStrengthsMap.get(targetPos);
             const posBonus = getPositionalFitBonus(p);
             const improvesWeakPos = weakPositions.includes(targetPos);
+            const fitScore = calculateTradeFitScore(p, [shopPlayer], targetPos, targetPosStrength);
             
             return {
               myPlayers: [shopPlayer],
@@ -219,15 +260,21 @@ serve(async (req) => {
               valueDiff: getPlayerValue(p) - shopValue,
               positionalFitBonus: posBonus,
               improvesWeakPosition: improvesWeakPos,
+              tradeFitScore: fitScore,
+              targetRank: targetPosStrength?.rank,
+              targetZScore: targetPosStrength?.z_score,
               type: '1-for-1',
               rationale: improvesWeakPos
-                ? `Trade ${shopPlayer.player_name || 'player'} to improve weak ${targetPos} position`
+                ? `Trade ${shopPlayer.player_name || 'player'} to improve weak ${targetPos} position (rank ${targetPosStrength?.rank})`
                 : `1-for-1 swap for ${p.player_name || 'player'}`,
             };
           });
 
-        // Sort matches by positional fit first
+        // Sort matches by trade fit score first
         matches.sort((a: any, b: any) => {
+          if (Math.abs((a.tradeFitScore || 0) - (b.tradeFitScore || 0)) > 0.1) {
+            return (b.tradeFitScore || 0) - (a.tradeFitScore || 0);
+          }
           if (a.improvesWeakPosition && !b.improvesWeakPosition) return -1;
           if (!a.improvesWeakPosition && b.improvesWeakPosition) return 1;
           return Math.abs(a.valueDiff) - Math.abs(b.valueDiff);
@@ -237,9 +284,14 @@ serve(async (req) => {
       }
     }
 
-    // Sort by positional fit first, then value fairness
+    // Sort by trade fit score, then positional fit, then value fairness
     tradeProposals.sort((a, b) => {
-      // Prioritize trades that improve weak positions
+      // Prioritize by trade fit score
+      if (Math.abs((a.tradeFitScore || 0) - (b.tradeFitScore || 0)) > 0.1) {
+        return (b.tradeFitScore || 0) - (a.tradeFitScore || 0);
+      }
+      
+      // Then by trades that improve weak positions
       if (a.improvesWeakPosition && !b.improvesWeakPosition) return -1;
       if (!a.improvesWeakPosition && b.improvesWeakPosition) return 1;
       
