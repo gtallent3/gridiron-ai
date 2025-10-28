@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, TrendingUp, Users } from 'lucide-react';
+import { Loader2, TrendingUp, Users, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ImprovePositionProps {
@@ -22,6 +22,9 @@ interface TradePackage {
   i_receive: any[];
   value_delta: number;
   
+  // PRIMARY: Net value gain
+  net_value_gain: number;
+  
   // Enhanced metrics
   my_pos_rank_before?: number;
   my_pos_rank_after?: number;
@@ -32,10 +35,12 @@ interface TradePackage {
   opponent_pos_rank_before?: number;
   opponent_pos_rank_after?: number;
   opponent_pss_delta?: number;
+  opponent_rank_change?: number;
   
   trade_fit_score?: number;
   grade?: string;
   mutual_benefit?: boolean;
+  acceptance_likelihood?: string;
   
   explanation: string;
   positional_gain: number;
@@ -78,6 +83,9 @@ export function ImprovePosition({
         i_receive: p.theirPlayers || [],
         value_delta: p.valueDiff || 0,
         
+        // PRIMARY: Net value gain
+        net_value_gain: p.net_value_gain || 0,
+        
         // Enhanced metrics
         my_pos_rank_before: p.my_pos_rank_before,
         my_pos_rank_after: p.my_pos_rank_after,
@@ -88,10 +96,12 @@ export function ImprovePosition({
         opponent_pos_rank_before: p.opponent_pos_rank_before,
         opponent_pos_rank_after: p.opponent_pos_rank_after,
         opponent_pss_delta: p.opponent_pss_delta,
+        opponent_rank_change: p.opponent_rank_change,
         
         trade_fit_score: p.trade_fit_score,
         grade: p.grade,
         mutual_benefit: p.mutual_benefit,
+        acceptance_likelihood: p.acceptance_likelihood || 'Medium',
         
         explanation: p.rationale || '',
         positional_gain: p.pss_delta || 0,
@@ -158,44 +168,66 @@ export function ImprovePosition({
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-3">
                       <CardTitle className="text-lg flex items-center gap-2">
                         <Users className="w-4 h-4" />
                         Trade with {pkg.partner_team_name}
                       </CardTitle>
-                      {pkg.mutual_benefit && (
-                        <Badge variant="default" className="bg-green-500 text-xs">
-                          ✓ Fair Deal
-                        </Badge>
-                      )}
                     </div>
                     
-                    {/* Rank Improvement Banner */}
-                    {pkg.rank_improvement !== undefined && pkg.rank_improvement > 0 && (
-                      <div className="flex items-center gap-2 mb-2 p-2 bg-primary/10 rounded-md">
-                        <TrendingUp className="w-4 h-4 text-primary" />
-                        <span className="text-sm font-medium">
-                          Improves {selectedPosition} rank {pkg.my_pos_rank_before} → {pkg.my_pos_rank_after} 
-                          <span className="text-primary ml-1">(+{pkg.rank_improvement} spots)</span>
-                        </span>
+                    {/* PRIMARY: Net Value Gain */}
+                    <div className="flex items-center gap-4 mb-3 p-3 bg-primary/10 rounded-lg">
+                      <div className="flex-1">
+                        <div className="text-xs text-muted-foreground mb-1">Net ROS Value Gain</div>
+                        <div className="text-2xl font-bold text-primary">
+                          +{pkg.net_value_gain.toFixed(1)}
+                        </div>
                       </div>
-                    )}
+                      <div className="flex items-center gap-2">
+                        {pkg.acceptance_likelihood === 'High' && (
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        )}
+                        {pkg.acceptance_likelihood === 'Medium' && (
+                          <AlertCircle className="h-5 w-5 text-yellow-500" />
+                        )}
+                        {pkg.acceptance_likelihood === 'Low' && (
+                          <AlertCircle className="h-5 w-5 text-red-500" />
+                        )}
+                        <div className="text-sm">
+                          <div className="font-medium">{pkg.acceptance_likelihood}</div>
+                          <div className="text-xs text-muted-foreground">Acceptance</div>
+                        </div>
+                      </div>
+                    </div>
                     
-                    <CardDescription className="mt-1">
+                    {/* SECONDARY: Positional Context */}
+                    <div className="bg-muted/50 rounded-lg p-3 mb-3">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <div className="text-muted-foreground mb-1 text-xs">📈 Your {selectedPosition} Rank</div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">#{pkg.my_pos_rank_before}</span>
+                            <ArrowRight className="h-3 w-3" />
+                            <span className="font-bold text-primary">#{pkg.my_pos_rank_after}</span>
+                            {pkg.rank_improvement && pkg.rank_improvement > 0 && (
+                              <span className="text-xs text-green-600">
+                                (+{pkg.rank_improvement})
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-muted-foreground mb-1 text-xs">🤝 Partner Rank Impact</div>
+                          <div className="font-medium text-xs">
+                            {pkg.opponent_pos} rank {pkg.opponent_rank_change !== undefined && pkg.opponent_rank_change >= 0 ? 'drops' : 'improves'} by {Math.abs(pkg.opponent_rank_change || 0)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <CardDescription className="text-xs">
                       {pkg.explanation}
                     </CardDescription>
-                  </div>
-                  
-                  <div className="flex flex-col items-end gap-2">
-                    <Badge variant={pkg.value_delta >= 0 ? 'default' : 'secondary'}>
-                      {pkg.value_delta >= 0 ? '+' : ''}
-                      {pkg.value_delta.toFixed(1)} value
-                    </Badge>
-                    {pkg.pss_delta !== undefined && (
-                      <Badge variant="outline" className="font-mono">
-                        +{pkg.pss_delta.toFixed(1)} PSS
-                      </Badge>
-                    )}
                   </div>
                 </div>
               </CardHeader>

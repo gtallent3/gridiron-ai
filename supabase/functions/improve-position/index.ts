@@ -279,30 +279,57 @@ serve(async (req) => {
               );
               const theirPSSDelta = theirNewPSS - theirCurrentPSS;
 
-              // Calculate trade fit score
-              const rankImprovement = Math.max(0, targetPosStrength.rank - myNewRank);
-              const tradeFitScore = 
-                (myPSSDelta * 0.6) + 
-                (rankImprovement * 10 * 0.3) + 
-                ((targetValue - Math.abs(valueDiff)) / targetValue * 0.1);
+              // PRIMARY: Net value gain (must be positive)
+              const netValueGain = targetValue - myValue;
+              
+              // Reject negative value trades
+              if (netValueGain <= 0) continue;
 
-              // Grade the trade
+              // SECONDARY: Positional improvement boost (contextual modifier)
+              const rankImprovement = Math.max(0, targetPosStrength.rank - myNewRank);
+              const myPosBoost = (myNewRank < targetPosStrength.rank) ? rankImprovement * 5 : 0;
+              
+              // Calculate opponent's positional impact
+              const theirRankChange = (theirPosStrength?.rank || 10) - estimateNewRank(
+                theirPosStrength?.rank || 10,
+                theirCurrentPSS,
+                theirNewPSS,
+                Array.from(strengthsByTeam.values())
+                  .map(s => s.get(needPos.position)?.pss || 0)
+                  .filter(p => p > 0)
+              );
+              const theirPosCost = theirRankChange > 0 ? theirRankChange * 3 : 0;
+              const posBoost = myPosBoost - theirPosCost;
+
+              // NEW TRADE SCORE: Value first (1.0x), positional context second (0.25x)
+              const tradeFitScore = (1.0 * netValueGain) + (0.25 * posBoost);
+
+              // Grade based on value gain magnitude
               let grade = 'C';
-              if (rankImprovement >= 3 && myPSSDelta > 15) grade = 'A';
-              else if (rankImprovement >= 2 && myPSSDelta > 10) grade = 'B';
-              else if (rankImprovement >= 1 && myPSSDelta > 5) grade = 'C+';
-              else if (myPSSDelta > 0) grade = 'C';
-              else grade = 'D';
+              if (netValueGain >= 20) grade = 'A';
+              else if (netValueGain >= 15) grade = 'B+';
+              else if (netValueGain >= 10) grade = 'B';
+              else if (netValueGain >= 5) grade = 'C+';
+              else if (netValueGain > 0) grade = 'C';
+
+              // Acceptance likelihood based on opponent impact
+              let acceptanceLikelihood = 'Medium';
+              if (theirPSSDelta > 10 && theirRankChange >= 2) acceptanceLikelihood = 'High';
+              else if (theirPSSDelta < 0 || theirRankChange >= 4) acceptanceLikelihood = 'Low';
+              else acceptanceLikelihood = 'Medium';
 
               const mutualBenefit = theirPSSDelta > 0 && myPSSDelta > 0;
 
-              console.log(`Match: ${myPlayer.name} → ${targetPlayer.name}, PSS Δ: ${myPSSDelta.toFixed(1)}, Rank: ${targetPosStrength.rank}→${myNewRank}`);
+              console.log(`Match: ${myPlayer.name} → ${targetPlayer.name}, Value Δ: +${netValueGain.toFixed(1)}, Rank: ${targetPosStrength.rank}→${myNewRank}`);
               
               tradeTargets.push({
                 myPlayers: [myPlayer],
                 theirPlayers: [targetPlayer],
                 theirTeam: team,
                 valueDiff,
+                
+                // PRIMARY METRIC: Net value gain
+                net_value_gain: netValueGain,
                 
                 // My metrics
                 my_pos_rank_before: targetPosStrength.rank,
@@ -323,17 +350,20 @@ serve(async (req) => {
                 ),
                 opponent_pss_delta: theirPSSDelta,
                 opponent_improved_position: needPos.position,
+                opponent_rank_change: theirRankChange,
                 
                 // Scoring
                 trade_fit_score: tradeFitScore,
                 grade,
                 mutual_benefit: mutualBenefit,
+                acceptance_likelihood: acceptanceLikelihood,
                 
                 // Analysis
-                rationale: `Trade ${myPlayer.name} from your strong ${needPos.position} (rank ${needPos.rank}) to get ${targetPlayer.name}. ` +
-                  `Your ${targetPosition} improves from rank ${targetPosStrength.rank} → ${myNewRank} (+${myPSSDelta.toFixed(1)} PSS). ` +
-                  `Opponent improves their weak ${needPos.position} from rank ${theirPosStrength?.rank || '?'} (${theirPSSDelta > 0 ? `+${theirPSSDelta.toFixed(1)}` : theirPSSDelta.toFixed(1)} PSS). ` +
-                  `${mutualBenefit ? '✓ Mutually beneficial' : '⚠️ One-sided favor'}`,
+                rationale: `Net value gain: +${netValueGain.toFixed(1)} ROS points. ` +
+                  `Trade ${myPlayer.name} (${myValue.toFixed(1)}) from your strong ${needPos.position} (rank ${needPos.rank}) to get ${targetPlayer.name} (${targetValue.toFixed(1)}). ` +
+                  `Your ${targetPosition} improves from rank ${targetPosStrength.rank} → ${myNewRank}. ` +
+                  `Opponent's ${needPos.position} rank changes by ${theirRankChange >= 0 ? '+' : ''}${theirRankChange}. ` +
+                  `Acceptance likelihood: ${acceptanceLikelihood}.`,
               });
               
               // Limit proposals per team
@@ -348,13 +378,9 @@ serve(async (req) => {
 
     console.log(`Found ${tradeTargets.length} total trade proposals`);
 
-    // Sort by trade fit score (best strategic + rank improvement + value)
+    // Sort by trade fit score (value-first: net_value_gain dominates)
     tradeTargets.sort((a, b) => {
-      // Prioritize mutual benefit
-      if (a.mutual_benefit && !b.mutual_benefit) return -1;
-      if (!a.mutual_benefit && b.mutual_benefit) return 1;
-      
-      // Then by trade fit score
+      // Primary: highest net value gain wins
       return b.trade_fit_score - a.trade_fit_score;
     });
 
