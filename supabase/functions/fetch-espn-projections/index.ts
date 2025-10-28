@@ -138,7 +138,7 @@ serve(async (req) => {
         }
       };
 
-      const waiverUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=kona_player_info`;
+      const waiverUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=kona_player_info`;
       
       const waiverResponse = await fetch(waiverUrl, {
         headers: {
