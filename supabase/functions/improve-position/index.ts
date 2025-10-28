@@ -10,6 +10,30 @@ const POSITION_WEIGHTS = {
   QB: 0.8, RB: 1.2, WR: 1.0, TE: 1.1, K: 0.6, DEF: 0.7,
 };
 
+// Bench depth to consider in strength calculations
+const BENCH_DEPTH: Record<string, number> = {
+  RB: 2,
+  WR: 2,
+  TE: 1,
+  QB: 1,
+  K: 0,
+  DST: 0,
+};
+
+// Position-specific weight vectors (diminishing returns)
+const SLOT_WEIGHTS: Record<string, number[]> = {
+  RB: [1.00, 0.85, 0.55, 0.30],  // Depth matters - multiple starters + bench
+  WR: [1.00, 0.85, 0.55, 0.30],  // Depth matters - multiple starters + bench
+  QB: [1.25, 0.35],              // Elite starter emphasis, minimal bench value
+  TE: [1.15, 0.35],              // Elite starter emphasis, minimal bench value
+  K: [0.60],                     // Low impact
+  DST: [0.60],                   // Low impact
+};
+
+const DEFAULT_STARTERS: Record<string, number> = { 
+  QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -118,13 +142,20 @@ serve(async (req) => {
       const addedValues = playersAdded.map(p => getPlayerValue(p));
       updatedValues = [...updatedValues, ...addedValues];
       
-      // Calculate new PSS (sum of top N+1 players)
-      const DEFAULT_STARTERS: Record<string, number> = { 
-        QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 
-      };
-      const N = (DEFAULT_STARTERS[position] || 1) + 1;
-      const topValues = updatedValues.sort((a, b) => b - a).slice(0, N);
-      return topValues.reduce((sum, v) => sum + v, 0);
+      // Calculate new PSS using slot-weighted diminishing returns
+      const weights = SLOT_WEIGHTS[position] || [1.0];
+      const starters = DEFAULT_STARTERS[position] || 1;
+      const bench = BENCH_DEPTH[position] || 0;
+      const totalSlots = starters + bench;
+      
+      const sortedValues = updatedValues.sort((a, b) => b - a);
+      const take = Math.min(sortedValues.length, totalSlots, weights.length);
+      
+      let pss = 0;
+      for (let i = 0; i < take; i++) {
+        pss += sortedValues[i] * weights[i];
+      }
+      return pss;
     };
 
     // Helper to estimate new rank based on PSS change

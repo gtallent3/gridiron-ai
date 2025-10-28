@@ -17,6 +17,29 @@ const DEFAULT_STARTERS: Record<string, number> = {
   DST: 1,
 };
 
+// Bench depth to consider in strength calculations
+const BENCH_DEPTH: Record<string, number> = {
+  RB: 2,
+  WR: 2,
+  TE: 1,
+  QB: 1,
+  K: 0,
+  DST: 0,
+};
+
+// Position-specific weight vectors (diminishing returns)
+const POSITION_WEIGHTS: Record<string, number[]> = {
+  RB: [1.00, 0.85, 0.55, 0.30],  // Depth matters - multiple starters + bench
+  WR: [1.00, 0.85, 0.55, 0.30],  // Depth matters - multiple starters + bench
+  QB: [1.25, 0.35],              // Elite starter emphasis, minimal bench value
+  TE: [1.15, 0.35],              // Elite starter emphasis, minimal bench value
+  K: [0.60],                     // Low impact
+  DST: [0.60],                   // Low impact
+};
+
+// FLEX weights for leftover RB/WR/TE
+const FLEX_WEIGHTS = [0.90, 0.50];
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -102,14 +125,29 @@ serve(async (req) => {
       return null;
     };
 
+    // Helper: Calculate PSS for a position using slot-weighted diminishing returns
+    const calculatePSSForPosition = (values: number[], pos: string): number => {
+      const weights = POSITION_WEIGHTS[pos] || [1.0];
+      const starters = DEFAULT_STARTERS[pos] || 1;
+      const bench = BENCH_DEPTH[pos] || 0;
+      const totalSlots = starters + bench;
+      const take = Math.min(values.length, totalSlots, weights.length);
+      
+      let pss = 0;
+      for (let i = 0; i < take; i++) {
+        pss += values[i] * weights[i];
+      }
+      return pss;
+    };
+
     for (const team of teams || []) {
       const roster = (team.roster as any[]) || [];
       const teamMap = new Map<string, number>();
-
+      
+      // Build sorted value arrays for each position
+      const sortedValues: Record<string, number[]> = {};
+      
       for (const pos of positions) {
-        const N = (DEFAULT_STARTERS[pos] || 1) + 1; // starters + 1 bench
-        
-        // Get all players at this position
         const posPlayers = roster
           .filter(p => normPos(p.position) === pos)
           .map(p => {
@@ -117,19 +155,43 @@ serve(async (req) => {
             return value ? Number(value.value_score) || 0 : 0;
           })
           .sort((a, b) => b - a); // descending
-
-        // Sum top N
-        const pss = posPlayers.slice(0, N).reduce((sum, v) => sum + v, 0);
+        
+        sortedValues[pos] = posPlayers;
+        
+        // Calculate PSS using slot-weighted diminishing returns
+        const pss = calculatePSSForPosition(posPlayers, pos);
         teamMap.set(pos, pss);
       }
+
+      // FLEX optimization: best remaining RB/WR/TE after starters
+      const rbStarters = DEFAULT_STARTERS['RB'] || 2;
+      const wrStarters = DEFAULT_STARTERS['WR'] || 2;
+      const teStarters = DEFAULT_STARTERS['TE'] || 1;
+      const flexSlots = DEFAULT_STARTERS['FLEX'] || 1;
+
+      // Build FLEX candidate pool from leftover players
+      const flexCandidates: number[] = [
+        ...(sortedValues['RB']?.slice(rbStarters) || []),
+        ...(sortedValues['WR']?.slice(wrStarters) || []),
+        ...(sortedValues['TE']?.slice(teStarters) || []),
+      ].sort((a, b) => b - a); // descending
+
+      // Calculate FLEX PSS using FLEX weights
+      let flexPSS = 0;
+      const flexTake = Math.min(flexSlots, FLEX_WEIGHTS.length, flexCandidates.length);
+      for (let i = 0; i < flexTake; i++) {
+        flexPSS += flexCandidates[i] * FLEX_WEIGHTS[i];
+      }
+      teamMap.set('FLEX', flexPSS);
 
       teamPSS.set(team.team_id, teamMap);
     }
 
-    // Calculate league-wide stats per position and assign ranks
+    // Calculate league-wide stats per position and assign ranks (include FLEX)
     const strengthResults = [];
+    const allPositions = [...positions, 'FLEX'];
 
-    for (const pos of positions) {
+    for (const pos of allPositions) {
       // Create array of {teamId, pss} for proper ranking
       const teamPSSArray: Array<{ teamId: string; pss: number }> = [];
       for (const [teamId, teamMap] of teamPSS.entries()) {

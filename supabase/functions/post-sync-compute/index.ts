@@ -165,6 +165,29 @@ serve(async (req) => {
 
     const positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
     const DEFAULT_STARTERS: Record<string, number> = { QB:1, RB:2, WR:2, TE:1, FLEX:1, K:1, DST:1 };
+    
+    // Bench depth to consider in strength calculations
+    const BENCH_DEPTH: Record<string, number> = {
+      RB: 2,
+      WR: 2,
+      TE: 1,
+      QB: 1,
+      K: 0,
+      DST: 0,
+    };
+
+    // Position-specific weight vectors (diminishing returns)
+    const POSITION_WEIGHTS: Record<string, number[]> = {
+      RB: [1.00, 0.85, 0.55, 0.30],  // Depth matters - multiple starters + bench
+      WR: [1.00, 0.85, 0.55, 0.30],  // Depth matters - multiple starters + bench
+      QB: [1.25, 0.35],              // Elite starter emphasis, minimal bench value
+      TE: [1.15, 0.35],              // Elite starter emphasis, minimal bench value
+      K: [0.60],                     // Low impact
+      DST: [0.60],                   // Low impact
+    };
+
+    // FLEX weights for leftover RB/WR/TE
+    const FLEX_WEIGHTS = [0.90, 0.50];
 
     const normPos = (pos: any) => {
       // Normalize numeric and string position codes to canonical labels
@@ -200,25 +223,68 @@ serve(async (req) => {
       return 0;
     };
 
+    // Helper: Calculate PSS for a position using slot-weighted diminishing returns
+    const calculatePSSForPosition = (values: number[], pos: string): number => {
+      const weights = POSITION_WEIGHTS[pos] || [1.0];
+      const starters = DEFAULT_STARTERS[pos] || 1;
+      const bench = BENCH_DEPTH[pos] || 0;
+      const totalSlots = starters + bench;
+      const take = Math.min(values.length, totalSlots, weights.length);
+      
+      let pss = 0;
+      for (let i = 0; i < take; i++) {
+        pss += values[i] * weights[i];
+      }
+      return pss;
+    };
+
     const teamPSS: Array<{ team_id: string; position: string; pss: number }> = [];
 
     for (const t of teams || []) {
       const roster = Array.isArray(t.roster) ? t.roster : [];
+      
+      // Build sorted value arrays for each position
+      const sortedValues: Record<string, number[]> = {};
+      
       for (const pos of positions) {
-        const N = (DEFAULT_STARTERS[pos] || 1) + 1;
         const scores = roster
           .filter((p: any) => normPos(p.position) === pos)
           .map((p: any) => getValue(p))
-          .sort((a: number, b: number) => b - a)
-          .slice(0, N);
-        const pss = scores.reduce((sum: number, v: number) => sum + v, 0);
+          .sort((a: number, b: number) => b - a);
+        
+        sortedValues[pos] = scores;
+        
+        // Calculate PSS using slot-weighted diminishing returns
+        const pss = calculatePSSForPosition(scores, pos);
         teamPSS.push({ team_id: t.team_id, position: pos, pss });
       }
+
+      // FLEX optimization: best remaining RB/WR/TE after starters
+      const rbStarters = DEFAULT_STARTERS['RB'] || 2;
+      const wrStarters = DEFAULT_STARTERS['WR'] || 2;
+      const teStarters = DEFAULT_STARTERS['TE'] || 1;
+      const flexSlots = DEFAULT_STARTERS['FLEX'] || 1;
+
+      // Build FLEX candidate pool from leftover players
+      const flexCandidates: number[] = [
+        ...(sortedValues['RB']?.slice(rbStarters) || []),
+        ...(sortedValues['WR']?.slice(wrStarters) || []),
+        ...(sortedValues['TE']?.slice(teStarters) || []),
+      ].sort((a: number, b: number) => b - a);
+
+      // Calculate FLEX PSS using FLEX weights
+      let flexPSS = 0;
+      const flexTake = Math.min(flexSlots, FLEX_WEIGHTS.length, flexCandidates.length);
+      for (let i = 0; i < flexTake; i++) {
+        flexPSS += flexCandidates[i] * FLEX_WEIGHTS[i];
+      }
+      teamPSS.push({ team_id: t.team_id, position: 'FLEX', pss: flexPSS });
     }
 
-    // Rank within each position
+    // Rank within each position (include FLEX)
     const strengthResults: any[] = [];
-    for (const pos of positions) {
+    const allPositions = [...positions, 'FLEX'];
+    for (const pos of allPositions) {
       const list = teamPSS.filter(r => r.position === pos);
       list.sort((a, b) => b.pss - a.pss);
       const values = list.map(l => l.pss);
