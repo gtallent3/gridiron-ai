@@ -55,6 +55,78 @@ serve(async (req) => {
 
     // Step 1: Compute player values (invoke with fallback)
     let playersProcessed = 0;
+
+    // Inline fallback to ensure cache is populated if invoke fails
+    const computePlayerValuesInline = async (): Promise<number> => {
+      try {
+        // Determine latest season available
+        const { data: seasonRow, error: seasonErr } = await adminClient
+          .from('projected_player_stats')
+          .select('season')
+          .order('season', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (seasonErr) console.error('Inline compute: season fetch error', seasonErr);
+        const season = seasonRow?.season ?? null;
+
+        // Fetch projections (scope to latest season if available)
+        const projQuery = adminClient
+          .from('projected_player_stats')
+          .select('player_id, player_name, position, team, projected_fp, season');
+        if (season) projQuery.eq('season', season);
+        const { data: proj, error: projErr } = await projQuery;
+        if (projErr || !proj?.length) {
+          console.warn('Inline compute: no projections found');
+          return 0;
+        }
+
+        // Aggregate ROS by player_id
+        const byPlayer = new Map<string, { name: string; pos: string; team: string | null; ros: number }>();
+        for (const r of proj) {
+          let pid = String(r.player_id ?? '').trim();
+          if (!pid) continue;
+          if (/^\d+$/.test(pid)) pid = `espn_${pid}`; // canonicalize
+          const pos = String(r.position ?? '').toUpperCase();
+          const team = (r.team ?? null) as string | null;
+          const name = r.player_name ?? '';
+          const prev = byPlayer.get(pid) ?? { name, pos, team, ros: 0 };
+          prev.name = prev.name || name;
+          prev.pos = prev.pos || pos;
+          prev.team = prev.team || team;
+          prev.ros += Number(r.projected_fp ?? 0);
+          byPlayer.set(pid, prev);
+        }
+
+        // Simple position weights to avoid zero values
+        const W: Record<string, number> = { RB: 1.1, WR: 1.0, QB: 0.95, TE: 0.98, K: 0.6, DST: 0.6 };
+        const rows = Array.from(byPlayer.entries()).map(([pid, v]) => ({
+          league_id: leagueId,
+          player_id: pid,
+          player_name: v.name || pid,
+          position: v.pos || 'FLEX',
+          team: v.team,
+          projected_fp_ros: v.ros,
+          consistency_multiplier: 1.0,
+          schedule_factor: 1.0,
+          risk_adjustment: 1.0,
+          value_score: v.ros * (W[v.pos] ?? 1.0),
+          updated_at: new Date().toISOString(),
+        }));
+
+        const { error: upErr } = await adminClient
+          .from('player_value_cache')
+          .upsert(rows, { onConflict: 'league_id,player_id' });
+        if (upErr) {
+          console.error('Inline compute upsert error', upErr);
+          return 0;
+        }
+        return rows.length;
+      } catch (e) {
+        console.error('Inline compute unexpected error', e);
+        return 0;
+      }
+    };
+
     try {
       const { data: valuesData, error: valuesError } = await adminClient.functions.invoke(
         'compute-player-values',
@@ -66,8 +138,8 @@ serve(async (req) => {
       if (valuesError) throw valuesError;
       playersProcessed = valuesData?.playersProcessed ?? 0;
     } catch (e) {
-      console.error('compute-player-values invoke failed, proceeding without invoke');
-      // Fallback: do nothing here (compute-player-values function already populates cache during resync flow)
+      console.error('compute-player-values invoke failed, running inline fallback', e);
+      playersProcessed = await computePlayerValuesInline();
     }
 
     // Step 2: Compute positional strengths inline (more reliable)
@@ -83,6 +155,7 @@ serve(async (req) => {
       .select('player_id, position, value_score')
       .eq('league_id', leagueId);
     if (valuesFetchError) throw valuesFetchError;
+    console.log('post-sync counts', { teams: teams?.length ?? 0, playerValues: playerValues?.length ?? 0 });
 
     // Build value map by canonical player_id only
     const valueById = new Map<string, number>();
@@ -120,8 +193,10 @@ serve(async (req) => {
     };
 
     const getValue = (p: any) => {
-      const pid = String(p.player_id || p.playerId || p.id || '');
-      if (pid && valueById.has(pid)) return valueById.get(pid)!;
+      let pid = String(p.player_id || p.playerId || p.id || '').trim();
+      if (!pid) return 0;
+      if (/^\d+$/.test(pid)) pid = `espn_${pid}`; // canonicalize numeric ids
+      if (valueById.has(pid)) return valueById.get(pid)!;
       return 0;
     };
 
