@@ -32,6 +32,8 @@ type WaiverPlayer = {
   position: string;
   team: string;
   projected: number;
+  stats?: any;
+  percentOwned?: number;
   recommendation?: {
     reasoning: string;
     projectedGain: number;
@@ -61,20 +63,21 @@ export function WaiverWire({ league }: WaiverWireProps) {
       
       const { data: leagueData } = await supabase
         .from('connected_leagues')
-        .select('current_week')
+        .select('current_week, league_id')
         .eq('id', league.id)
         .single();
       
       const currentWeek = leagueData?.current_week || 1;
 
+      // Query projected_player_stats for waiver players with projections
       const { data, error } = await supabase
-        .from('waiver_wire_players')
+        .from('projected_player_stats')
         .select('*')
-        .eq('league_id', league.id)
+        .in('waiver_status', ['FREEAGENT', 'WAIVERS'])
         .eq('season', currentSeason)
         .eq('week', currentWeek)
-        .order('percent_owned', { ascending: false })
-        .limit(20);
+        .order('projected_fp', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
 
@@ -83,7 +86,9 @@ export function WaiverWire({ league }: WaiverWireProps) {
         name: p.player_name,
         position: p.position,
         team: p.team || 'FA',
-        projected: 0, // Will be enhanced with projections later
+        projected: p.projected_fp || 0,
+        stats: p.stats,
+        percentOwned: p.percent_owned || 0,
       }));
 
       setWaiverPlayers(mapped);
@@ -247,24 +252,41 @@ export function WaiverWire({ league }: WaiverWireProps) {
             </div>
           ) : waiverPlayers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <p>No waiver players available. Try resyncing your league from the home page.</p>
+              <p>No waiver players with projections available. Use "Fetch ESPN Projections" above to load projection data.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {waiverPlayers.map(player => (
                 <div key={player.id} className="space-y-2">
-                <PlayerCard player={player} readOnly />
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={() => handleAddPlayer(player)} 
-                    size="sm" 
-                    className="flex-1"
-                    variant="outline"
-                  >
-                    <Plus className="mr-1 h-3 w-3" />
-                    Add
-                  </Button>
-                </div>
+                  <Card className="p-3 space-y-2">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <div className="font-semibold">{player.name}</div>
+                        <div className="text-sm text-muted-foreground">{player.team}</div>
+                      </div>
+                      <Badge>{player.position}</Badge>
+                    </div>
+                    <div className="text-2xl font-bold text-primary">
+                      {player.projected.toFixed(1)}
+                      <span className="text-sm text-muted-foreground ml-1">pts</span>
+                    </div>
+                    {player.percentOwned !== undefined && (
+                      <div className="text-xs text-muted-foreground">
+                        {player.percentOwned.toFixed(0)}% owned
+                      </div>
+                    )}
+                  </Card>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => handleAddPlayer(player)} 
+                      size="sm" 
+                      className="flex-1"
+                      variant="outline"
+                    >
+                      <Plus className="mr-1 h-3 w-3" />
+                      Add
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
