@@ -77,3 +77,6 @@ verify_jwt = true
 
 [functions.post-sync-compute]
 verify_jwt = true
+
+[functions.fantasy-copilot]
+verify_jwt = true
