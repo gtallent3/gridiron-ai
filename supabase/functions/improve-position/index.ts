@@ -35,105 +35,133 @@ serve(async (req) => {
     
     console.log('Improve position:', { targetPosition, myTeamId: myTeam.team_id });
 
-    // Get player valuations
-    const now = new Date();
-    const currentWeek = Math.min(Math.floor((now.getTime() - new Date(now.getFullYear(), 8, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1, 18);
-    const currentSeason = now.getFullYear();
-
-    const { data: valuations } = await supabase
-      .from('player_valuations')
+    // Get player values from cache
+    const { data: playerValues } = await supabase
+      .from('player_value_cache')
       .select('*')
-      .eq('season', currentSeason)
-      .eq('week', currentWeek);
+      .eq('league_id', leagueId);
 
-    const valuationMap = new Map((valuations || []).map(v => [v.player_id, v]));
+    const valueMap = new Map((playerValues || []).map(v => [v.player_id, v]));
 
-    const getPlayerValue = (player: any) => {
-      const val = valuationMap.get(player.id || player.player_id);
-      if (!val) return (player.projected || 0) * 10;
-      const posWeight = POSITION_WEIGHTS[val.position as keyof typeof POSITION_WEIGHTS] || 1;
-      return Number(val.player_value) * posWeight;
+    // Get positional strengths for all teams
+    const { data: allStrengths } = await supabase
+      .from('team_positional_strengths')
+      .select('*')
+      .eq('league_id', leagueId);
+
+    const strengthsByTeam = new Map<string, Map<string, any>>();
+    for (const s of allStrengths || []) {
+      if (!strengthsByTeam.has(s.team_id)) {
+        strengthsByTeam.set(s.team_id, new Map());
+      }
+      strengthsByTeam.get(s.team_id)!.set(s.position, s);
+    }
+
+    const myStrengths = strengthsByTeam.get(myTeam.team_id);
+    const targetPosStrength = myStrengths?.get(targetPosition);
+
+    if (!targetPosStrength) {
+      throw new Error(`No positional strength data found for ${targetPosition}`);
+    }
+
+    console.log(`Target ${targetPosition} strength:`, {
+      pss: targetPosStrength.pss,
+      rank: targetPosStrength.rank,
+      z_score: targetPosStrength.z_score,
+      delta_vs_median: targetPosStrength.delta_vs_median,
+    });
+
+    const normPos = (pos: any): string => {
+      if (typeof pos === 'number') {
+        const map: Record<number, string> = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST' };
+        return map[pos] || String(pos).toUpperCase();
+      }
+      const s = String(pos || '').trim().toUpperCase();
+      if (/^\d+$/.test(s)) {
+        const n = Number(s);
+        const map: Record<number, string> = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST' };
+        return map[n] || s;
+      }
+      if (s === 'D/ST' || s === 'DST' || s === 'DEF') return 'DST';
+      return ['QB', 'RB', 'WR', 'TE', 'K', 'DST'].includes(s) ? s : s;
     };
 
-    // Calculate position strength
-    const myRoster = myTeam.roster || [];
-    const myPositionPlayers = myRoster.filter((p: any) => p.position === targetPosition);
-    const myPosStrength = myPositionPlayers
-      .sort((a: any, b: any) => getPlayerValue(b) - getPlayerValue(a))
-      .slice(0, 3) // Top 3 at position
-      .reduce((sum: number, p: any) => sum + getPlayerValue(p), 0);
+    const getPlayerValue = (player: any) => {
+      const playerId = player.id || player.player_id || player.player_id;
+      const val = valueMap.get(playerId);
+      if (!val) return 0;
+      return Number(val.value_score) || 0;
+    };
 
-    // Calculate league average for this position
-    const allRosters = allTeams.map((t: any) => t.roster || []);
-    const leagueAvgPos = allRosters
-      .map((roster: any[]) => {
-        const posPlayers = roster.filter((p: any) => p.position === targetPosition);
-        return posPlayers
-          .sort((a: any, b: any) => getPlayerValue(b) - getPlayerValue(a))
-          .slice(0, 3)
-          .reduce((sum: number, p: any) => sum + getPlayerValue(p), 0);
-      })
-      .reduce((sum: number, val: number) => sum + val, 0) / allRosters.length;
-
-    const posStrengthGap = leagueAvgPos - myPosStrength;
-
-    console.log(`Position ${targetPosition}: My ${myPosStrength.toFixed(1)}, Avg ${leagueAvgPos.toFixed(1)}, Gap ${posStrengthGap.toFixed(1)}`);
-
-    // Find teams with surplus at target position
+    // Find teams with surplus at target position (strong positional ranking)
     const tradeTargets: any[] = [];
+    const myRoster = myTeam.roster || [];
 
     for (const team of allTeams) {
       if (team.team_id === myTeam.team_id) continue;
 
-      const theirRoster = team.roster || [];
-      const theirPosPlayers = theirRoster
-        .filter((p: any) => p.position === targetPosition)
-        .sort((a: any, b: any) => getPlayerValue(b) - getPlayerValue(a));
+      const theirStrengths = strengthsByTeam.get(team.team_id);
+      if (!theirStrengths) continue;
 
-      if (theirPosPlayers.length < 3) continue; // Need surplus
+      const theirTargetPosStrength = theirStrengths.get(targetPosition);
+      
+      // Only target teams that are strong at this position (z_score > 0.5, rank <= 4)
+      if (!theirTargetPosStrength || theirTargetPosStrength.z_score < 0.5) continue;
 
-      // Check if they have surplus at target position
-      const theirPosStrength = theirPosPlayers.slice(0, 3)
-        .reduce((sum: number, p: any) => sum + getPlayerValue(p), 0);
-
-      if (theirPosStrength <= leagueAvgPos * 1.1) continue; // No real surplus
-
-      // Find what positions I have surplus in
-      const myPositions: Record<string, any[]> = {};
-      myRoster.forEach((p: any) => {
-        if (!myPositions[p.position]) myPositions[p.position] = [];
-        myPositions[p.position].push(p);
+      console.log(`Team ${team.team_id} has surplus at ${targetPosition}:`, {
+        rank: theirTargetPosStrength.rank,
+        z_score: theirTargetPosStrength.z_score,
       });
 
-      // Try to find fair trades
-      for (const targetPlayerIdx of [2, 3, 4]) { // Their 3rd, 4th, 5th best at position
+      const theirRoster = team.roster || [];
+      const theirPosPlayers = theirRoster
+        .filter((p: any) => normPos(p.position) === targetPosition)
+        .map((p: any) => ({ ...p, value: getPlayerValue(p) }))
+        .sort((a: any, b: any) => b.value - a.value);
+
+      if (theirPosPlayers.length < 3) continue;
+
+      // Find positions where I have strength (z_score > 0) to trade from
+      const myStrongPositions = Array.from(myStrengths?.entries() || [])
+        .filter(([pos, strength]) => pos !== targetPosition && strength.z_score > 0)
+        .map(([pos, strength]) => ({ position: pos, ...strength }))
+        .sort((a, b) => b.z_score - a.z_score);
+
+      // Try to find fair trades - target their 3rd, 4th, 5th best player
+      for (const targetPlayerIdx of [2, 3, 4]) {
         if (targetPlayerIdx >= theirPosPlayers.length) continue;
         
         const targetPlayer = theirPosPlayers[targetPlayerIdx];
-        const targetValue = getPlayerValue(targetPlayer);
+        const targetValue = targetPlayer.value;
 
-        // Look for matches from my other positions
-        for (const [pos, players] of Object.entries(myPositions)) {
-          if (pos === targetPosition) continue; // Don't trade same position
+        // Look for matches from my positions of strength
+        for (const myStrongPos of myStrongPositions) {
+          const myPosPlayers = myRoster
+            .filter((p: any) => normPos(p.position) === myStrongPos.position)
+            .map((p: any) => ({ ...p, value: getPlayerValue(p) }))
+            .sort((a: any, b: any) => b.value - a.value);
 
-          const sorted = players.sort((a, b) => getPlayerValue(b) - getPlayerValue(a));
-          
-          for (const myPlayer of sorted.slice(1)) { // Not my best
-            const myValue = getPlayerValue(myPlayer);
+          // Don't trade my best player at this position
+          for (let i = 1; i < myPosPlayers.length; i++) {
+            const myPlayer = myPosPlayers[i];
+            const myValue = myPlayer.value;
             const valueDiff = targetValue - myValue;
 
-            if (Math.abs(valueDiff) < targetValue * 0.2) { // Within 20%
-              const posGain = targetValue - (myPositionPlayers[Math.min(myPositionPlayers.length - 1, 2)] 
-                ? getPlayerValue(myPositionPlayers[Math.min(myPositionPlayers.length - 1, 2)]) 
-                : 0);
-
+            // Check if it's a fair trade (within 25%)
+            if (Math.abs(valueDiff) < targetValue * 0.25) {
+              const positionGainEstimate = targetValue * 0.5; // Simplified estimate
+              
               tradeTargets.push({
                 myPlayers: [myPlayer],
                 theirPlayers: [targetPlayer],
                 theirTeam: team,
                 valueDiff,
-                positionGain: posGain,
-                rationale: `Upgrade ${targetPosition} by ${posGain.toFixed(1)} pts, trade away surplus ${pos}`,
+                positionGain: positionGainEstimate,
+                myPositionRank: myStrongPos.rank,
+                theirPositionRank: theirTargetPosStrength.rank,
+                myPositionZScore: myStrongPos.z_score,
+                theirPositionZScore: theirTargetPosStrength.z_score,
+                rationale: `Trade from your strong ${myStrongPos.position} (rank ${myStrongPos.rank}, z-score ${myStrongPos.z_score.toFixed(2)}) to improve weak ${targetPosition} (rank ${targetPosStrength.rank}, z-score ${targetPosStrength.z_score.toFixed(2)}). Opponent is strong at ${targetPosition} (rank ${theirTargetPosStrength.rank}).`,
               });
             }
           }
@@ -141,16 +169,27 @@ serve(async (req) => {
       }
     }
 
-    // Sort by position gain
-    tradeTargets.sort((a, b) => b.positionGain - a.positionGain);
+    // Sort by best strategic fit (trading from strength to weakness)
+    tradeTargets.sort((a, b) => {
+      // Prioritize trades where I'm trading from greater strength
+      const aStrengthDiff = a.myPositionZScore - a.theirPositionZScore;
+      const bStrengthDiff = b.myPositionZScore - b.theirPositionZScore;
+      if (Math.abs(aStrengthDiff - bStrengthDiff) > 0.3) {
+        return bStrengthDiff - aStrengthDiff;
+      }
+      // Then by position gain
+      return b.positionGain - a.positionGain;
+    });
 
     return new Response(
       JSON.stringify({ 
         targetPosition,
-        myPosStrength: myPosStrength.toFixed(1),
-        leagueAvgPos: leagueAvgPos.toFixed(1),
-        posStrengthGap: posStrengthGap.toFixed(1),
-        needsUpgrade: posStrengthGap > 10,
+        currentRank: targetPosStrength.rank,
+        currentZScore: targetPosStrength.z_score.toFixed(2),
+        currentPSS: targetPosStrength.pss.toFixed(1),
+        deltaVsMedian: targetPosStrength.delta_vs_median.toFixed(1),
+        needsUpgrade: targetPosStrength.z_score < -0.3 || targetPosStrength.rank > 6,
+        isVeryWeak: targetPosStrength.z_score < -1.0,
         proposals: tradeTargets.slice(0, 10),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

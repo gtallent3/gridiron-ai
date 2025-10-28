@@ -114,36 +114,97 @@ serve(async (req) => {
       sumBIn += bestPlayerBonus;
     }
 
-    // Positional fit adjustments
+    // Enhanced Positional fit adjustments based on z_score and rank
     const positionalFitNotes: string[] = [];
     let teamAFitBonus = 0;
     let teamBFitBonus = 0;
 
-    // Check if trade improves weak positions
+    // Helper to calculate positional fit bonus based on weakness severity
+    const getPositionalFitBonus = (posStrength: any, playerValue: number): number => {
+      if (!posStrength) return 0;
+      
+      const zScore = posStrength.z_score;
+      const rank = posStrength.rank;
+      
+      // Scale bonus by how weak the position is
+      // z_score < -1.5: Very weak (bottom 10%) - 8% bonus
+      // z_score < -1.0: Weak (bottom 20%) - 5% bonus  
+      // z_score < -0.5: Below average - 3% bonus
+      // z_score < 0: Slightly below average - 1.5% bonus
+      
+      if (zScore < -1.5) return playerValue * 0.08;
+      if (zScore < -1.0) return playerValue * 0.05;
+      if (zScore < -0.5) return playerValue * 0.03;
+      if (zScore < 0) return playerValue * 0.015;
+      
+      return 0;
+    };
+
+    // Check if Team A improves weak positions by receiving players
     for (const playerId of teamBGives) {
       const value = valueMap.get(playerId);
       if (value) {
         const posStrength = teamAStrengths.get(value.position);
-        if (posStrength && posStrength.z_score < -0.5) {
-          teamAFitBonus += value.value_score * 0.02; // 2% bonus
-          positionalFitNotes.push(`Team A improves ${value.position} where they rank ${posStrength.rank}`);
+        const bonus = getPositionalFitBonus(posStrength, value.value_score);
+        if (bonus > 0) {
+          teamAFitBonus += bonus;
+          const zScore = posStrength.z_score.toFixed(2);
+          positionalFitNotes.push(
+            `Team A significantly improves ${value.position} (rank ${posStrength.rank}, z-score ${zScore}) by adding ${value.player_name}`
+          );
         }
       }
     }
 
+    // Check if Team A is trading away from positions of strength
+    for (const playerId of teamAGives) {
+      const value = valueMap.get(playerId);
+      if (value) {
+        const posStrength = teamAStrengths.get(value.position);
+        // If trading from a position of strength (z_score > 0.5), minor penalty
+        if (posStrength && posStrength.z_score > 0.5) {
+          teamAFitBonus -= value.value_score * 0.01; // 1% penalty for trading from strength
+          positionalFitNotes.push(
+            `Team A trades from ${value.position} strength (rank ${posStrength.rank})`
+          );
+        }
+      }
+    }
+
+    // Check if Team B improves weak positions by receiving players
     for (const playerId of teamAGives) {
       const value = valueMap.get(playerId);
       if (value) {
         const posStrength = teamBStrengths.get(value.position);
-        if (posStrength && posStrength.z_score < -0.5) {
-          teamBFitBonus += value.value_score * 0.02;
-          positionalFitNotes.push(`Team B improves ${value.position} where they rank ${posStrength.rank}`);
+        const bonus = getPositionalFitBonus(posStrength, value.value_score);
+        if (bonus > 0) {
+          teamBFitBonus += bonus;
+          const zScore = posStrength.z_score.toFixed(2);
+          positionalFitNotes.push(
+            `Team B significantly improves ${value.position} (rank ${posStrength.rank}, z-score ${zScore}) by adding ${value.player_name}`
+          );
+        }
+      }
+    }
+
+    // Check if Team B is trading away from positions of strength
+    for (const playerId of teamBGives) {
+      const value = valueMap.get(playerId);
+      if (value) {
+        const posStrength = teamBStrengths.get(value.position);
+        if (posStrength && posStrength.z_score > 0.5) {
+          teamBFitBonus -= value.value_score * 0.01;
+          positionalFitNotes.push(
+            `Team B trades from ${value.position} strength (rank ${posStrength.rank})`
+          );
         }
       }
     }
 
     sumAIn += teamAFitBonus;
     sumBIn += teamBFitBonus;
+
+    console.log('Positional fit adjustments:', { teamAFitBonus, teamBFitBonus, notes: positionalFitNotes });
 
     // Calculate net deltas
     const teamANet = sumAIn - sumAOut;

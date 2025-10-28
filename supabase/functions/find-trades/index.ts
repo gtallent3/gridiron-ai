@@ -35,24 +35,67 @@ serve(async (req) => {
     
     console.log('Find trades:', { mode, targetPlayerId, shopPlayerId });
 
-    // Get player valuations
-    const now = new Date();
-    const currentWeek = Math.min(Math.floor((now.getTime() - new Date(now.getFullYear(), 8, 1).getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1, 18);
-    const currentSeason = now.getFullYear();
-
-    const { data: valuations } = await supabase
-      .from('player_valuations')
+    // Get player values from cache
+    const { data: playerValues } = await supabase
+      .from('player_value_cache')
       .select('*')
-      .eq('season', currentSeason)
-      .eq('week', currentWeek);
+      .eq('league_id', leagueId);
 
-    const valuationMap = new Map((valuations || []).map(v => [v.player_id, v]));
+    const valueMap = new Map((playerValues || []).map(v => [v.player_id, v]));
+
+    // Get positional strengths for my team
+    const { data: myStrengths } = await supabase
+      .from('team_positional_strengths')
+      .select('*')
+      .eq('league_id', leagueId)
+      .eq('team_id', myTeam.team_id);
+
+    const myStrengthsMap = new Map((myStrengths || []).map(s => [s.position, s]));
+
+    // Identify my weakest positions (highest rank, lowest z_score)
+    const weakPositions = (myStrengths || [])
+      .filter(s => s.z_score < -0.3 || s.rank > 6)
+      .sort((a, b) => a.z_score - b.z_score)
+      .map(s => s.position);
+
+    console.log('My weak positions:', weakPositions);
 
     const getPlayerValue = (player: any) => {
-      const val = valuationMap.get(player.id || player.player_id);
-      if (!val) return (player.projected || 0) * 10;
-      const posWeight = POSITION_WEIGHTS[val.position as keyof typeof POSITION_WEIGHTS] || 1;
-      return Number(val.player_value) * posWeight;
+      const playerId = player.id || player.player_id || player.player_id;
+      const val = valueMap.get(playerId);
+      if (!val) return 0;
+      return Number(val.value_score) || 0;
+    };
+
+    const normPos = (pos: any): string => {
+      if (typeof pos === 'number') {
+        const map: Record<number, string> = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST' };
+        return map[pos] || String(pos).toUpperCase();
+      }
+      const s = String(pos || '').trim().toUpperCase();
+      if (/^\d+$/.test(s)) {
+        const n = Number(s);
+        const map: Record<number, string> = { 1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST' };
+        return map[n] || s;
+      }
+      if (s === 'D/ST' || s === 'DST' || s === 'DEF') return 'DST';
+      return ['QB', 'RB', 'WR', 'TE', 'K', 'DST'].includes(s) ? s : s;
+    };
+
+    // Calculate positional fit bonus for receiving a player
+    const getPositionalFitBonus = (player: any): number => {
+      const pos = normPos(player.position);
+      const strength = myStrengthsMap.get(pos);
+      if (!strength) return 0;
+      
+      const value = getPlayerValue(player);
+      const zScore = strength.z_score;
+      
+      // Stronger bonus for weaker positions
+      if (zScore < -1.5) return value * 0.15; // Very weak position
+      if (zScore < -1.0) return value * 0.10; // Weak position
+      if (zScore < -0.5) return value * 0.05; // Below average
+      return 0;
     };
 
     const tradeProposals: any[] = [];
@@ -75,18 +118,35 @@ serve(async (req) => {
       // Find fair packages from my roster
       const myRoster = myTeam.roster || [];
       
+      // Calculate positional fit for target
+      const targetPos = normPos(targetPlayer.position);
+      const targetPosBonus = getPositionalFitBonus(targetPlayer);
+      const targetIsWeakPos = weakPositions.includes(targetPos);
+      
       // 1-for-1 trades
       const oneForOne = myRoster
         .filter((p: any) => {
           const val = getPlayerValue(p);
           return val >= targetValue * 0.85 && val <= targetValue * 1.15;
         })
-        .map((p: any) => ({
-          myPlayers: [p],
-          theirPlayers: [targetPlayer],
-          valueDiff: getPlayerValue(p) - targetValue,
-          type: '1-for-1',
-        }));
+        .map((p: any) => {
+          const myPos = normPos(p.position);
+          const myPosStrength = myStrengthsMap.get(myPos);
+          const tradingFromStrength = myPosStrength && myPosStrength.z_score > 0.5;
+          
+          return {
+            myPlayers: [p],
+            theirPlayers: [targetPlayer],
+            valueDiff: getPlayerValue(p) - targetValue,
+            positionalFitBonus: targetPosBonus,
+            tradingFromStrength,
+            improvesWeakPosition: targetIsWeakPos,
+            type: '1-for-1',
+            rationale: targetIsWeakPos 
+              ? `Improves your weak ${targetPos} position (rank ${myStrengthsMap.get(targetPos)?.rank})` 
+              : `Adds ${targetPlayer.player_name || 'player'} to your roster`,
+          };
+        });
 
       // 2-for-1 trades
       const twoForOne: any[] = [];
@@ -99,15 +159,27 @@ serve(async (req) => {
               myPlayers: combo,
               theirPlayers: [targetPlayer],
               valueDiff: comboValue - targetValue,
+              positionalFitBonus: targetPosBonus,
+              improvesWeakPosition: targetIsWeakPos,
               type: '2-for-1',
+              rationale: targetIsWeakPos 
+                ? `Consolidates depth to improve weak ${targetPos} position` 
+                : `2-for-1 consolidation trade`,
             });
           }
         }
       }
 
+      // Sort by positional fit first, then value fairness
+      const sortByFit = (a: any, b: any) => {
+        if (a.improvesWeakPosition && !b.improvesWeakPosition) return -1;
+        if (!a.improvesWeakPosition && b.improvesWeakPosition) return 1;
+        return Math.abs(a.valueDiff) - Math.abs(b.valueDiff);
+      };
+
       tradeProposals.push(
-        ...oneForOne.slice(0, 2),
-        ...twoForOne.slice(0, 2)
+        ...oneForOne.sort(sortByFit).slice(0, 3),
+        ...twoForOne.sort(sortByFit).slice(0, 2)
       );
 
     } else if (mode === 'shop') {
@@ -121,6 +193,7 @@ serve(async (req) => {
       }
 
       const shopValue = getPlayerValue(shopPlayer);
+      const shopPos = normPos(shopPlayer.position);
 
       // Look through all opponent teams
       for (const team of allTeams) {
@@ -128,26 +201,55 @@ serve(async (req) => {
 
         const opponentRoster = team.roster || [];
 
-        // Find 1-for-1 matches
-        const matches = opponentRoster.filter((p: any) => {
-          const val = getPlayerValue(p);
-          return val >= shopValue * 0.85 && val <= shopValue * 1.15;
+        // Prioritize getting players in my weak positions
+        const matches = opponentRoster
+          .filter((p: any) => {
+            const val = getPlayerValue(p);
+            return val >= shopValue * 0.85 && val <= shopValue * 1.15;
+          })
+          .map((p: any) => {
+            const targetPos = normPos(p.position);
+            const posBonus = getPositionalFitBonus(p);
+            const improvesWeakPos = weakPositions.includes(targetPos);
+            
+            return {
+              myPlayers: [shopPlayer],
+              theirPlayers: [p],
+              theirTeam: team,
+              valueDiff: getPlayerValue(p) - shopValue,
+              positionalFitBonus: posBonus,
+              improvesWeakPosition: improvesWeakPos,
+              type: '1-for-1',
+              rationale: improvesWeakPos
+                ? `Trade ${shopPlayer.player_name || 'player'} to improve weak ${targetPos} position`
+                : `1-for-1 swap for ${p.player_name || 'player'}`,
+            };
+          });
+
+        // Sort matches by positional fit first
+        matches.sort((a: any, b: any) => {
+          if (a.improvesWeakPosition && !b.improvesWeakPosition) return -1;
+          if (!a.improvesWeakPosition && b.improvesWeakPosition) return 1;
+          return Math.abs(a.valueDiff) - Math.abs(b.valueDiff);
         });
 
-        matches.slice(0, 2).forEach((p: any) => {
-          tradeProposals.push({
-            myPlayers: [shopPlayer],
-            theirPlayers: [p],
-            theirTeam: team,
-            valueDiff: getPlayerValue(p) - shopValue,
-            type: '1-for-1',
-          });
-        });
+        tradeProposals.push(...matches.slice(0, 2));
       }
     }
 
-    // Sort by value fairness
-    tradeProposals.sort((a, b) => Math.abs(a.valueDiff) - Math.abs(b.valueDiff));
+    // Sort by positional fit first, then value fairness
+    tradeProposals.sort((a, b) => {
+      // Prioritize trades that improve weak positions
+      if (a.improvesWeakPosition && !b.improvesWeakPosition) return -1;
+      if (!a.improvesWeakPosition && b.improvesWeakPosition) return 1;
+      
+      // Then by positional fit bonus
+      const bonusDiff = (b.positionalFitBonus || 0) - (a.positionalFitBonus || 0);
+      if (Math.abs(bonusDiff) > 0.5) return bonusDiff > 0 ? 1 : -1;
+      
+      // Finally by value fairness
+      return Math.abs(a.valueDiff) - Math.abs(b.valueDiff);
+    });
 
     return new Response(
       JSON.stringify({ 
