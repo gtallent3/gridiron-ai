@@ -17,6 +17,15 @@ const getTeamAbbreviation = (teamId: number): string => {
   return teams[teamId] || 'FA';
 };
 
+// Map ESPN defaultPositionId to canonical position strings used by our DB/UI
+const POSITION_MAP: Record<number, string> = {
+  1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST'
+};
+const mapPosition = (val: any): string => {
+  const id = typeof val === 'number' ? val : parseInt(String(val || ''), 10);
+  return POSITION_MAP[id] || 'FLEX';
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -187,9 +196,9 @@ serve(async (req) => {
           if (weekProjection?.stats || weekProjection?.appliedStats) {
             const rawStats = weekProjection.stats || {};
             const appliedStats = weekProjection.appliedStats || {};
-            const position = normalizedPlayer?.position || player.defaultPositionId?.toString() || 'FLEX';
-            const isDST = position === 'D/ST' || position === 'DEF' || position === '16';
-            const isK = position === 'K' || position === '5' || player.defaultPositionId === 5;
+            const position = normalizedPlayer?.position || mapPosition(player.defaultPositionId);
+            const isDST = position === 'DST';
+            const isK = position === 'K' || player.defaultPositionId === 5;
             // Check if player is on bye (ESPN marks with specific indicators)
             const isByeWeek = (!rawStats || Object.keys(rawStats).length === 0) && (!appliedStats || Object.keys(appliedStats).length === 0);
             
@@ -396,9 +405,9 @@ serve(async (req) => {
         if (weekProjection?.stats || weekProjection?.appliedStats) {
           const rawStats = weekProjection.stats || {};
           const appliedStats = weekProjection.appliedStats || {};
-          const position = normalizedPlayer?.position || player.defaultPositionId?.toString() || 'FLEX';
-          const isDST = position === 'D/ST' || position === 'DEF' || position === '16';
-          const isK = position === 'K' || position === '5' || player.defaultPositionId === 5;
+          const position = normalizedPlayer?.position || mapPosition(player.defaultPositionId);
+          const isDST = position === 'DST';
+          const isK = position === 'K' || player.defaultPositionId === 5;
           const isByeWeek = (!rawStats || Object.keys(rawStats).length === 0) && (!appliedStats || Object.keys(appliedStats).length === 0);
           
           const normalizedStats: any = {
