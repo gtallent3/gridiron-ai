@@ -115,7 +115,13 @@ serve(async (req) => {
         continue;
       }
 
-      const weekData = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      const raw = await response.text();
+      if (!contentType.includes('application/json') || raw.trim().startsWith('<')) {
+        console.error(`Week ${week}: Non-JSON response from ESPN (status ${response.status})`);
+        continue;
+      }
+      const weekData = JSON.parse(raw);
       const projectionStatsToInsert: any[] = [];
       const poolRows: any[] = [];
       const waiverRows: any[] = [];
@@ -143,9 +149,15 @@ serve(async (req) => {
 
       let waiverPlayers: any[] = [];
       if (waiverResponse.ok) {
-        const waiverData = await waiverResponse.json();
-        waiverPlayers = waiverData.players || [];
-        console.log(`Week ${week}: Found ${waiverPlayers.length} waiver/FA players`);
+        const wct = waiverResponse.headers.get('content-type') || '';
+        const wraw = await waiverResponse.text();
+        if (wct.includes('application/json') && !wraw.trim().startsWith('<')) {
+          const waiverData = JSON.parse(wraw);
+          waiverPlayers = waiverData.players || [];
+          console.log(`Week ${week}: Found ${waiverPlayers.length} waiver/FA players`);
+        } else {
+          console.error(`Week ${week}: Non-JSON waiver response from ESPN (status ${waiverResponse.status})`);
+        }
       }
 
       // Process rostered players

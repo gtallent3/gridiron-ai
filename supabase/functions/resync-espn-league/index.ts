@@ -524,6 +524,81 @@ serve(async (req) => {
       // Don't fail the resync if projections fail
     }
 
+    // Also fetch waiver/free agent list for current week and populate waiver_wire_players
+    try {
+      const swidCookie = swid?.startsWith('{') ? swid : `{${swid}}`;
+      const waiverFilter = {
+        players: {
+          filterStatus: { value: ["FREEAGENT", "WAIVERS"] },
+          filterStatsForExternalIds: { value: [currentYear] },
+          filterStatsForSourceIds: { value: [1] },
+          filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [currentWeek] },
+          limit: 2000,
+          sortPercOwned: { sortPriority: 1, sortAsc: false }
+        }
+      };
+      const waiverUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentYear}/segments/0/leagues/${leagueData.league_id}?scoringPeriodId=${currentWeek}&view=kona_player_info`;
+      const waiverResp = await fetch(waiverUrl, {
+        headers: {
+          'Cookie': `SWID=${swidCookie}; espn_s2=${espn_s2}`,
+          'X-Fantasy-Filter': JSON.stringify(waiverFilter),
+        },
+      });
+      let waiverPlayers: any[] = [];
+      if (waiverResp.ok) {
+        const wct = waiverResp.headers.get('content-type') || '';
+        const wraw = await waiverResp.text();
+        if (wct.includes('application/json') && !wraw.trim().startsWith('<')) {
+          const wjson = JSON.parse(wraw);
+          waiverPlayers = wjson.players || [];
+        } else {
+          console.error('Resync: Non-JSON waiver response from ESPN');
+        }
+      }
+      const waiverRows: any[] = [];
+      for (const playerData of waiverPlayers) {
+        const player = playerData.player;
+        const espnId = player?.id?.toString();
+        if (!espnId) continue;
+        let normalizedPlayer = normalizedMap.get(espnId) || null;
+        if (!normalizedPlayer) {
+          const newPlayer = {
+            player_id: `espn_${espnId}`,
+            espn_id: espnId,
+            player_name: player?.fullName || 'Unknown',
+            position: player?.defaultPositionId?.toString() || 'FLEX',
+            team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA',
+          };
+          await supabase.from('normalized_players').upsert([newPlayer], { onConflict: 'espn_id', ignoreDuplicates: true });
+          normalizedPlayer = newPlayer;
+          normalizedMap.set(espnId, newPlayer);
+        }
+        const ownership = playerData.ownership || {};
+        const waiverStatus = playerData.status === 'FREEAGENT' ? 'FREEAGENT' : 'WAIVERS';
+        waiverRows.push({
+          league_id: updatedLeague.id,
+          espn_league_id: leagueData.league_id,
+          player_id: normalizedPlayer.player_id,
+          player_name: normalizedPlayer.player_name,
+          position: normalizedPlayer.position,
+          team: normalizedPlayer.team,
+          season: currentYear,
+          week: currentWeek,
+          waiver_status: waiverStatus,
+          percent_owned: ownership.percentOwned || 0,
+          percent_started: ownership.percentStarted || 0,
+          provider_ids: { espn: espnId },
+          updated_at: new Date().toISOString(),
+        });
+      }
+      if (waiverRows.length > 0) {
+        await supabase.from('waiver_wire_players').upsert(waiverRows, { onConflict: 'league_id,season,week,player_id', ignoreDuplicates: false });
+        console.log(`Resync: inserted ${waiverRows.length} waiver players for week ${currentWeek}`);
+      }
+    } catch (waiverErr) {
+      console.error('Resync: waiver sync error', waiverErr);
+    }
+
     return new Response(
       JSON.stringify({
         message: `Successfully resynced ${espnLeagueData.settings.name}`,
