@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PlayerCard } from "./PlayerCard";
-import { FetchProjections } from "./FetchProjections";
 import { Sparkles, Plus, Minus, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -148,8 +147,6 @@ export function WaiverWire({ league }: WaiverWireProps) {
 
   return (
     <div className="space-y-6">
-      <FetchProjections leagueId={league.id} />
-      
       <Card className="border-2 border-accent/50 bg-gradient-to-br from-accent/5 to-primary/5">
         <CardHeader>
           <div className="flex justify-between items-start">
