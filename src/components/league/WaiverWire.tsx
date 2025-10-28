@@ -279,9 +279,8 @@ export function WaiverWire({ league }: WaiverWireProps) {
             </AlertDialogTitle>
             <AlertDialogDescription>
               {selectedAction?.type === 'add' 
-                ? `Are you sure you want to add ${selectedAction.player.name} to your roster?`
-                : `Are you sure you want to drop ${selectedAction.player.name} from your roster?`
-              }
+                ? `Are you sure you want to add ${selectedAction?.player?.name ?? 'this player'} to your roster?`
+                : `Are you sure you want to drop ${selectedAction?.player?.name ?? 'this player'} from your roster?`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
