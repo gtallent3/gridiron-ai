@@ -64,18 +64,35 @@ serve(async (req) => {
 
     if (valuesError) throw valuesError;
 
-    // Build player value map
-    const valueMap = new Map<string, any>();
+    // Build player value maps (by id and by name)
+    const valueMapById = new Map<string, any>();
+    const valueMapByName = new Map<string, any>();
     for (const pv of playerValues || []) {
-      valueMap.set(pv.player_id, pv);
+      valueMapById.set(pv.player_id, pv);
+      if (pv.player_name) valueMapByName.set(String(pv.player_name).toLowerCase().trim(), pv);
     }
 
     // Calculate PSS for each team and position
     const positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
     const teamPSS: Map<string, Map<string, number>> = new Map();
 
+    const normPos = (pos: any) => {
+      const s = String(pos || '').toUpperCase();
+      if (s === 'D/ST' || s === 'DST' || s === 'DEF') return 'DST';
+      if (s === 'PK' || s === 'K') return 'K';
+      return s;
+    };
+
+    const getValueForPlayer = (p: any) => {
+      const pid = p.player_id || p.playerId || p.id;
+      if (pid && valueMapById.has(String(pid))) return valueMapById.get(String(pid));
+      const name = (p.player_name || p.playerName || p.name || '').toLowerCase().trim();
+      if (name && valueMapByName.has(name)) return valueMapByName.get(name);
+      return null;
+    };
+
     for (const team of teams || []) {
-      const roster = team.roster as any[];
+      const roster = (team.roster as any[]) || [];
       const teamMap = new Map<string, number>();
 
       for (const pos of positions) {
@@ -83,10 +100,10 @@ serve(async (req) => {
         
         // Get all players at this position
         const posPlayers = roster
-          .filter(p => p.position === pos)
+          .filter(p => normPos(p.position) === pos)
           .map(p => {
-            const value = valueMap.get(p.player_id);
-            return value ? value.value_score : 0;
+            const value = getValueForPlayer(p);
+            return value ? Number(value.value_score) || 0 : 0;
           })
           .sort((a, b) => b - a); // descending
 
