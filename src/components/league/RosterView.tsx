@@ -166,19 +166,50 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             }
           });
         } else {
-          // For current/future weeks, use projected values from roster
+          // For current/future weeks, fetch projections from projected_player_stats
+          const now = new Date();
+          const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+          
+          // Fetch projected stats for this specific week
+          const { data: projectedStats, error: projError } = await supabase
+            .from('projected_player_stats')
+            .select('*')
+            .eq('week', week)
+            .eq('season', inferredSeason);
+          
+          if (projError) {
+            console.error('Error fetching projected stats:', projError);
+          }
+          
+          // Create a map by player_id and normalized name for matching
+          const projByPlayerId = new Map<string, any>();
+          const projByName = new Map<string, any>();
+          if (projectedStats) {
+            for (const proj of projectedStats) {
+              if (proj.player_id) {
+                projByPlayerId.set(proj.player_id, proj);
+              }
+              const normalizedName = proj.player_name.toLowerCase().replace(/[^a-z]/g, '');
+              projByName.set(normalizedName, proj);
+            }
+          }
+          
           userTeam.roster.forEach((player: any) => {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
             const isStarter = player.starter !== false;
             
+            // Try to find projection by ID first, then by name
+            const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
+            const projection = projByPlayerId.get(playerId) || projByName.get(normalizedName);
+            
             const playerDataObj = {
               id: playerId || playerName,
               name: playerName,
               position: positionName,
-              team: player.team || 'NFL',
-              projected: player.projected || 0,
+              team: projection?.team || player.team || 'NFL',
+              projected: projection?.projected_fp || player.projected || 0,
               actualPoints: 0,
               status: isStarter ? 'starter' : 'bench',
               is_bye_week: player.is_bye_week || false,
