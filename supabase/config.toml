@@ -6,6 +6,9 @@ verify_jwt = true
 [functions.admin-create-prop]
 verify_jwt = true
 
+[functions.analyze-start-sit]
+verify_jwt = false
+
 [functions.sync-sleeper-league]
 verify_jwt = true
 
