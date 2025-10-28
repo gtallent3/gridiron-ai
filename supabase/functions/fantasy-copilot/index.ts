@@ -140,32 +140,51 @@ function classifyIntent(message: string): string {
 
 async function handleLineupOptimization(supabase: any, context: LeagueContext, message: string) {
   try {
-    const { data, error } = await supabase.functions.invoke('analyze-start-sit', {
-      body: {
-        leagueId: context.leagueId,
-        teamId: context.teamId,
-        week: context.week,
+    // Try to extract a pairwise start/sit question like:
+    // "Start Player A or Player B?" or "Player A vs Player B"
+    const pairRegexes = [
+      /start\s+([^?]+?)\s+(?:or|vs\.?|versus)\s+([^?]+?)(?:\?|$)/i,
+      /([^?]+?)\s+(?:or|vs\.?|versus)\s+([^?]+?)(?:\?|$)/i,
+    ];
+    let p1: string | undefined;
+    let p2: string | undefined;
+    for (const rx of pairRegexes) {
+      const m = message.match(rx);
+      if (m) {
+        p1 = m[1].trim();
+        p2 = m[2].trim();
+        break;
       }
-    });
-
-    if (error) throw error;
-
-    const recommendations = data.recommendations || [];
-    if (recommendations.length === 0) {
-      return {
-        response: "Your current lineup looks optimal! No suggested changes at this time.",
-        data: null
-      };
     }
 
-    let response = `**Lineup Optimization for Week ${context.week}**\n\n`;
-    recommendations.forEach((rec: any, idx: number) => {
-      response += `${idx + 1}. **${rec.action}**: ${rec.player_in.name} (${rec.player_in.position})\n`;
-      response += `   • Projected: ${rec.player_in.projected_fp.toFixed(1)} pts\n`;
-      response += `   • Reason: ${rec.reasoning}\n\n`;
-    });
+    if (p1 && p2) {
+      const season = new Date().getFullYear();
+      const week = context.week || 1;
 
-    return { response, data: recommendations };
+      const { data, error } = await supabase.functions.invoke('analyze-start-sit', {
+        body: {
+          player1Name: p1,
+          player2Name: p2,
+          week,
+          season,
+        }
+      });
+
+      if (error) throw error;
+
+      let response = `**Start/Sit: ${p1} vs ${p2} (Week ${week})**\n\n`;
+      response += `Recommendation: ${data.recommendation}\n`;
+      response += `Reason: ${data.reasoning}\n`;
+      response += `Confidence: ${data.confidence}%`;
+
+      return { response, data };
+    }
+
+    // No pairwise players detected – guide the user instead of erroring
+    return {
+      response: "I can compare two players for you. Try: 'Start Player A or Player B?' For full lineup optimization, use the My Team tab or ask position-specific questions (e.g., 'Best WR starters this week?').",
+      data: null
+    };
   } catch (error) {
     console.error('Lineup optimization error:', error);
     return {
