@@ -64,6 +64,11 @@ serve(async (req) => {
       throw new Error(`No positional strength data found for ${targetPosition}`);
     }
 
+    // Get all PSS values for this position across league for rank estimation
+    const allTeamsPSSForPosition = Array.from(strengthsByTeam.values())
+      .map(s => s.get(targetPosition)?.pss || 0)
+      .filter(p => p > 0);
+
     console.log(`Target ${targetPosition} strength:`, {
       pss: targetPosStrength.pss,
       rank: targetPosStrength.rank,
@@ -93,6 +98,47 @@ serve(async (req) => {
       return Number(val.value_score) || 0;
     };
 
+    // Helper to calculate what PSS would be after adding/removing a player
+    const calculatePSSAfterTrade = (
+      roster: any[],
+      position: string,
+      playersAdded: any[],
+      playersRemoved: any[]
+    ): number => {
+      // Get current position players
+      const posPlayers = roster
+        .filter((p: any) => normPos(p.position) === position)
+        .map((p: any) => getPlayerValue(p));
+      
+      // Remove traded away players
+      const removedValues = playersRemoved.map(p => getPlayerValue(p));
+      let updatedValues = posPlayers.filter(v => !removedValues.includes(v));
+      
+      // Add received players
+      const addedValues = playersAdded.map(p => getPlayerValue(p));
+      updatedValues = [...updatedValues, ...addedValues];
+      
+      // Calculate new PSS (sum of top N+1 players)
+      const DEFAULT_STARTERS: Record<string, number> = { 
+        QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 
+      };
+      const N = (DEFAULT_STARTERS[position] || 1) + 1;
+      const topValues = updatedValues.sort((a, b) => b - a).slice(0, N);
+      return topValues.reduce((sum, v) => sum + v, 0);
+    };
+
+    // Helper to estimate new rank based on PSS change
+    const estimateNewRank = (
+      currentRank: number,
+      currentPSS: number,
+      newPSS: number,
+      allTeamsPSS: number[]
+    ): number => {
+      // Sort all PSS values
+      const sortedPSS = [...allTeamsPSS, newPSS].sort((a, b) => b - a);
+      return sortedPSS.indexOf(newPSS) + 1;
+    };
+
     const normalizePlayerForTrade = (player: any) => {
       const playerId = player.id || player.player_id;
       const playerValue = valueMap.get(playerId);
@@ -118,13 +164,25 @@ serve(async (req) => {
 
       const theirTargetPosStrength = theirStrengths.get(targetPosition);
       
-      // Only target teams that are strong at this position (z_score > 0.5, rank <= 4)
+      // Only target teams that are strong at this position AND weak where I'm strong
       if (!theirTargetPosStrength || theirTargetPosStrength.z_score < 0.5) continue;
 
-      console.log(`Team ${team.team_id} has surplus at ${targetPosition}:`, {
-        rank: theirTargetPosStrength.rank,
-        z_score: theirTargetPosStrength.z_score,
+      // Find if they have a weakness where I have strength (complementary needs)
+      const myStrongPositions = Array.from(myStrengths?.entries() || [])
+        .filter(([pos, strength]) => pos !== targetPosition && strength.z_score > 0 && strength.rank <= 4)
+        .map(([pos, strength]) => ({ position: pos, ...strength }))
+        .sort((a, b) => b.z_score - a.z_score);
+
+      // Check if opponent is weak in any of my strong positions
+      const complementaryNeeds = myStrongPositions.filter(myStrong => {
+        const theirPosStrength = theirStrengths.get(myStrong.position);
+        return theirPosStrength && (theirPosStrength.z_score < -0.3 || theirPosStrength.rank > 6);
       });
+
+      if (complementaryNeeds.length === 0) continue; // Skip if no mutual benefit
+
+      console.log(`Team ${team.team_id} has surplus at ${targetPosition} AND needs:`, 
+        complementaryNeeds.map(c => c.position).join(', '));
 
       const theirRoster = team.roster || [];
       const theirPosPlayers = theirRoster
@@ -135,12 +193,6 @@ serve(async (req) => {
 
       if (theirPosPlayers.length < 2) continue; // Need at least 2 to target depth
 
-      // Find positions where I have strength (z_score > 0) to trade from
-      const myStrongPositions = Array.from(myStrengths?.entries() || [])
-        .filter(([pos, strength]) => pos !== targetPosition && strength.z_score > 0)
-        .map(([pos, strength]) => ({ position: pos, ...strength }))
-        .sort((a, b) => b.z_score - a.z_score);
-
       // Try to find fair trades - target their 2nd, 3rd, 4th best player at this position
       for (const targetPlayerIdx of [1, 2, 3]) {
         if (targetPlayerIdx >= theirPosPlayers.length) continue;
@@ -148,46 +200,112 @@ serve(async (req) => {
         const targetPlayer = theirPosPlayers[targetPlayerIdx];
         const targetValue = targetPlayer.value;
 
-        if (targetValue === 0) continue; // Skip players with no value
+        if (targetValue === 0) continue;
 
-        console.log(`Considering ${targetPlayer.name} (value: ${targetValue}) from team ${team.team_id}`);
-
-        // Look for matches from my positions of strength
-        for (const myStrongPos of myStrongPositions) {
+        // Look for matches from my positions that help THEM (complementary needs)
+        for (const needPos of complementaryNeeds) {
           const myPosPlayers = myRoster
-            .filter((p: any) => normPos(p.position) === myStrongPos.position)
+            .filter((p: any) => normPos(p.position) === needPos.position)
             .map((p: any) => normalizePlayerForTrade(p))
             .filter((p: any) => p.value > 0)
             .sort((a: any, b: any) => b.value - a.value);
 
-          if (myPosPlayers.length < 2) continue; // Need depth to trade
+          if (myPosPlayers.length < 2) continue;
 
-          // Don't trade my best player at this position, try 2nd-4th best
+          // Try 2nd-4th best players to preserve my top player
           for (let i = 1; i < Math.min(myPosPlayers.length, 4); i++) {
             const myPlayer = myPosPlayers[i];
             const myValue = myPlayer.value;
             const valueDiff = targetValue - myValue;
 
             // Check if it's a fair trade (within 30% value)
-            if (Math.abs(valueDiff) < targetValue * 0.30) {
-              const positionGainEstimate = targetValue * 0.4;
+            if (Math.abs(valueDiff) < Math.max(targetValue, myValue) * 0.30) {
+              // Calculate PSS changes
+              const myNewPSS = calculatePSSAfterTrade(
+                myRoster,
+                targetPosition,
+                [targetPlayer],
+                [myPlayer]
+              );
+              const myPSSDelta = myNewPSS - targetPosStrength.pss;
               
-              console.log(`Found match: ${myPlayer.name} (${myValue}) for ${targetPlayer.name} (${targetValue})`);
+              // Estimate my new rank
+              const myNewRank = estimateNewRank(
+                targetPosStrength.rank,
+                targetPosStrength.pss,
+                myNewPSS,
+                allTeamsPSSForPosition
+              );
+
+              // Calculate their PSS improvement
+              const theirPosStrength = theirStrengths.get(needPos.position);
+              const theirCurrentPSS = theirPosStrength?.pss || 0;
+              const theirNewPSS = calculatePSSAfterTrade(
+                team.roster || [],
+                needPos.position,
+                [myPlayer],
+                [targetPlayer]
+              );
+              const theirPSSDelta = theirNewPSS - theirCurrentPSS;
+
+              // Calculate trade fit score
+              const rankImprovement = Math.max(0, targetPosStrength.rank - myNewRank);
+              const tradeFitScore = 
+                (myPSSDelta * 0.6) + 
+                (rankImprovement * 10 * 0.3) + 
+                ((targetValue - Math.abs(valueDiff)) / targetValue * 0.1);
+
+              // Grade the trade
+              let grade = 'C';
+              if (rankImprovement >= 3 && myPSSDelta > 15) grade = 'A';
+              else if (rankImprovement >= 2 && myPSSDelta > 10) grade = 'B';
+              else if (rankImprovement >= 1 && myPSSDelta > 5) grade = 'C+';
+              else if (myPSSDelta > 0) grade = 'C';
+              else grade = 'D';
+
+              const mutualBenefit = theirPSSDelta > 0 && myPSSDelta > 0;
+
+              console.log(`Match: ${myPlayer.name} → ${targetPlayer.name}, PSS Δ: ${myPSSDelta.toFixed(1)}, Rank: ${targetPosStrength.rank}→${myNewRank}`);
               
               tradeTargets.push({
                 myPlayers: [myPlayer],
                 theirPlayers: [targetPlayer],
                 theirTeam: team,
                 valueDiff,
-                positionGain: positionGainEstimate,
-                myPositionRank: myStrongPos.rank,
-                theirPositionRank: theirTargetPosStrength.rank,
-                myPositionZScore: myStrongPos.z_score,
-                theirPositionZScore: theirTargetPosStrength.z_score,
-                rationale: `Trade ${myPlayer.name} from your strong ${myStrongPos.position} (rank ${myStrongPos.rank}, z-score ${myStrongPos.z_score.toFixed(2)}) to get ${targetPlayer.name} and improve weak ${targetPosition} (rank ${targetPosStrength.rank}, z-score ${targetPosStrength.z_score.toFixed(2)}). Opponent is strong at ${targetPosition} (rank ${theirTargetPosStrength.rank}).`,
+                
+                // My metrics
+                my_pos_rank_before: targetPosStrength.rank,
+                my_pos_rank_after: myNewRank,
+                my_pss_before: targetPosStrength.pss,
+                my_pss_after: myNewPSS,
+                pss_delta: myPSSDelta,
+                
+                // Their metrics
+                opponent_pos_rank_before: theirPosStrength?.rank || 0,
+                opponent_pos_rank_after: estimateNewRank(
+                  theirPosStrength?.rank || 10,
+                  theirCurrentPSS,
+                  theirNewPSS,
+                  Array.from(strengthsByTeam.values())
+                    .map(s => s.get(needPos.position)?.pss || 0)
+                    .filter(p => p > 0)
+                ),
+                opponent_pss_delta: theirPSSDelta,
+                opponent_improved_position: needPos.position,
+                
+                // Scoring
+                trade_fit_score: tradeFitScore,
+                grade,
+                mutual_benefit: mutualBenefit,
+                
+                // Analysis
+                rationale: `Trade ${myPlayer.name} from your strong ${needPos.position} (rank ${needPos.rank}) to get ${targetPlayer.name}. ` +
+                  `Your ${targetPosition} improves from rank ${targetPosStrength.rank} → ${myNewRank} (+${myPSSDelta.toFixed(1)} PSS). ` +
+                  `Opponent improves their weak ${needPos.position} from rank ${theirPosStrength?.rank || '?'} (${theirPSSDelta > 0 ? `+${theirPSSDelta.toFixed(1)}` : theirPSSDelta.toFixed(1)} PSS). ` +
+                  `${mutualBenefit ? '✓ Mutually beneficial' : '⚠️ One-sided favor'}`,
               });
               
-              // Limit to 2 proposals per opponent to avoid spam
+              // Limit proposals per team
               if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 2) break;
             }
           }
@@ -199,24 +317,18 @@ serve(async (req) => {
 
     console.log(`Found ${tradeTargets.length} total trade proposals`);
 
-    // Sort by best strategic fit (trading from strength to weakness)
+    // Sort by trade fit score (best strategic + rank improvement + value)
     tradeTargets.sort((a, b) => {
-      // Prioritize trades where I'm trading from greater strength
-      const aStrengthDiff = a.myPositionZScore - a.theirPositionZScore;
-      const bStrengthDiff = b.myPositionZScore - b.theirPositionZScore;
-      if (Math.abs(aStrengthDiff - bStrengthDiff) > 0.3) {
-        return bStrengthDiff - aStrengthDiff;
-      }
-      // Then by position gain
-      return b.positionGain - a.positionGain;
+      // Prioritize mutual benefit
+      if (a.mutual_benefit && !b.mutual_benefit) return -1;
+      if (!a.mutual_benefit && b.mutual_benefit) return 1;
+      
+      // Then by trade fit score
+      return b.trade_fit_score - a.trade_fit_score;
     });
 
-    // Enrich proposals with rank improvement estimates
-    const enrichedProposals = tradeTargets.slice(0, 8).map(t => ({
-      ...t,
-      estimatedRankImprovement: Math.max(1, Math.floor(t.positionGain / 15)),
-      improvementContext: `Would improve ${targetPosition} from rank ${targetPosStrength.rank} (z-score ${targetPosStrength.z_score.toFixed(2)})`,
-    }));
+    // Return top proposals
+    const finalProposals = tradeTargets.slice(0, 8);
 
     return new Response(
       JSON.stringify({ 
@@ -227,7 +339,7 @@ serve(async (req) => {
         deltaVsMedian: targetPosStrength.delta_vs_median.toFixed(1),
         needsUpgrade: targetPosStrength.z_score < -0.3 || targetPosStrength.rank > 6,
         isVeryWeak: targetPosStrength.z_score < -1.0,
-        proposals: enrichedProposals,
+        proposals: finalProposals,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
