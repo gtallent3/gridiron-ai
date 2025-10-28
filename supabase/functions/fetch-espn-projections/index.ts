@@ -68,7 +68,7 @@ serve(async (req) => {
     const { data: league, error: leagueError } = await supabase
       .from('connected_leagues')
       .select('league_id, platform')
-      .eq('id', leagueId)
+      .eq('league_id', leagueId)
       .eq('user_id', user.id)
       .single();
 
@@ -381,13 +381,13 @@ serve(async (req) => {
                 player_id: `espn_${espnId}`,
                 espn_id: espnId,
                 player_name: player.fullName || 'Unknown',
-                position: player.defaultPositionId?.toString() || 'FLEX',
+                position: mapPosition(player.defaultPositionId),
                 team: player.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA',
               };
               normalizedMap.set(espnId, newPlayer);
               await supabase
                 .from('normalized_players')
-                .upsert([newPlayer], { onConflict: 'espn_id', ignoreDuplicates: true });
+                .upsert([newPlayer], { onConflict: 'player_id', ignoreDuplicates: true });
             }
           }
         }
@@ -518,13 +518,13 @@ serve(async (req) => {
               player_id: `espn_${espnId}`,
               espn_id: espnId,
               player_name: player.fullName || 'Unknown',
-              position: player.defaultPositionId?.toString() || 'FLEX',
+              position: mapPosition(player.defaultPositionId),
               team: player.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA',
             };
             normalizedMap.set(espnId, newPlayer);
             await supabase
               .from('normalized_players')
-              .upsert([newPlayer], { onConflict: 'espn_id', ignoreDuplicates: true });
+              .upsert([newPlayer], { onConflict: 'player_id', ignoreDuplicates: true });
           }
         }
       }

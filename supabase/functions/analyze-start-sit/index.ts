@@ -253,6 +253,19 @@ serve(async (req) => {
       }
     }
 
+    // Fetch all projections for the given week/season (for richer UI context)
+    const { data: allWeekProjections, error: allProjError } = await supabase
+      .from('projected_player_stats')
+      .select('player_id, player_name, team, position, week, season, projected_fp, status_flags, confidence')
+      .eq('week', week)
+      .eq('season', season)
+      .order('projected_fp', { ascending: false, nullsFirst: false })
+      .limit(2000);
+
+    if (allProjError) {
+      console.error('Error fetching all projections:', allProjError);
+    }
+
     // Return analysis
     return new Response(
       JSON.stringify({
@@ -286,6 +299,7 @@ serve(async (req) => {
           eligible: false,
           ineligibilityReason: player2Check.reason,
         },
+        allProjections: allWeekProjections || [],
         lastUpdated: player1Check.player?.last_updated || player2Check.player?.last_updated || new Date().toISOString(),
       }),
       {
