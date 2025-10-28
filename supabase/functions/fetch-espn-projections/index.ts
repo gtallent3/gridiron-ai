@@ -111,7 +111,7 @@ serve(async (req) => {
       });
 
       if (!response.ok) {
-        console.error(`Failed to fetch week ${week}: ${response.status}`);
+        console.error(`Failed to fetch week ${week}: ${response.status} - ESPN may not have data for this week yet`);
         continue;
       }
 
