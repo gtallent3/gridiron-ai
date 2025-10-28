@@ -265,58 +265,57 @@ serve(async (req) => {
         console.error('Error fetching stats:', err);
       }
 
-      // Fetch projections for the current week with robust fallbacks
+      // Fetch projections from projected_player_stats table
       const projectionMap = new Map<string, number>();
       try {
-        // Attempt 1: Default projections endpoint (array expected)
-        const baseProjUrl = `https://api.sleeper.app/v1/projections/nfl/${currentYear}/${currentWeek}`;
-        console.log('Fetching projections (base):', baseProjUrl);
-        let projResp = await fetch(baseProjUrl);
-        if (projResp.ok) {
-          const projections: any = await projResp.json();
-          if (Array.isArray(projections)) {
-            for (const p of projections) {
-              const id = (p.player_id || '').toString();
-              const stats = (p.stats || p);
-              const pts = stats[projField] ?? stats.pts_ppr ?? stats.pts_half_ppr ?? stats.pts_std ?? 0;
-              if (id) projectionMap.set(id, Number(pts) || 0);
+        console.log(`Fetching projections from database for week ${currentWeek}, season ${currentYear}`);
+        
+        // Get projections from projected_player_stats table
+        // Try to match by sleeper_id if available
+        const { data: dbProjections, error: projError } = await supabase
+          .from('projected_player_stats')
+          .select('player_id, projected_fp, provider_ids')
+          .eq('week', currentWeek)
+          .eq('season', currentYear);
+
+        if (projError) {
+          console.error('Error fetching projections from database:', projError);
+        } else if (dbProjections && dbProjections.length > 0) {
+          for (const proj of dbProjections) {
+            // Try to match by sleeper_id in provider_ids
+            const providerIds = proj.provider_ids as any;
+            const sleeperId = providerIds?.sleeper_id || proj.player_id;
+            
+            if (sleeperId) {
+              projectionMap.set(sleeperId, Number(proj.projected_fp) || 0);
             }
-            console.log(`Loaded (base) ${projectionMap.size} projections`);
-          } else if (projections && typeof projections === 'object') {
-            // Sometimes returns object keyed by player_id
-            for (const [playerId, stats] of Object.entries(projections as Record<string, any>)) {
-              const s = stats as any;
-              const pts = s[projField] ?? s.pts_ppr ?? s.pts_half_ppr ?? s.pts_std ?? 0;
-              projectionMap.set(playerId, Number(pts) || 0);
-            }
-            console.log(`Loaded (base-object) ${projectionMap.size} projections`);
           }
+          console.log(`Loaded ${projectionMap.size} projections from database`);
         }
 
-        // Attempt 2: If empty, try projections with scoring type query
+        // Fallback to Sleeper API if no database projections found
         if (projectionMap.size === 0) {
-          const typedProjUrl = `https://api.sleeper.app/v1/projections/nfl/${currentYear}/${currentWeek}?type=${projType}`;
-          console.log('Fetching projections (typed):', typedProjUrl);
-          projResp = await fetch(typedProjUrl);
+          console.log('No database projections found, falling back to Sleeper API');
+          const baseProjUrl = `https://api.sleeper.app/v1/projections/nfl/${currentYear}/${currentWeek}`;
+          const projResp = await fetch(baseProjUrl);
           if (projResp.ok) {
-            const projections2: any = await projResp.json();
-            if (Array.isArray(projections2)) {
-              for (const p of projections2) {
+            const projections: any = await projResp.json();
+            if (Array.isArray(projections)) {
+              for (const p of projections) {
                 const id = (p.player_id || '').toString();
                 const stats = (p.stats || p);
                 const pts = stats[projField] ?? stats.pts_ppr ?? stats.pts_half_ppr ?? stats.pts_std ?? 0;
                 if (id) projectionMap.set(id, Number(pts) || 0);
               }
-            } else if (projections2 && typeof projections2 === 'object') {
-              for (const [playerId, stats] of Object.entries(projections2 as Record<string, any>)) {
+              console.log(`Loaded ${projectionMap.size} projections from Sleeper API`);
+            } else if (projections && typeof projections === 'object') {
+              for (const [playerId, stats] of Object.entries(projections as Record<string, any>)) {
                 const s = stats as any;
                 const pts = s[projField] ?? s.pts_ppr ?? s.pts_half_ppr ?? s.pts_std ?? 0;
                 projectionMap.set(playerId, Number(pts) || 0);
               }
+              console.log(`Loaded ${projectionMap.size} projections from Sleeper API (object format)`);
             }
-            console.log(`Loaded (typed) ${projectionMap.size} projections`);
-          } else {
-            console.error('Typed projections fetch failed:', projResp.status, projResp.statusText);
           }
         }
       } catch (err) {
@@ -415,6 +414,76 @@ serve(async (req) => {
           }, {
             onConflict: 'league_id,team_id',
           });
+      }
+
+      // Populate waiver_wire_players from projected_player_stats
+      try {
+        console.log('Populating waiver wire from projected_player_stats...');
+        
+        // Get all rostered player IDs
+        const rosteredPlayerIds = new Set(
+          rosters.flatMap((r: any) => (r.players || []).map((id: any) => id?.toString()))
+        );
+
+        // Query projected_player_stats for non-rostered players
+        const { data: waiverProjections } = await supabase
+          .from('projected_player_stats')
+          .select('player_id, player_name, position, team, projected_fp, provider_ids, stats, applied_breakdown, confidence, status_flags')
+          .eq('week', currentWeek)
+          .eq('season', currentYear)
+          .order('projected_fp', { ascending: false })
+          .limit(500); // Top 500 available players
+
+        if (waiverProjections && waiverProjections.length > 0) {
+          const waiverRows = [];
+          
+          for (const proj of waiverProjections) {
+            // Check if player is available (not rostered)
+            const providerIds = proj.provider_ids as any;
+            const sleeperId = providerIds?.sleeper_id || proj.player_id;
+            
+            // Skip if player is rostered
+            if (rosteredPlayerIds.has(sleeperId)) {
+              continue;
+            }
+
+            waiverRows.push({
+              league_id: connectedLeague.id,
+              espn_league_id: league.league_id, // Using league_id as identifier
+              season: currentYear,
+              week: currentWeek,
+              player_id: proj.player_id,
+              player_name: proj.player_name,
+              position: proj.position,
+              team: proj.team,
+              projected_fp: proj.projected_fp || 0,
+              waiver_status: 'FREEAGENT',
+              stats: proj.stats || {},
+              applied_breakdown: proj.applied_breakdown || {},
+              confidence: proj.confidence || 0.8,
+              status_flags: proj.status_flags || {},
+              source: 'sleeper_db_projection',
+              provider_ids: proj.provider_ids || {},
+            });
+          }
+
+          if (waiverRows.length > 0) {
+            const { error: waiverError } = await supabase
+              .from('waiver_wire_players')
+              .upsert(waiverRows, {
+                onConflict: 'league_id,season,week,player_id',
+                ignoreDuplicates: false
+              });
+            
+            if (waiverError) {
+              console.error('Error upserting waiver wire players:', waiverError);
+            } else {
+              console.log(`Populated ${waiverRows.length} waiver wire players for league ${league.league_id}`);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error populating waiver wire:', err);
       }
 
       syncedLeagues.push({
