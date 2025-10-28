@@ -74,37 +74,68 @@ export const ConnectedLeagues = () => {
   const handleQuickResync = async (e: React.MouseEvent, leagueId: string, platform: string) => {
     e.stopPropagation(); // Prevent navigation
     
-    if (platform !== 'espn') {
-      toast({
-        title: "Not Available",
-        description: "Quick resync is currently only available for ESPN leagues",
-      });
-      return;
-    }
-
     setRefreshingId(leagueId);
     try {
-      const { data, error } = await supabase.functions.invoke('resync-espn-league', {
-        body: { leagueId }
-      });
+      if (platform === 'espn') {
+        const { data, error } = await supabase.functions.invoke('resync-espn-league', {
+          body: { leagueId }
+        });
 
-      if (error) {
-        if (error.message?.includes('credentials') || error.message?.includes('expired')) {
+        if (error) {
+          if (error.message?.includes('credentials') || error.message?.includes('expired')) {
+            toast({
+              title: "Credentials Expired",
+              description: "Please reconnect your ESPN league",
+              variant: "destructive",
+            });
+            return;
+          }
+          throw error;
+        }
+
+        toast({
+          title: "League Synced",
+          description: data?.message || "Your league has been updated",
+        });
+      } else if (platform === 'sleeper') {
+        // Get the Sleeper username from the user's profile
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('Not authenticated');
+
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .single();
+
+        if (!profile?.username) {
           toast({
-            title: "Credentials Expired",
-            description: "Please reconnect your ESPN league",
+            title: "Username Required",
+            description: "Please set your Sleeper username in Settings first",
             variant: "destructive",
           });
           return;
         }
-        throw error;
+
+        const { data, error } = await supabase.functions.invoke('sync-sleeper-league', {
+          body: { username: profile.username }
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "League Synced",
+          description: data?.message || "Your Sleeper league has been updated",
+        });
+      } else {
+        toast({
+          title: "Not Available",
+          description: `Quick resync is not available for ${platform} leagues yet`,
+        });
+        return;
       }
 
       await fetchLeagues();
-      toast({
-        title: "✅ Resynced",
-        description: "League data updated successfully",
-      });
     } catch (error: any) {
       console.error('Error resyncing:', error);
       toast({
