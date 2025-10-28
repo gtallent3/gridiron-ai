@@ -191,11 +191,14 @@ export type Database = {
           interception_tds: number | null
           interceptions: number | null
           kick_return_tds: number | null
+          market_rank: number | null
           passing_2pt_conversions: number | null
           passing_attempts: number | null
           passing_completions: number | null
           passing_tds: number | null
           passing_yards: number | null
+          percent_owned: number | null
+          percent_started: number | null
           player_id: string
           player_name: string
           points_allowed: number | null
@@ -220,6 +223,7 @@ export type Database = {
           source_type: string | null
           team: string | null
           updated_at: string | null
+          waiver_status: string | null
           week: number
           xp_attempts: number | null
           xp_made: number | null
@@ -248,11 +252,14 @@ export type Database = {
           interception_tds?: number | null
           interceptions?: number | null
           kick_return_tds?: number | null
+          market_rank?: number | null
           passing_2pt_conversions?: number | null
           passing_attempts?: number | null
           passing_completions?: number | null
           passing_tds?: number | null
           passing_yards?: number | null
+          percent_owned?: number | null
+          percent_started?: number | null
           player_id: string
           player_name: string
           points_allowed?: number | null
@@ -277,6 +284,7 @@ export type Database = {
           source_type?: string | null
           team?: string | null
           updated_at?: string | null
+          waiver_status?: string | null
           week: number
           xp_attempts?: number | null
           xp_made?: number | null
@@ -305,11 +313,14 @@ export type Database = {
           interception_tds?: number | null
           interceptions?: number | null
           kick_return_tds?: number | null
+          market_rank?: number | null
           passing_2pt_conversions?: number | null
           passing_attempts?: number | null
           passing_completions?: number | null
           passing_tds?: number | null
           passing_yards?: number | null
+          percent_owned?: number | null
+          percent_started?: number | null
           player_id?: string
           player_name?: string
           points_allowed?: number | null
@@ -334,6 +345,7 @@ export type Database = {
           source_type?: string | null
           team?: string | null
           updated_at?: string | null
+          waiver_status?: string | null
           week?: number
           xp_attempts?: number | null
           xp_made?: number | null
@@ -457,51 +469,69 @@ export type Database = {
       }
       projected_player_stats: {
         Row: {
+          applied_breakdown: Json | null
           confidence: number | null
           created_at: string | null
           id: string
           last_updated: string
+          market_rank: number | null
+          percent_owned: number | null
+          percent_started: number | null
           player_id: string
           player_name: string
           position: string
+          projected_fp: number | null
           provider_ids: Json | null
           season: number
           source: string
           stats: Json
           status_flags: Json | null
           team: string | null
+          waiver_status: string | null
           week: number
         }
         Insert: {
+          applied_breakdown?: Json | null
           confidence?: number | null
           created_at?: string | null
           id?: string
           last_updated?: string
+          market_rank?: number | null
+          percent_owned?: number | null
+          percent_started?: number | null
           player_id: string
           player_name: string
           position: string
+          projected_fp?: number | null
           provider_ids?: Json | null
           season: number
           source?: string
           stats?: Json
           status_flags?: Json | null
           team?: string | null
+          waiver_status?: string | null
           week: number
         }
         Update: {
+          applied_breakdown?: Json | null
           confidence?: number | null
           created_at?: string | null
           id?: string
           last_updated?: string
+          market_rank?: number | null
+          percent_owned?: number | null
+          percent_started?: number | null
           player_id?: string
           player_name?: string
           position?: string
+          projected_fp?: number | null
           provider_ids?: Json | null
           season?: number
           source?: string
           stats?: Json
           status_flags?: Json | null
           team?: string | null
+          waiver_status?: string | null
           week?: number
         }
         Relationships: []
