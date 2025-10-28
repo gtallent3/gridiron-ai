@@ -44,6 +44,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [starters, setStarters] = useState<any[]>([]);
   const [bench, setBench] = useState<any[]>([]);
   const [selectedWeek, setSelectedWeek] = useState<number>(league.current_week || getCurrentNFLWeek().week);
+  const [providerCurrentWeek, setProviderCurrentWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
@@ -54,7 +55,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
     
     setLoading(true);
     try {
-      const leagueCurrentWeek = league.current_week || 7;
+      const leagueCurrentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
       const isHistorical = week < leagueCurrentWeek;
       
       // For Sleeper, fetch actuals for past weeks, use projections for current/future
@@ -300,6 +301,19 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   };
 
   useEffect(() => {
+    if (league.platform === 'sleeper') {
+      fetch('https://api.sleeper.app/v1/state/nfl')
+        .then(res => res.json())
+        .then(state => {
+          if (state?.week) setProviderCurrentWeek(Number(state.week));
+        })
+        .catch(() => {});
+    } else {
+      setProviderCurrentWeek(null);
+    }
+  }, [league.platform]);
+
+  useEffect(() => {
     fetchWeeklyStats(selectedWeek);
   }, [selectedWeek, userTeam, league.platform]);
 
@@ -343,7 +357,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
   const totalProjected = starters.reduce((sum, p) => sum + p.projected, 0);
   const totalActual = starters.reduce((sum, p) => sum + (p.actualPoints || 0), 0);
-  const currentWeek = league.current_week || getCurrentNFLWeek().week;
+  const currentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
   const isHistoricalWeek = selectedWeek < currentWeek;
   const isFutureWeek = selectedWeek > currentWeek;
   const maxWeek = 18; // NFL regular season weeks
