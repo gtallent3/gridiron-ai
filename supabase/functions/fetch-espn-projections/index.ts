@@ -577,6 +577,17 @@ serve(async (req) => {
         console.log(`Inserted ${projectionStatsToInsert.length} projections for week ${week}`);
         totalProjectionsInserted += projectionStatsToInsert.length;
       }
+
+      // Batch insert player pool for this week
+      if (poolRows.length > 0) {
+        await supabase
+          .from('player_pool')
+          .upsert(poolRows, {
+            onConflict: 'league_id,player_id,season,week',
+            ignoreDuplicates: false
+          });
+        console.log(`Inserted ${poolRows.length} players into pool for week ${week}`);
+      }
     }
 
     return new Response(
