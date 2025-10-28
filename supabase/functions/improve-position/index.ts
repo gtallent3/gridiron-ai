@@ -304,13 +304,19 @@ serve(async (req) => {
               // NEW TRADE SCORE: Value first (1.0x), positional context second (0.25x)
               const tradeFitScore = (1.0 * netValueGain) + (0.25 * posBoost);
 
-              // Grade based on value gain magnitude
-              let grade = 'C';
-              if (netValueGain >= 20) grade = 'A';
-              else if (netValueGain >= 15) grade = 'B+';
-              else if (netValueGain >= 10) grade = 'B';
-              else if (netValueGain >= 5) grade = 'C+';
-              else if (netValueGain > 0) grade = 'C';
+              // Grade based purely on YOUR net value gain (what you receive vs what you give)
+              // This is YOUR grade, not a fairness grade
+              let grade = 'D';
+              if (netValueGain >= 25) grade = 'A+';
+              else if (netValueGain >= 20) grade = 'A';
+              else if (netValueGain >= 15) grade = 'A-';
+              else if (netValueGain >= 10) grade = 'B+';
+              else if (netValueGain >= 7) grade = 'B';
+              else if (netValueGain >= 5) grade = 'B-';
+              else if (netValueGain >= 3) grade = 'C+';
+              else if (netValueGain >= 1) grade = 'C';
+              else if (netValueGain > 0) grade = 'C-';
+              else grade = 'F'; // Should never happen due to earlier filter
 
               // Acceptance likelihood based on opponent impact
               let acceptanceLikelihood = 'Medium';
