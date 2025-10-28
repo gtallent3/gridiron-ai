@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PlayerStatsDialog } from "./PlayerStatsDialog";
+import { getCurrentNFLWeek } from "@/lib/nflWeekUtils";
 
 type League = {
   id: string;
@@ -42,7 +43,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [starters, setStarters] = useState<any[]>([]);
   const [bench, setBench] = useState<any[]>([]);
-  const [selectedWeek, setSelectedWeek] = useState<number>(league.current_week || 7);
+  const [selectedWeek, setSelectedWeek] = useState<number>(league.current_week || getCurrentNFLWeek().week);
   const [loading, setLoading] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
@@ -237,7 +238,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
       const starterPlayers: any[] = [];
       const benchPlayers: any[] = [];
-      const currentWeek = league.current_week || 7;
+      const currentWeek = league.current_week || getCurrentNFLWeek().week;
 
       userTeam.roster.forEach((player: any) => {
         const playerIdRaw = player.player_id ?? player.playerId ?? player.id;
@@ -342,7 +343,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
   const totalProjected = starters.reduce((sum, p) => sum + p.projected, 0);
   const totalActual = starters.reduce((sum, p) => sum + (p.actualPoints || 0), 0);
-  const currentWeek = league.current_week || 7;
+  const currentWeek = league.current_week || getCurrentNFLWeek().week;
   const isHistoricalWeek = selectedWeek < currentWeek;
   const isFutureWeek = selectedWeek > currentWeek;
   const maxWeek = 18; // NFL regular season weeks

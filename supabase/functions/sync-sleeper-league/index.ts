@@ -152,6 +152,7 @@ serve(async (req) => {
           league_size: league.total_rosters,
           scoring_settings: league.scoring_settings,
           user_team_id: userTeamId,
+          current_week: matchupWeek,
           last_synced_at: new Date().toISOString(),
           ...matchupData,
         }, {
