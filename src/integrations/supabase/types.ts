@@ -14,6 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_links: {
+        Row: {
+          created_at: string | null
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          primary_user_id: string | null
+          requested_by: string | null
+          secondary_user_id: string | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          primary_user_id?: string | null
+          requested_by?: string | null
+          secondary_user_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          primary_user_id?: string | null
+          requested_by?: string | null
+          secondary_user_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_links_primary_user_id_fkey"
+            columns: ["primary_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "account_links_secondary_user_id_fkey"
+            columns: ["secondary_user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       ai_rate_limits: {
         Row: {
           created_at: string
@@ -38,6 +86,42 @@ export type Database = {
           request_count?: number
           user_id?: string
           window_start?: string
+        }
+        Relationships: []
+      }
+      app_users: {
+        Row: {
+          auth_provider: string | null
+          created_at: string | null
+          email: string | null
+          is_banned: boolean | null
+          phone: string | null
+          risk_score: number | null
+          stripe_customer_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          auth_provider?: string | null
+          created_at?: string | null
+          email?: string | null
+          is_banned?: boolean | null
+          phone?: string | null
+          risk_score?: number | null
+          stripe_customer_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          auth_provider?: string | null
+          created_at?: string | null
+          email?: string | null
+          is_banned?: boolean | null
+          phone?: string | null
+          risk_score?: number | null
+          stripe_customer_id?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -94,6 +178,44 @@ export type Database = {
           user_team_id?: string | null
         }
         Relationships: []
+      }
+      devices: {
+        Row: {
+          device_id: string
+          fingerprint: string
+          first_seen: string | null
+          ip_inet: unknown
+          last_seen: string | null
+          ua: string | null
+          user_id: string | null
+        }
+        Insert: {
+          device_id?: string
+          fingerprint: string
+          first_seen?: string | null
+          ip_inet?: unknown
+          last_seen?: string | null
+          ua?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          device_id?: string
+          fingerprint?: string
+          first_seen?: string | null
+          ip_inet?: unknown
+          last_seen?: string | null
+          ua?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devices_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       league_credentials: {
         Row: {
@@ -166,6 +288,41 @@ export type Database = {
           yahoo_id?: string | null
         }
         Relationships: []
+      }
+      payment_fingerprints: {
+        Row: {
+          fingerprint: string
+          first_used: string | null
+          id: string
+          last_used: string | null
+          stripe_payment_method_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          fingerprint: string
+          first_used?: string | null
+          id?: string
+          last_used?: string | null
+          stripe_payment_method_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          fingerprint?: string
+          first_used?: string | null
+          id?: string
+          last_used?: string | null
+          stripe_payment_method_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_fingerprints_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       player_pool: {
         Row: {
@@ -714,6 +871,68 @@ export type Database = {
           },
         ]
       }
+      risk_events: {
+        Row: {
+          created_at: string | null
+          event_type: string
+          id: number
+          meta: Json | null
+          reason: string | null
+          risk_score: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          event_type: string
+          id?: number
+          meta?: Json | null
+          reason?: string | null
+          risk_score?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          event_type?: string
+          id?: number
+          meta?: Json | null
+          reason?: string | null
+          risk_score?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "risk_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      signup_rate_limits: {
+        Row: {
+          attempt_count: number | null
+          id: string
+          identifier: string
+          identifier_type: string
+          window_start: string | null
+        }
+        Insert: {
+          attempt_count?: number | null
+          id?: string
+          identifier: string
+          identifier_type: string
+          window_start?: string | null
+        }
+        Update: {
+          attempt_count?: number | null
+          id?: string
+          identifier?: string
+          identifier_type?: string
+          window_start?: string | null
+        }
+        Relationships: []
+      }
       team_positional_strengths: {
         Row: {
           created_at: string
@@ -960,6 +1179,44 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "connected_leagues"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_identities: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          phone: string | null
+          provider: string
+          provider_uid: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          phone?: string | null
+          provider: string
+          provider_uid: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          phone?: string | null
+          provider?: string
+          provider_uid?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_identities_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -1225,6 +1482,7 @@ export type Database = {
         }
         Returns: Json
       }
+      cleanup_old_rate_limits: { Args: never; Returns: undefined }
       deduct_tokens: {
         Args: {
           p_amount: number
@@ -1249,6 +1507,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      normalize_email: { Args: { raw_email: string }; Returns: string }
       settle_weekly_prop: {
         Args: { p_actual_value: number; p_prop_id: string }
         Returns: undefined

@@ -77,3 +77,12 @@ verify_jwt = true
 
 [functions.post-sync-compute]
 verify_jwt = true
+
+[functions.check-signup-risk]
+verify_jwt = false
+
+[functions.link-user-identity]
+verify_jwt = false
+
+[functions.check-trial-eligibility]
+verify_jwt = true
