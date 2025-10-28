@@ -152,15 +152,23 @@ serve(async (req) => {
 
     const { data: playerValues, error: valuesFetchError } = await adminClient
       .from('player_value_cache')
-      .select('player_id, position, value_score')
+      .select('player_id, player_name, position, value_score')
       .eq('league_id', leagueId);
     if (valuesFetchError) throw valuesFetchError;
     console.log('post-sync counts', { teams: teams?.length ?? 0, playerValues: playerValues?.length ?? 0 });
 
-    // Build value map by canonical player_id only
+    // Build value maps by player_id AND player_name for flexible matching
     const valueById = new Map<string, number>();
+    const valueByName = new Map<string, number>();
     for (const pv of playerValues || []) {
-      valueById.set(String(pv.player_id), Number(pv.value_score) || 0);
+      const id = String(pv.player_id);
+      const score = Number(pv.value_score) || 0;
+      valueById.set(id, score);
+      // Also index by normalized name for cross-platform matching
+      if (pv.player_name) {
+        const normalizedName = String(pv.player_name).toLowerCase().replace(/[^a-z]/g, '');
+        valueByName.set(normalizedName, score);
+      }
     }
 
     const positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
@@ -216,10 +224,23 @@ serve(async (req) => {
     };
 
     const getValue = (p: any) => {
+      // Try exact player_id match first (handles both espn_ prefixed and platform-specific IDs)
       let pid = String(p.player_id || p.playerId || p.id || '').trim();
-      if (!pid) return 0;
-      if (/^\d+$/.test(pid)) pid = `espn_${pid}`; // canonicalize numeric ids
-      if (valueById.has(pid)) return valueById.get(pid)!;
+      if (pid && valueById.has(pid)) return valueById.get(pid)!;
+      
+      // Try with espn_ prefix for numeric IDs
+      if (pid && /^\d+$/.test(pid)) {
+        const espnId = `espn_${pid}`;
+        if (valueById.has(espnId)) return valueById.get(espnId)!;
+      }
+      
+      // Fallback to name matching for cross-platform compatibility (Sleeper vs ESPN IDs)
+      const playerName = p.player_name || p.name || '';
+      if (playerName) {
+        const normalizedName = String(playerName).toLowerCase().replace(/[^a-z]/g, '');
+        if (valueByName.has(normalizedName)) return valueByName.get(normalizedName)!;
+      }
+      
       return 0;
     };
 
