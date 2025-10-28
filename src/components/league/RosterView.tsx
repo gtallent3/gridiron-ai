@@ -56,36 +56,140 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
       const leagueCurrentWeek = league.current_week || 7;
       const isHistorical = week < leagueCurrentWeek;
       
-      // For Sleeper, use projected values from roster directly (already synced)
+      // For Sleeper, fetch actuals for past weeks, use projections for current/future
       if (league.platform === 'sleeper') {
         const starterPlayers: any[] = [];
         const benchPlayers: any[] = [];
         
-        userTeam.roster.forEach((player: any) => {
-          const playerId = String(player.player_id ?? '');
-          const playerName = player.player_name || 'Unknown Player';
-          const positionName = player.position || 'FLEX';
-          const isStarter = player.starter !== false;
+        // For historical weeks, fetch from player_stats
+        if (isHistorical) {
+          const now = new Date();
+          const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
           
-          const playerDataObj = {
-            id: playerId || playerName,
-            name: playerName,
-            position: positionName,
-            team: player.team || 'NFL',
-            projected: !isHistorical ? (player.projected || 0) : 0,
-            actualPoints: isHistorical ? (player.projected || 0) : 0, // Use projected as fallback for historical
-            status: isStarter ? 'starter' : 'bench',
-            is_bye_week: player.is_bye_week || false,
-            injury_status: player.injury_status || null,
-            week: week,
+          // Fetch actual stats from player_stats table
+          const { data: statsData, error } = await supabase
+            .from('player_stats')
+            .select('*')
+            .eq('week', week)
+            .eq('season', inferredSeason)
+            .eq('source_type', 'actual');
+          
+          if (error) {
+            console.error('Error fetching player stats:', error);
+          }
+          
+          // Create a map by normalized player name for matching
+          const statsByName = new Map<string, any>();
+          if (statsData) {
+            for (const stat of statsData) {
+              const normalizedName = stat.player_name.toLowerCase().replace(/[^a-z]/g, '');
+              statsByName.set(normalizedName, stat);
+            }
+          }
+          
+          // Get league scoring settings
+          const { data: leagueData } = await supabase
+            .from('connected_leagues')
+            .select('scoring_settings, scoring_type')
+            .eq('id', league.id)
+            .maybeSingle();
+          
+          // Default scoring for Sleeper (PPR)
+          let scoringSettings: any = {
+            passing_yards: 0.04,
+            passing_tds: 4,
+            interceptions: -2,
+            rushing_yards: 0.1,
+            rushing_tds: 6,
+            receptions: 1,
+            receiving_yards: 0.1,
+            receiving_tds: 6,
+            fumbles_lost: -2,
           };
           
-          if (isStarter) {
-            starterPlayers.push(playerDataObj);
-          } else {
-            benchPlayers.push(playerDataObj);
+          if (leagueData?.scoring_settings && typeof leagueData.scoring_settings === 'object') {
+            scoringSettings = { ...scoringSettings, ...(leagueData.scoring_settings as Record<string, any>) };
+          } else if (leagueData?.scoring_type === 'standard') {
+            scoringSettings.receptions = 0;
+          } else if (leagueData?.scoring_type === 'half_ppr') {
+            scoringSettings.receptions = 0.5;
           }
-        });
+          
+          // Calculate fantasy points for each player
+          userTeam.roster.forEach((player: any) => {
+            const playerId = String(player.player_id ?? '');
+            const playerName = player.player_name || 'Unknown Player';
+            const positionName = player.position || 'FLEX';
+            const isStarter = player.starter !== false;
+            
+            // Match by name
+            const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
+            const stats = statsByName.get(normalizedName);
+            
+            let actualPoints = 0;
+            if (stats) {
+              // Calculate fantasy points based on stats
+              actualPoints += (stats.passing_yards || 0) * (scoringSettings.passing_yards || 0);
+              actualPoints += (stats.passing_tds || 0) * (scoringSettings.passing_tds || 0);
+              actualPoints += (stats.interceptions || 0) * (scoringSettings.interceptions || 0);
+              actualPoints += (stats.rushing_yards || 0) * (scoringSettings.rushing_yards || 0);
+              actualPoints += (stats.rushing_tds || 0) * (scoringSettings.rushing_tds || 0);
+              actualPoints += (stats.receptions || 0) * (scoringSettings.receptions || 0);
+              actualPoints += (stats.receiving_yards || 0) * (scoringSettings.receiving_yards || 0);
+              actualPoints += (stats.receiving_tds || 0) * (scoringSettings.receiving_tds || 0);
+              actualPoints += (stats.fumbles_lost || 0) * (scoringSettings.fumbles_lost || 0);
+              actualPoints += (stats.passing_2pt_conversions || 0) * (scoringSettings.passing_2pt_conversions || 2);
+              actualPoints += (stats.rushing_2pt_conversions || 0) * (scoringSettings.rushing_2pt_conversions || 2);
+              actualPoints += (stats.receiving_2pt_conversions || 0) * (scoringSettings.receiving_2pt_conversions || 2);
+            }
+            
+            const playerDataObj = {
+              id: playerId || playerName,
+              name: playerName,
+              position: positionName,
+              team: stats?.team || player.team || 'NFL',
+              projected: 0,
+              actualPoints: Math.round(actualPoints * 100) / 100,
+              status: isStarter ? 'starter' : 'bench',
+              is_bye_week: player.is_bye_week || false,
+              injury_status: player.injury_status || null,
+              week: week,
+            };
+            
+            if (isStarter) {
+              starterPlayers.push(playerDataObj);
+            } else {
+              benchPlayers.push(playerDataObj);
+            }
+          });
+        } else {
+          // For current/future weeks, use projected values from roster
+          userTeam.roster.forEach((player: any) => {
+            const playerId = String(player.player_id ?? '');
+            const playerName = player.player_name || 'Unknown Player';
+            const positionName = player.position || 'FLEX';
+            const isStarter = player.starter !== false;
+            
+            const playerDataObj = {
+              id: playerId || playerName,
+              name: playerName,
+              position: positionName,
+              team: player.team || 'NFL',
+              projected: player.projected || 0,
+              actualPoints: 0,
+              status: isStarter ? 'starter' : 'bench',
+              is_bye_week: player.is_bye_week || false,
+              injury_status: player.injury_status || null,
+              week: week,
+            };
+            
+            if (isStarter) {
+              starterPlayers.push(playerDataObj);
+            } else {
+              benchPlayers.push(playerDataObj);
+            }
+          });
+        }
         
         setStarters(starterPlayers);
         setBench(benchPlayers);
