@@ -265,58 +265,39 @@ serve(async (req) => {
         console.error('Error fetching stats:', err);
       }
 
-      // Fetch projections from projected_player_stats table
+      // Fetch projections from projected_player_stats table by matching player names
       const projectionMap = new Map<string, number>();
       try {
         console.log(`Fetching projections from database for week ${currentWeek}, season ${currentYear}`);
         
-        // First, get all Sleeper player IDs from roster
-        const allSleeperIds = Array.from(new Set(
-          rosters.flatMap((r: any) => (r.players || []).concat(r.starters || []).map((id: any) => id?.toString()).filter(Boolean))
-        ));
+        // Get all projections for the current week
+        const { data: dbProjections, error: projError } = await supabase
+          .from('projected_player_stats')
+          .select('player_id, player_name, projected_fp')
+          .eq('week', currentWeek)
+          .eq('season', currentYear)
+          .gt('projected_fp', 0);
 
-        if (allSleeperIds.length > 0) {
-          // Get player ID mappings from normalized_players
-          const { data: playerMappings } = await supabase
-            .from('normalized_players')
-            .select('player_id, sleeper_id, espn_id')
-            .in('sleeper_id', allSleeperIds);
-
-          // Create mapping from Sleeper ID to normalized player_id
-          const sleeperToNormalizedMap = new Map<string, string>();
-          if (playerMappings) {
-            for (const mapping of playerMappings) {
-              if (mapping.sleeper_id) {
-                sleeperToNormalizedMap.set(mapping.sleeper_id, mapping.player_id);
-              }
+        if (projError) {
+          console.error('Error fetching projections from database:', projError);
+        } else if (dbProjections && dbProjections.length > 0) {
+          // Create a map of normalized player names to projections
+          const nameToProjectionMap = new Map<string, number>();
+          for (const proj of dbProjections) {
+            const normalizedName = proj.player_name.toLowerCase().replace(/[^a-z]/g, '');
+            nameToProjectionMap.set(normalizedName, Number(proj.projected_fp));
+          }
+          
+          // Match Sleeper players by name to projections
+          for (const [sleeperId, meta] of normalizedMap.entries()) {
+            const normalizedName = meta.player_name.toLowerCase().replace(/[^a-z]/g, '');
+            const projection = nameToProjectionMap.get(normalizedName);
+            if (projection && projection > 0) {
+              projectionMap.set(sleeperId, projection);
             }
           }
-
-          // Get projections using normalized player_ids
-          const normalizedIds = Array.from(sleeperToNormalizedMap.values());
-          if (normalizedIds.length > 0) {
-            const { data: dbProjections, error: projError } = await supabase
-              .from('projected_player_stats')
-              .select('player_id, projected_fp')
-              .in('player_id', normalizedIds)
-              .eq('week', currentWeek)
-              .eq('season', currentYear);
-
-            if (projError) {
-              console.error('Error fetching projections from database:', projError);
-            } else if (dbProjections && dbProjections.length > 0) {
-              // Map back to Sleeper IDs
-              for (const proj of dbProjections) {
-                // Find which Sleeper ID maps to this normalized player_id
-                for (const [sleeperId, normalizedId] of sleeperToNormalizedMap.entries()) {
-                  if (normalizedId === proj.player_id && proj.projected_fp > 0) {
-                    projectionMap.set(sleeperId, Number(proj.projected_fp));
-                  }
-                }
-              }
-              console.log(`Loaded ${projectionMap.size} projections from database (mapped via normalized_players)`);
-            }
-          }
+          
+          console.log(`Loaded ${projectionMap.size} projections from database (matched by player name)`);
         }
 
         // Fallback to Sleeper API if no database projections found or all are zero
