@@ -77,13 +77,15 @@ export function WaiverWire({ league }: WaiverWireProps) {
 
       if (error) throw error;
 
-      const mapped = (data || []).map(p => ({
-        id: p.id,
-        name: p.player_name,
-        position: p.position,
-        team: p.team || 'FA',
-        projected: 0, // Will be enhanced with projections later
-      }));
+      const mapped = (data || [])
+        .filter(p => p && p.player_name && p.position) // Filter out null/invalid entries
+        .map(p => ({
+          id: p.id,
+          name: p.player_name,
+          position: p.position,
+          team: p.team || 'FA',
+          projected: 0, // Will be enhanced with projections later
+        }));
 
       setWaiverPlayers(mapped);
     } catch (error) {
@@ -248,7 +250,7 @@ export function WaiverWire({ league }: WaiverWireProps) {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {waiverPlayers.map(player => (
+              {waiverPlayers.filter(p => p && p.name).map(player => (
                 <div key={player.id} className="space-y-2">
                 <PlayerCard player={player} readOnly />
                 <div className="flex gap-2">
