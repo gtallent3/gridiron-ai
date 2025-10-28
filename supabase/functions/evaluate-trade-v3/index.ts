@@ -274,19 +274,24 @@ serve(async (req) => {
     const teamANet = sumAIn - sumAOut;
     const teamBNet = sumBIn - sumBOut;
 
-    // Determine advantage and grade
+    // Determine advantage and YOUR grade (Team A perspective)
     const totalValue = sumAOut + sumBOut;
     const advantageTeam = teamANet > teamBNet ? teamAId : teamBId;
     const valueDifference = Math.abs(teamANet - teamBNet);
     const percentDiff = totalValue > 0 ? (valueDifference / totalValue) * 100 : 0;
 
-    let grade = 'C';
-    if (percentDiff >= 10) grade = 'A';
-    else if (percentDiff >= 6) grade = 'B';
-    else if (percentDiff >= 3) grade = 'C+';
-    else if (percentDiff <= 3 && percentDiff >= -3) grade = 'C';
-    else if (percentDiff <= -3 && percentDiff >= -6) grade = 'D+';
-    else grade = 'D';
+    // Grade strictly by Team A net gain (what you receive minus what you give)
+    let grade = 'D';
+    if (teamANet >= 25) grade = 'A+';
+    else if (teamANet >= 20) grade = 'A';
+    else if (teamANet >= 15) grade = 'A-';
+    else if (teamANet >= 10) grade = 'B+';
+    else if (teamANet >= 7) grade = 'B';
+    else if (teamANet >= 5) grade = 'B-';
+    else if (teamANet >= 3) grade = 'C+';
+    else if (teamANet >= 1) grade = 'C';
+    else if (teamANet > 0) grade = 'C-';
+    else grade = 'F';
 
     // Build explanation
     const explanation = buildExplanation({
