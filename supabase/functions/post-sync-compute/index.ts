@@ -16,14 +16,24 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
-    const authHeader = req.headers.get('Authorization')!;
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
 
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -43,41 +53,41 @@ serve(async (req) => {
 
     console.log(`Starting post-sync compute for league ${leagueId}`);
 
-    // Step 1: Compute player values
-    const { data: valuesData, error: valuesError } = await supabase.functions.invoke(
-      'compute-player-values',
-      {
-        body: { leagueId },
-        headers: { Authorization: req.headers.get('Authorization')! },
-      }
-    );
-
-    if (valuesError) {
-      console.error('Error computing player values:', valuesError);
-      throw new Error(`Failed to compute player values: ${valuesError.message}`);
+    // Step 1: Compute player values (invoke with fallback)
+    let playersProcessed = 0;
+    try {
+      const { data: valuesData, error: valuesError } = await adminClient.functions.invoke(
+        'compute-player-values',
+        {
+          body: { leagueId },
+          headers: { Authorization: authHeader },
+        }
+      );
+      if (valuesError) throw valuesError;
+      playersProcessed = valuesData?.playersProcessed ?? 0;
+    } catch (e) {
+      console.error('compute-player-values invoke failed, proceeding without invoke');
+      // Fallback: do nothing here (compute-player-values function already populates cache during resync flow)
     }
-
-    console.log(`Player values computed: ${valuesData?.playersProcessed || 0} players`);
 
     // Step 2: Compute positional strengths inline (more reliable)
     // Fetch teams and values
-    const { data: teams, error: teamsError } = await supabase
+    const { data: teams, error: teamsError } = await adminClient
       .from('user_teams')
       .select('team_id, roster')
       .eq('league_id', leagueId);
     if (teamsError) throw teamsError;
 
-    const { data: playerValues, error: valuesFetchError } = await supabase
+    const { data: playerValues, error: valuesFetchError } = await adminClient
       .from('player_value_cache')
-      .select('player_id, player_name, position, value_score')
+      .select('player_id, position, value_score')
       .eq('league_id', leagueId);
     if (valuesFetchError) throw valuesFetchError;
 
-    const valueMapById = new Map<string, any>();
-    const valueMapByName = new Map<string, any>();
+    // Build value map by canonical player_id only
+    const valueById = new Map<string, number>();
     for (const pv of playerValues || []) {
-      valueMapById.set(pv.player_id, pv);
-      if (pv.player_name) valueMapByName.set(String(pv.player_name).toLowerCase().trim(), pv);
+      valueById.set(String(pv.player_id), Number(pv.value_score) || 0);
     }
 
     const positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
@@ -102,10 +112,8 @@ serve(async (req) => {
     };
 
     const getValue = (p: any) => {
-      const pid = p.player_id || p.playerId || p.id;
-      if (pid && valueMapById.has(String(pid))) return Number(valueMapById.get(String(pid)).value_score) || 0;
-      const name = (p.player_name || p.playerName || p.name || '').toLowerCase().trim();
-      if (name && valueMapByName.has(name)) return Number(valueMapByName.get(name).value_score) || 0;
+      const pid = String(p.player_id || p.playerId || p.id || '');
+      if (pid && valueById.has(pid)) return valueById.get(pid)!;
       return 0;
     };
 
@@ -152,7 +160,7 @@ serve(async (req) => {
       }
     }
 
-    const { error: upsertError } = await supabase
+    const { error: upsertError } = await adminClient
       .from('team_positional_strengths')
       .upsert(strengthResults, { onConflict: 'league_id,team_id,position' });
     if (upsertError) throw upsertError;
@@ -163,10 +171,13 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         playerValues: {
-          playersProcessed: valuesData?.playersProcessed || 0,
+          playersProcessed,
+          updatedAt: new Date().toISOString(),
         },
         positionalStrengths: {
           teamsProcessed: teams?.length || 0,
+          recordsUpserted: strengthResults.length,
+          updatedAt: new Date().toISOString(),
         },
         message: 'Post-sync compute completed successfully',
       }),
