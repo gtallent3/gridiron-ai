@@ -94,20 +94,28 @@ serve(async (req) => {
     const DEFAULT_STARTERS: Record<string, number> = { QB:1, RB:2, WR:2, TE:1, FLEX:1, K:1, DST:1 };
 
     const normPos = (pos: any) => {
-      if (typeof pos === 'number') {
-        switch (pos) {
+      // Normalize numeric and string position codes to canonical labels
+      const mapNum = (n: number) => {
+        switch (n) {
           case 1: return 'QB';
           case 2: return 'RB';
           case 3: return 'WR';
           case 4: return 'TE';
           case 5: return 'K';
           case 16: return 'DST';
-          default: return String(pos).toUpperCase();
+          default: return String(n).toUpperCase();
         }
-      }
-      const s = String(pos || '').toUpperCase();
+      };
+
+      if (typeof pos === 'number') return mapNum(pos);
+
+      const s = String(pos ?? '').trim().toUpperCase();
+      // Handle numeric strings like "1", "2", "16"
+      if (/^\d+$/.test(s)) return mapNum(Number(s));
+
       if (s === 'D/ST' || s === 'DST' || s === 'DEF') return 'DST';
       if (s === 'PK' || s === 'K') return 'K';
+      if (s === 'QB' || s === 'RB' || s === 'WR' || s === 'TE') return s;
       return s;
     };
 
@@ -139,10 +147,12 @@ serve(async (req) => {
       const list = teamPSS.filter(r => r.position === pos);
       list.sort((a, b) => b.pss - a.pss);
       const values = list.map(l => l.pss);
-      const mean = values.reduce((a, b) => a + b, 0) / values.length || 0;
+      const mean = values.reduce((a, b) => a + b, 0) / (values.length || 1);
       const variance = values.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / (values.length || 1);
       const std = Math.sqrt(variance);
-      const median = values.slice().sort((a, b) => a - b)[Math.floor(values.length / 2)] || 0;
+      const sorted = values.slice().sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const median = sorted.length ? (sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2) : 0;
 
       let currentRank = 1;
       for (let i = 0; i < list.length; i++) {
