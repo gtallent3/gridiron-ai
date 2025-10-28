@@ -179,22 +179,36 @@ Deno.serve(async (req) => {
       };
     }
 
-    // Log risk event (for monitoring)
+    // Hash sensitive data for privacy compliance
+    const hashData = async (data: string): Promise<string> => {
+      const encoder = new TextEncoder();
+      const dataBuffer = encoder.encode(data);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    };
+
+    const emailDomain = normalizedEmail.split('@')[1] || '';
+    const hashedEmail = await hashData(normalizedEmail);
+    const hashedIp = await hashData(ip);
+
+    // Log risk event (for monitoring) with hashed PII
     await supabase.from('risk_events').insert({
       event_type: 'signup_attempt',
       risk_score: riskScore,
       reason: reasons.join(', '),
       meta: {
-        email: normalizedEmail,
+        email_hash: hashedEmail,
+        email_domain: emailDomain, // Store domain only for analysis
         provider,
-        fingerprint,
-        ip,
+        fingerprint, // Already a hash
+        ip_hash: hashedIp,
         result: result.allowed ? 'allowed' : result.blocked ? 'blocked' : 'verification_required',
       },
     });
 
     console.log('Signup risk check:', {
-      email: normalizedEmail,
+      email_domain: emailDomain,
       risk_score: riskScore,
       result: result.allowed ? 'allowed' : result.blocked ? 'blocked' : 'verification_required',
     });

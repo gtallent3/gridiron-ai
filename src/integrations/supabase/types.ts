@@ -1595,6 +1595,7 @@ export type Database = {
         Returns: Json
       }
       cleanup_old_rate_limits: { Args: never; Returns: undefined }
+      cleanup_old_risk_events: { Args: never; Returns: undefined }
       deduct_tokens: {
         Args: {
           p_amount: number
