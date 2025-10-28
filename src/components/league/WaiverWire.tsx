@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { PlayerCard } from "./PlayerCard";
@@ -37,43 +38,65 @@ type WaiverPlayer = {
   };
 };
 
-// Mock waiver wire data
-const mockWaiverPlayers: WaiverPlayer[] = [
-  { 
-    id: 'w1', 
-    name: 'Nico Collins', 
-    position: 'WR', 
-    team: 'HOU', 
-    projected: 16.8,
-  },
-  { 
-    id: 'w2', 
-    name: 'Jordan Mason', 
-    position: 'RB', 
-    team: 'SF', 
-    projected: 14.5,
-  },
-  { 
-    id: 'w3', 
-    name: 'Cole Kmet', 
-    position: 'TE', 
-    team: 'CHI', 
-    projected: 11.7,
-  },
-  { 
-    id: 'w4', 
-    name: 'Dak Prescott', 
-    position: 'QB', 
-    team: 'DAL', 
-    projected: 21.2,
-  },
-];
-
 export function WaiverWire({ league }: WaiverWireProps) {
   const { toast } = useToast();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recommendations, setRecommendations] = useState<WaiverPlayer[]>([]);
   const [selectedAction, setSelectedAction] = useState<{ type: 'add' | 'drop', player: WaiverPlayer } | null>(null);
+  const [waiverPlayers, setWaiverPlayers] = useState<WaiverPlayer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    fetchWaiverPlayers();
+  }, [league.id]);
+
+  const fetchWaiverPlayers = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Get current season and week
+      const now = new Date();
+      const currentSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+      
+      const { data: leagueData } = await supabase
+        .from('connected_leagues')
+        .select('current_week')
+        .eq('id', league.id)
+        .single();
+      
+      const currentWeek = leagueData?.current_week || 1;
+
+      const { data, error } = await supabase
+        .from('waiver_wire_players')
+        .select('*')
+        .eq('league_id', league.id)
+        .eq('season', currentSeason)
+        .eq('week', currentWeek)
+        .order('percent_owned', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+
+      const mapped = (data || []).map(p => ({
+        id: p.id,
+        name: p.player_name,
+        position: p.position,
+        team: p.team || 'FA',
+        projected: 0, // Will be enhanced with projections later
+      }));
+
+      setWaiverPlayers(mapped);
+    } catch (error) {
+      console.error('Error fetching waiver players:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load waiver wire players",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const analyzeWaivers = async () => {
     setIsAnalyzing(true);
@@ -84,7 +107,7 @@ export function WaiverWire({ league }: WaiverWireProps) {
     // Mock AI recommendations
     const aiRecommendations = [
       {
-        ...mockWaiverPlayers[0],
+        ...waiverPlayers[0],
         recommendation: {
           reasoning: "Nico Collins has elite target share (32%) and faces a weak secondary. Projected +4.8 pts over Drake London.",
           projectedGain: 4.8,
@@ -215,9 +238,18 @@ export function WaiverWire({ league }: WaiverWireProps) {
           <CardDescription>Top projected available players</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {mockWaiverPlayers.map(player => (
-              <div key={player.id} className="space-y-2">
+          {isLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          ) : waiverPlayers.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No waiver players available. Try resyncing your league from the home page.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {waiverPlayers.map(player => (
+                <div key={player.id} className="space-y-2">
                 <PlayerCard player={player} readOnly />
                 <div className="flex gap-2">
                   <Button 
@@ -230,9 +262,10 @@ export function WaiverWire({ league }: WaiverWireProps) {
                     Add
                   </Button>
                 </div>
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

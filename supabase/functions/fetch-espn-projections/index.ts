@@ -118,6 +118,7 @@ serve(async (req) => {
       const weekData = await response.json();
       const projectionStatsToInsert: any[] = [];
       const poolRows: any[] = [];
+      const waiverRows: any[] = [];
 
       // Fetch waiver players
       const waiverFilter = {
@@ -236,6 +237,23 @@ serve(async (req) => {
             provider_ids: { espn: espnId },
             updated_at: new Date().toISOString(),
           });
+
+          // Also add to waiver_wire_players table for easy querying
+          waiverRows.push({
+            league_id: league.id,
+            espn_league_id: league.league_id,
+            player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
+            player_name: normalizedPlayer?.player_name || player.fullName || 'Unknown',
+            position: normalizedPlayer?.position || mapPosition(player.defaultPositionId),
+            team: normalizedPlayer?.team || (player.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
+            season: currentSeason,
+            week,
+            waiver_status: waiverStatus,
+            percent_owned: ownership.percentOwned || 0,
+            percent_started: ownership.percentStarted || 0,
+            provider_ids: { espn: espnId },
+            updated_at: new Date().toISOString(),
+          });
         }
 
         if (weekProjection?.stats || weekProjection?.appliedStats) {
@@ -273,6 +291,14 @@ serve(async (req) => {
           ignoreDuplicates: false
         });
         console.log(`Inserted ${poolRows.length} players into pool for week ${week}`);
+      }
+
+      if (waiverRows.length > 0) {
+        await supabase.from('waiver_wire_players').upsert(waiverRows, {
+          onConflict: 'league_id,season,week,player_id',
+          ignoreDuplicates: false
+        });
+        console.log(`Inserted ${waiverRows.length} waiver players for week ${week}`);
       }
     }
 
