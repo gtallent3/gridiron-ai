@@ -169,9 +169,10 @@ serve(async (req) => {
           const espnId = entry.playerId?.toString();
           const normalizedPlayer = espnId ? normalizedMap.get(espnId) : null;
 
-          const weekProjection = player.stats?.find((stat: any) =>
-            stat.statSourceId === 1 && stat.statSplitTypeId === 1 && stat.scoringPeriodId === week
+          const projCandidates = (player.stats || []).filter((stat: any) =>
+            stat.statSourceId === 1 && stat.statSplitTypeId === 2
           );
+          const weekProjection = projCandidates.find((stat: any) => stat.scoringPeriodId === week) || projCandidates[0];
 
           // Add to player pool with projection data
           if (espnId) {
@@ -194,9 +195,14 @@ serve(async (req) => {
 
             // Add projection stats if available
             if (weekProjection?.stats || weekProjection?.appliedStats) {
+              const projectedPts = typeof weekProjection?.appliedTotal === 'number'
+                ? weekProjection.appliedTotal
+                : weekProjection?.appliedStats
+                  ? Object.values(weekProjection.appliedStats).reduce((sum: number, v: any) => sum + (typeof v === 'number' ? v : 0), 0)
+                  : 0;
               poolEntry.stats = weekProjection.stats || {};
               poolEntry.applied_breakdown = weekProjection.appliedStats || {};
-              poolEntry.projected_fp = weekProjection.appliedTotal || 0;
+              poolEntry.projected_fp = projectedPts;
               poolEntry.confidence = 0.8;
               poolEntry.source = 'espn_projection';
             }
@@ -238,9 +244,10 @@ serve(async (req) => {
         const ownership = playerData.ownership || {};
         const waiverStatus = playerData.status === 'FREEAGENT' ? 'FREEAGENT' : 'WAIVERS';
 
-        const weekProjection = player.stats?.find((stat: any) =>
-          stat.statSourceId === 1 && stat.scoringPeriodId === week && stat.seasonId === currentSeason
+        const projCandidates = (player.stats || []).filter((stat: any) =>
+          stat.statSourceId === 1 && stat.statSplitTypeId === 2
         );
+        const weekProjection = projCandidates.find((stat: any) => stat.scoringPeriodId === week) || projCandidates[0];
 
         // Add to player pool with projection data
         if (espnId) {
@@ -263,9 +270,14 @@ serve(async (req) => {
 
           // Add projection stats if available
           if (weekProjection?.stats || weekProjection?.appliedStats) {
+            const projectedPts = typeof weekProjection?.appliedTotal === 'number'
+              ? weekProjection.appliedTotal
+              : weekProjection?.appliedStats
+                ? Object.values(weekProjection.appliedStats).reduce((sum: number, v: any) => sum + (typeof v === 'number' ? v : 0), 0)
+                : 0;
             poolEntry.stats = weekProjection.stats || {};
             poolEntry.applied_breakdown = weekProjection.appliedStats || {};
-            poolEntry.projected_fp = weekProjection.appliedTotal || 0;
+            poolEntry.projected_fp = projectedPts;
             poolEntry.confidence = 0.8;
             poolEntry.source = 'espn_projection';
           }
@@ -286,6 +298,12 @@ serve(async (req) => {
             percent_owned: ownership.percentOwned || 0,
             percent_started: ownership.percentStarted || 0,
             provider_ids: { espn: espnId },
+            projected_fp: (typeof weekProjection?.appliedTotal === 'number' ? weekProjection.appliedTotal : (weekProjection?.appliedStats ? Object.values(weekProjection.appliedStats).reduce((sum: number, v: any) => sum + (typeof v === 'number' ? v : 0), 0) : 0)),
+            stats: weekProjection?.stats || null,
+            applied_breakdown: weekProjection?.appliedStats || null,
+            confidence: weekProjection ? 0.8 : null,
+            source: weekProjection ? 'espn_projection' : null,
+            last_updated: new Date().toISOString(),
             updated_at: new Date().toISOString(),
           });
         }
