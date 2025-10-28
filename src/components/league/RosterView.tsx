@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PlayerCard } from "./PlayerCard";
 import { StartSitRecommendations } from "./StartSitRecommendations";
@@ -48,6 +48,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [loading, setLoading] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
+  const hasAutoSetSelectedWeek = useRef(false);
 
   // Fetch stats with calculated fantasy points from player_stats table
   const fetchWeeklyStats = async (week: number) => {
@@ -312,6 +313,24 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
       setProviderCurrentWeek(null);
     }
   }, [league.platform]);
+
+  // Reset the one-time auto-set guard when switching leagues
+  useEffect(() => {
+    hasAutoSetSelectedWeek.current = false;
+  }, [league.id]);
+
+  // For Sleeper: once provider week is known, set it as initial selected week (one-time)
+  useEffect(() => {
+    if (
+      league.platform === 'sleeper' &&
+      typeof providerCurrentWeek === 'number' &&
+      providerCurrentWeek > 0 &&
+      !hasAutoSetSelectedWeek.current
+    ) {
+      setSelectedWeek(providerCurrentWeek);
+      hasAutoSetSelectedWeek.current = true;
+    }
+  }, [league.platform, providerCurrentWeek]);
 
   useEffect(() => {
     fetchWeeklyStats(selectedWeek);
