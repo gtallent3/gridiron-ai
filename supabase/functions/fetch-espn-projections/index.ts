@@ -116,11 +116,24 @@ serve(async (req) => {
     for (let week = startWeek; week <= endWeek; week++) {
       console.log(`Fetching projections for week ${week}...`);
 
-      const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=mRoster&view=kona_player_info`;
+      // Ensure SWID has braces
+      const swidCookie = swid?.startsWith('{') ? swid : `{${swid}}`;
+      
+      const fantasyFilter = {
+        players: {
+          filterStatsForExternalIds: { value: [currentSeason] },
+          filterStatsForSourceIds: { value: [1] }, // projections
+          filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [week] },
+          limit: 2000
+        }
+      };
+
+      const leagueUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=kona_player_info`;
 
       const response = await fetch(leagueUrl, {
         headers: {
-          'Cookie': `espn_s2=${espn_s2}; SWID=${swid}`,
+          'Cookie': `SWID=${swidCookie}; espn_s2=${espn_s2}`,
+          'X-Fantasy-Filter': JSON.stringify(fantasyFilter),
         },
       });
 
@@ -151,7 +164,7 @@ serve(async (req) => {
       
       const waiverResponse = await fetch(waiverUrl, {
         headers: {
-          'Cookie': `espn_s2=${espn_s2}; SWID=${swid}`,
+          'Cookie': `SWID=${swidCookie}; espn_s2=${espn_s2}`,
           'X-Fantasy-Filter': JSON.stringify(waiverFilter),
         },
       });

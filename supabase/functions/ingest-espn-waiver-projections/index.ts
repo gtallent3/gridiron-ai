@@ -39,6 +39,9 @@ serve(async (req) => {
     let totalInserted = 0;
     let totalUpdated = 0;
 
+    // Ensure SWID has braces
+    const swidCookie = swid?.startsWith('{') ? swid : `{${swid}}`;
+
     // Process each week
     for (let week = startWeek; week <= endWeek; week++) {
       const filter = {
@@ -59,7 +62,7 @@ serve(async (req) => {
       
       const response = await fetch(url, {
         headers: {
-          'Cookie': `SWID=${swid}; espn_s2=${espn_s2}`,
+          'Cookie': `SWID=${swidCookie}; espn_s2=${espn_s2}`,
           'X-Fantasy-Filter': JSON.stringify(filter),
         },
       });
@@ -80,6 +83,7 @@ serve(async (req) => {
         if (!player) continue;
 
         const espnId = player.id.toString();
+        const canonicalId = `espn_${espnId}`;
         const playerName = player.fullName;
         const positionId = player.defaultPositionId;
         const position = POSITION_MAP[positionId] || 'FLEX';
@@ -150,7 +154,7 @@ serve(async (req) => {
         const { data: normalizedPlayer } = await supabase
           .from('normalized_players')
           .upsert({
-            player_id: espnId,
+            player_id: canonicalId,
             player_name: playerName,
             position,
             team,
@@ -167,7 +171,7 @@ serve(async (req) => {
         const { error: insertError } = await supabase
           .from('projected_player_stats')
           .upsert({
-            player_id: espnId,
+            player_id: canonicalId,
             player_name: playerName,
             team,
             position,

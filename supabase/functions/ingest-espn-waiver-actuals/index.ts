@@ -35,6 +35,9 @@ serve(async (req) => {
 
     console.log(`Ingesting ESPN waiver actuals: League ${leagueId}, Season ${season}, Week ${week}`);
 
+    // Ensure SWID has braces
+    const swidCookie = swid?.startsWith('{') ? swid : `{${swid}}`;
+
     const filter = {
       players: {
         filterStatus: { value: ["FREEAGENT", "WAIVERS"] },
@@ -53,7 +56,7 @@ serve(async (req) => {
     
     const response = await fetch(url, {
       headers: {
-        'Cookie': `SWID=${swid}; espn_s2=${espn_s2}`,
+        'Cookie': `SWID=${swidCookie}; espn_s2=${espn_s2}`,
         'X-Fantasy-Filter': JSON.stringify(filter),
       },
     });
@@ -75,6 +78,7 @@ serve(async (req) => {
       if (!player) continue;
 
       const espnId = player.id.toString();
+      const canonicalId = `espn_${espnId}`;
       const playerName = player.fullName;
       const positionId = player.defaultPositionId;
       const position = POSITION_MAP[positionId] || 'FLEX';
@@ -140,7 +144,7 @@ serve(async (req) => {
       await supabase
         .from('normalized_players')
         .upsert({
-          player_id: espnId,
+          player_id: canonicalId,
           player_name: playerName,
           position,
           team,
@@ -155,7 +159,7 @@ serve(async (req) => {
       const { error: insertError } = await supabase
         .from('player_stats')
         .upsert({
-          player_id: espnId,
+          player_id: canonicalId,
           player_name: playerName,
           team,
           position,
