@@ -102,27 +102,44 @@ serve(async (req) => {
     const strengthResults = [];
 
     for (const pos of positions) {
-      const allPSS = Array.from(teamPSS.values()).map(m => m.get(pos) || 0);
-      
-      // Sort for ranking
-      const sorted = [...allPSS].sort((a, b) => b - a);
+      // Create array of {teamId, pss} for proper ranking
+      const teamPSSArray: Array<{ teamId: string; pss: number }> = [];
+      for (const [teamId, teamMap] of teamPSS.entries()) {
+        teamPSSArray.push({
+          teamId,
+          pss: teamMap.get(pos) || 0,
+        });
+      }
+
+      // Sort by PSS descending
+      teamPSSArray.sort((a, b) => b.pss - a.pss);
+
+      // Calculate stats
+      const allPSS = teamPSSArray.map(t => t.pss);
       const mean = allPSS.reduce((a, b) => a + b, 0) / allPSS.length;
       const variance = allPSS.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / allPSS.length;
       const stdDev = Math.sqrt(variance);
       const median = calculateMedian(allPSS);
 
-      for (const [teamId, teamMap] of teamPSS.entries()) {
-        const pss = teamMap.get(pos) || 0;
-        const rank = sorted.indexOf(pss) + 1;
-        const zScore = stdDev > 0 ? (pss - mean) / stdDev : 0;
-        const deltaVsMedian = pss - median;
+      // Assign ranks (with tie-breaking: same PSS = same rank)
+      let currentRank = 1;
+      for (let i = 0; i < teamPSSArray.length; i++) {
+        const team = teamPSSArray[i];
+        
+        // If not the first and PSS differs from previous, increment rank
+        if (i > 0 && team.pss < teamPSSArray[i - 1].pss) {
+          currentRank = i + 1;
+        }
+
+        const zScore = stdDev > 0 ? (team.pss - mean) / stdDev : 0;
+        const deltaVsMedian = team.pss - median;
 
         strengthResults.push({
           league_id: leagueId,
-          team_id: teamId,
+          team_id: team.teamId,
           position: pos,
-          pss,
-          rank,
+          pss: team.pss,
+          rank: currentRank,
           z_score: zScore,
           delta_vs_median: deltaVsMedian,
           updated_at: new Date().toISOString(),
