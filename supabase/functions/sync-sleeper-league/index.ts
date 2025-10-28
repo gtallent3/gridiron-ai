@@ -517,7 +517,8 @@ serve(async (req) => {
       try {
         console.log(`Computing player values and positional strengths for league ${connectedLeague.id}`);
         const { error: computeError } = await supabase.functions.invoke('post-sync-compute', {
-          body: { leagueId: connectedLeague.id }
+          body: { leagueId: connectedLeague.id },
+          headers: { Authorization: authHeader }
         });
         
         if (computeError) {
