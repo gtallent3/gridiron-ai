@@ -116,8 +116,18 @@ serve(async (req) => {
       // Get matchup week from league settings
       const matchupWeek = parseInt(league.settings?.leg || '1');
       
-      // Fetch matchups for current week
-      const matchupsUrl = `https://api.sleeper.app/v1/league/${league.league_id}/matchups/${matchupWeek}`;
+      // Fallback to Sleeper NFL state week if league settings are unavailable
+      let providerWeek = Number.isFinite(matchupWeek) && matchupWeek > 0 ? matchupWeek : 1;
+      try {
+        const stateResp = await fetch('https://api.sleeper.app/v1/state/nfl');
+        if (stateResp.ok) {
+          const state = await stateResp.json();
+          if (!providerWeek || providerWeek < 1) providerWeek = state?.week || 1;
+        }
+      } catch (_) {}
+      
+      // Fetch matchups for detected week (used to find opponent)
+      const matchupsUrl = `https://api.sleeper.app/v1/league/${league.league_id}/matchups/${providerWeek}`;
       const matchupsResponse = await fetch(matchupsUrl);
       
       let matchupData: any = {};
@@ -152,7 +162,7 @@ serve(async (req) => {
           league_size: league.total_rosters,
           scoring_settings: league.scoring_settings,
           user_team_id: userTeamId,
-          current_week: matchupWeek,
+          current_week: providerWeek,
           last_synced_at: new Date().toISOString(),
           ...matchupData,
         }, {
