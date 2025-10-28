@@ -13,7 +13,7 @@ import { LeagueHeader } from "@/components/league/LeagueHeader";
 import { TradeAnalyzer } from "@/components/league/trade/TradeAnalyzer";
 import { TradeFinder } from "@/components/league/trade/TradeFinder";
 import { PositionImprover } from "@/components/league/trade/PositionImprover";
-import { FantasyCopilot } from "@/components/copilot/FantasyCopilot";
+import { LeagueAIAssistant } from "@/components/league/LeagueAIAssistant";
 import { PositionalRankings } from "@/components/league/PositionalRankings";
 import { ImprovePosition } from "@/components/league/ImprovePosition";
 import { ComputeValuesCard } from "@/components/league/ComputeValuesCard";
@@ -302,7 +302,10 @@ export default function LeagueDashboard() {
           </TabsContent>
 
           <TabsContent value="ai" className="mt-4 sm:mt-6">
-            <FantasyCopilot />
+            <LeagueAIAssistant 
+              league={league}
+              userTeam={userTeam}
+            />
           </TabsContent>
 
           <TabsContent value="teams" className="mt-4 sm:mt-6">
