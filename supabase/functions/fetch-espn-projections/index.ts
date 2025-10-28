@@ -123,6 +123,37 @@ serve(async (req) => {
       const weekData = await response.json();
       const projectionStatsToInsert: any[] = [];
 
+      // Also fetch waiver/FA players for complete pool
+      const waiverFilter = {
+        players: {
+          filterStatus: { value: ["FREEAGENT", "WAIVERS"] },
+          filterStatsForExternalIds: { value: [currentSeason] },
+          filterStatsForSourceIds: { value: [1] },
+          filterStatsForTopScoringPeriodIds: {
+            value: 2,
+            additionalValue: [week]
+          },
+          limit: 2000,
+          sortPercOwned: { sortPriority: 1, sortAsc: false }
+        }
+      };
+
+      const waiverUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=kona_player_info`;
+      
+      const waiverResponse = await fetch(waiverUrl, {
+        headers: {
+          'Cookie': `espn_s2=${espn_s2}; SWID=${swid}`,
+          'X-Fantasy-Filter': JSON.stringify(waiverFilter),
+        },
+      });
+
+      let waiverPlayers: any[] = [];
+      if (waiverResponse.ok) {
+        const waiverData = await waiverResponse.json();
+        waiverPlayers = waiverData.players || [];
+        console.log(`Week ${week}: Found ${waiverPlayers.length} waiver/FA players`);
+      }
+
       console.log(`Week ${week} response has ${weekData.teams?.length || 0} teams`);
       
       // Log first player's stat structure to debug
@@ -312,6 +343,11 @@ serve(async (req) => {
                 bye: isByeWeek,
                 inactive: false,
               },
+              waiver_status: 'ROSTERED',
+              percent_owned: 100,
+              percent_started: 0,
+              projected_fp: projected_fp,
+              applied_breakdown: appliedStats,
               last_updated: new Date().toISOString(),
             };
             
@@ -331,6 +367,142 @@ serve(async (req) => {
                 .from('normalized_players')
                 .upsert([newPlayer], { onConflict: 'espn_id', ignoreDuplicates: true });
             }
+          }
+        }
+      }
+
+      // Process waiver/FA players
+      for (const playerData of waiverPlayers) {
+        const player = playerData.player;
+        if (!player) continue;
+
+        const espnId = player.id?.toString();
+        const normalizedPlayer = espnId ? normalizedMap.get(espnId) : null;
+
+        // Skip if already processed from rosters
+        if (projectionStatsToInsert.some(p => p.provider_ids?.espn === espnId)) {
+          continue;
+        }
+
+        const ownership = playerData.ownership || {};
+        const waiverStatus = playerData.status === 'FREEAGENT' ? 'FREEAGENT' : 'WAIVERS';
+
+        const weekProjection = player.stats?.find((stat: any) =>
+          stat.statSourceId === 1 && 
+          stat.scoringPeriodId === week &&
+          stat.seasonId === currentSeason
+        );
+
+        if (weekProjection?.stats || weekProjection?.appliedStats) {
+          const rawStats = weekProjection.stats || {};
+          const appliedStats = weekProjection.appliedStats || {};
+          const position = normalizedPlayer?.position || player.defaultPositionId?.toString() || 'FLEX';
+          const isDST = position === 'D/ST' || position === 'DEF' || position === '16';
+          const isK = position === 'K' || position === '5' || player.defaultPositionId === 5;
+          const isByeWeek = (!rawStats || Object.keys(rawStats).length === 0) && (!appliedStats || Object.keys(appliedStats).length === 0);
+          
+          const normalizedStats: any = {
+            fumbles_lost: parseFloat(rawStats['72']) || 0,
+          };
+          
+          if (!isDST && !isK) {
+            normalizedStats.passing_yards = parseFloat(rawStats['3']) || 0;
+            normalizedStats.passing_tds = parseFloat(rawStats['4']) || 0;
+            normalizedStats.interceptions = parseFloat(rawStats['20']) || 0;
+            normalizedStats.passing_completions = parseFloat(rawStats['1']) || 0;
+            normalizedStats.passing_attempts = parseFloat(rawStats['0']) || 0;
+            normalizedStats.passing_2pt_conversions = parseFloat(rawStats['19']) || 0;
+            
+            normalizedStats.rushing_yards = parseFloat(rawStats['24']) || 0;
+            normalizedStats.rushing_tds = parseFloat(rawStats['25']) || 0;
+            normalizedStats.rushing_attempts = parseFloat(rawStats['23']) || 0;
+            normalizedStats.rushing_2pt_conversions = parseFloat(rawStats['26']) || 0;
+            
+            normalizedStats.receiving_yards = parseFloat(rawStats['42']) || 0;
+            normalizedStats.receiving_tds = parseFloat(rawStats['43']) || 0;
+            normalizedStats.receptions = parseFloat(rawStats['53']) || 0;
+            normalizedStats.receiving_targets = parseFloat(rawStats['58']) || 0;
+            normalizedStats.receiving_2pt_conversions = parseFloat(rawStats['44']) || 0;
+          }
+          
+          if (isDST) {
+            normalizedStats.interceptions = parseFloat(rawStats['95']) || 0;
+            normalizedStats.sacks = parseFloat(rawStats['99']) || 0;
+            normalizedStats.fumbles_recovered = parseFloat(rawStats['96']) || 0;
+            normalizedStats.interception_tds = parseFloat(rawStats['103']) || 0;
+            normalizedStats.fumble_recovery_tds = parseFloat(rawStats['104']) || 0;
+            normalizedStats.defensive_tds = (parseFloat(rawStats['103']) || 0) + (parseFloat(rawStats['104']) || 0);
+            normalizedStats.kick_return_tds = parseFloat(rawStats['101']) || 0;
+            normalizedStats.punt_return_tds = parseFloat(rawStats['102']) || 0;
+            normalizedStats.safeties = parseFloat(rawStats['98']) || 0;
+            normalizedStats.blocked_kicks = parseFloat(rawStats['97']) || 0;
+          }
+          
+          if (isK) {
+            normalizedStats.fg_made_0_19 = parseFloat(rawStats['80']) || 0;
+            normalizedStats.fg_made_20_29 = parseFloat(rawStats['81']) || 0;
+            normalizedStats.fg_made_30_39 = parseFloat(rawStats['82']) || 0;
+            normalizedStats.fg_made_40_49 = parseFloat(rawStats['83']) || 0;
+            normalizedStats.fg_made_50_plus = parseFloat(rawStats['84']) || 0;
+            normalizedStats.xp_made = parseFloat(rawStats['85']) || 0;
+          }
+          
+          if (appliedStats && Object.keys(appliedStats).length > 0) {
+            (normalizedStats as any).__applied_breakdown = appliedStats;
+          }
+          
+          let projected_fp: number | undefined;
+          if (isK && appliedStats && Object.keys(appliedStats).length > 0) {
+            projected_fp = Object.values(appliedStats).reduce((sum: number, val: any) => {
+              const num = typeof val === 'number' ? val : parseFloat(val || '0') || 0;
+              return sum + num;
+            }, 0);
+          } else if (typeof weekProjection.appliedTotal === 'number') {
+            projected_fp = weekProjection.appliedTotal;
+          }
+          
+          if (projected_fp !== undefined) {
+            (normalizedStats as any).projected_fp = projected_fp;
+          }
+          
+          const projectionEntry = {
+            player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
+            player_name: normalizedPlayer?.player_name || player.fullName || 'Unknown',
+            team: normalizedPlayer?.team || (player.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
+            position: position,
+            provider_ids: espnId ? { espn: espnId } : {},
+            week: week,
+            season: currentSeason,
+            source: 'espn_projection',
+            stats: normalizedStats,
+            confidence: 0.75,
+            status_flags: {
+              bye: isByeWeek,
+              inactive: false,
+            },
+            waiver_status: waiverStatus,
+            percent_owned: ownership.percentOwned || 0,
+            percent_started: ownership.percentStarted || 0,
+            projected_fp: projected_fp,
+            applied_breakdown: appliedStats,
+            last_updated: new Date().toISOString(),
+          };
+          
+          projectionStatsToInsert.push(projectionEntry);
+
+          // Add normalized player if missing
+          if (!normalizedPlayer && espnId) {
+            const newPlayer = {
+              player_id: `espn_${espnId}`,
+              espn_id: espnId,
+              player_name: player.fullName || 'Unknown',
+              position: player.defaultPositionId?.toString() || 'FLEX',
+              team: player.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA',
+            };
+            normalizedMap.set(espnId, newPlayer);
+            await supabase
+              .from('normalized_players')
+              .upsert([newPlayer], { onConflict: 'espn_id', ignoreDuplicates: true });
           }
         }
       }
