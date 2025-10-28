@@ -87,10 +87,23 @@ serve(async (req) => {
     };
 
     const getPlayerValue = (player: any) => {
-      const playerId = player.id || player.player_id || player.player_id;
+      const playerId = player.id || player.player_id;
       const val = valueMap.get(playerId);
       if (!val) return 0;
       return Number(val.value_score) || 0;
+    };
+
+    const normalizePlayerForTrade = (player: any) => {
+      const playerId = player.id || player.player_id;
+      const playerValue = valueMap.get(playerId);
+      return {
+        id: playerId,
+        player_id: playerId,
+        name: player.player_name || player.name || playerValue?.player_name || 'Unknown Player',
+        position: normPos(player.position),
+        team: player.team || playerValue?.team || 'FA',
+        value: getPlayerValue(player),
+      };
     };
 
     // Find teams with surplus at target position (strong positional ranking)
@@ -116,10 +129,11 @@ serve(async (req) => {
       const theirRoster = team.roster || [];
       const theirPosPlayers = theirRoster
         .filter((p: any) => normPos(p.position) === targetPosition)
-        .map((p: any) => ({ ...p, value: getPlayerValue(p) }))
+        .map((p: any) => normalizePlayerForTrade(p))
+        .filter((p: any) => p.value > 0) // Only include players with value
         .sort((a: any, b: any) => b.value - a.value);
 
-      if (theirPosPlayers.length < 3) continue;
+      if (theirPosPlayers.length < 2) continue; // Need at least 2 to target depth
 
       // Find positions where I have strength (z_score > 0) to trade from
       const myStrongPositions = Array.from(myStrengths?.entries() || [])
@@ -127,29 +141,38 @@ serve(async (req) => {
         .map(([pos, strength]) => ({ position: pos, ...strength }))
         .sort((a, b) => b.z_score - a.z_score);
 
-      // Try to find fair trades - target their 3rd, 4th, 5th best player
-      for (const targetPlayerIdx of [2, 3, 4]) {
+      // Try to find fair trades - target their 2nd, 3rd, 4th best player at this position
+      for (const targetPlayerIdx of [1, 2, 3]) {
         if (targetPlayerIdx >= theirPosPlayers.length) continue;
         
         const targetPlayer = theirPosPlayers[targetPlayerIdx];
         const targetValue = targetPlayer.value;
 
+        if (targetValue === 0) continue; // Skip players with no value
+
+        console.log(`Considering ${targetPlayer.name} (value: ${targetValue}) from team ${team.team_id}`);
+
         // Look for matches from my positions of strength
         for (const myStrongPos of myStrongPositions) {
           const myPosPlayers = myRoster
             .filter((p: any) => normPos(p.position) === myStrongPos.position)
-            .map((p: any) => ({ ...p, value: getPlayerValue(p) }))
+            .map((p: any) => normalizePlayerForTrade(p))
+            .filter((p: any) => p.value > 0)
             .sort((a: any, b: any) => b.value - a.value);
 
-          // Don't trade my best player at this position
-          for (let i = 1; i < myPosPlayers.length; i++) {
+          if (myPosPlayers.length < 2) continue; // Need depth to trade
+
+          // Don't trade my best player at this position, try 2nd-4th best
+          for (let i = 1; i < Math.min(myPosPlayers.length, 4); i++) {
             const myPlayer = myPosPlayers[i];
             const myValue = myPlayer.value;
             const valueDiff = targetValue - myValue;
 
-            // Check if it's a fair trade (within 25%)
-            if (Math.abs(valueDiff) < targetValue * 0.25) {
-              const positionGainEstimate = targetValue * 0.5; // Simplified estimate
+            // Check if it's a fair trade (within 30% value)
+            if (Math.abs(valueDiff) < targetValue * 0.30) {
+              const positionGainEstimate = targetValue * 0.4;
+              
+              console.log(`Found match: ${myPlayer.name} (${myValue}) for ${targetPlayer.name} (${targetValue})`);
               
               tradeTargets.push({
                 myPlayers: [myPlayer],
@@ -161,13 +184,20 @@ serve(async (req) => {
                 theirPositionRank: theirTargetPosStrength.rank,
                 myPositionZScore: myStrongPos.z_score,
                 theirPositionZScore: theirTargetPosStrength.z_score,
-                rationale: `Trade from your strong ${myStrongPos.position} (rank ${myStrongPos.rank}, z-score ${myStrongPos.z_score.toFixed(2)}) to improve weak ${targetPosition} (rank ${targetPosStrength.rank}, z-score ${targetPosStrength.z_score.toFixed(2)}). Opponent is strong at ${targetPosition} (rank ${theirTargetPosStrength.rank}).`,
+                rationale: `Trade ${myPlayer.name} from your strong ${myStrongPos.position} (rank ${myStrongPos.rank}, z-score ${myStrongPos.z_score.toFixed(2)}) to get ${targetPlayer.name} and improve weak ${targetPosition} (rank ${targetPosStrength.rank}, z-score ${targetPosStrength.z_score.toFixed(2)}). Opponent is strong at ${targetPosition} (rank ${theirTargetPosStrength.rank}).`,
               });
+              
+              // Limit to 2 proposals per opponent to avoid spam
+              if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 2) break;
             }
           }
+          if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 2) break;
         }
+        if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 2) break;
       }
     }
+
+    console.log(`Found ${tradeTargets.length} total trade proposals`);
 
     // Sort by best strategic fit (trading from strength to weakness)
     tradeTargets.sort((a, b) => {
@@ -182,9 +212,9 @@ serve(async (req) => {
     });
 
     // Enrich proposals with rank improvement estimates
-    const enrichedProposals = tradeTargets.slice(0, 10).map(t => ({
+    const enrichedProposals = tradeTargets.slice(0, 8).map(t => ({
       ...t,
-      estimatedRankImprovement: Math.max(1, Math.floor(t.positionGain / 20)), // Rough estimate
+      estimatedRankImprovement: Math.max(1, Math.floor(t.positionGain / 15)),
       improvementContext: `Would improve ${targetPosition} from rank ${targetPosStrength.rank} (z-score ${targetPosStrength.z_score.toFixed(2)})`,
     }));
 
