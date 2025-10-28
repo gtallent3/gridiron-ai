@@ -169,6 +169,8 @@ export type Database = {
       }
       player_pool: {
         Row: {
+          applied_breakdown: Json | null
+          confidence: number | null
           created_at: string | null
           espn_league_id: string
           id: string
@@ -179,14 +181,19 @@ export type Database = {
           player_id: string
           player_name: string
           position: string
+          projected_fp: number | null
           provider_ids: Json | null
           season: number
+          source: string | null
+          stats: Json | null
           team: string | null
           updated_at: string | null
           waiver_status: string | null
           week: number
         }
         Insert: {
+          applied_breakdown?: Json | null
+          confidence?: number | null
           created_at?: string | null
           espn_league_id: string
           id?: string
@@ -197,14 +204,19 @@ export type Database = {
           player_id: string
           player_name: string
           position: string
+          projected_fp?: number | null
           provider_ids?: Json | null
           season: number
+          source?: string | null
+          stats?: Json | null
           team?: string | null
           updated_at?: string | null
           waiver_status?: string | null
           week: number
         }
         Update: {
+          applied_breakdown?: Json | null
+          confidence?: number | null
           created_at?: string | null
           espn_league_id?: string
           id?: string
@@ -215,8 +227,11 @@ export type Database = {
           player_id?: string
           player_name?: string
           position?: string
+          projected_fp?: number | null
           provider_ids?: Json | null
           season?: number
+          source?: string | null
+          stats?: Json | null
           team?: string | null
           updated_at?: string | null
           waiver_status?: string | null

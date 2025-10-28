@@ -173,9 +173,9 @@ serve(async (req) => {
             stat.statSourceId === 1 && stat.statSplitTypeId === 1 && stat.scoringPeriodId === week
           );
 
-          // Always add to player pool regardless of projection
+          // Add to player pool with projection data
           if (espnId) {
-            poolRows.push({
+            const poolEntry: any = {
               league_id: league.id,
               espn_league_id: league.league_id,
               player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
@@ -190,7 +190,18 @@ serve(async (req) => {
               percent_started: 0,
               provider_ids: { espn: espnId },
               updated_at: new Date().toISOString(),
-            });
+            };
+
+            // Add projection stats if available
+            if (weekProjection?.stats || weekProjection?.appliedStats) {
+              poolEntry.stats = weekProjection.stats || {};
+              poolEntry.applied_breakdown = weekProjection.appliedStats || {};
+              poolEntry.projected_fp = weekProjection.appliedTotal || 0;
+              poolEntry.confidence = 0.8;
+              poolEntry.source = 'espn_projection';
+            }
+
+            poolRows.push(poolEntry);
           }
 
           if (weekProjection?.stats || weekProjection?.appliedStats) {
@@ -231,9 +242,9 @@ serve(async (req) => {
           stat.statSourceId === 1 && stat.scoringPeriodId === week && stat.seasonId === currentSeason
         );
 
-        // Always add to player pool regardless of projection
+        // Add to player pool with projection data
         if (espnId) {
-          poolRows.push({
+          const poolEntry: any = {
             league_id: league.id,
             espn_league_id: league.league_id,
             player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
@@ -248,7 +259,18 @@ serve(async (req) => {
             percent_started: ownership.percentStarted || 0,
             provider_ids: { espn: espnId },
             updated_at: new Date().toISOString(),
-          });
+          };
+
+          // Add projection stats if available
+          if (weekProjection?.stats || weekProjection?.appliedStats) {
+            poolEntry.stats = weekProjection.stats || {};
+            poolEntry.applied_breakdown = weekProjection.appliedStats || {};
+            poolEntry.projected_fp = weekProjection.appliedTotal || 0;
+            poolEntry.confidence = 0.8;
+            poolEntry.source = 'espn_projection';
+          }
+
+          poolRows.push(poolEntry);
 
           // Also add to waiver_wire_players table for easy querying
           waiverRows.push({
