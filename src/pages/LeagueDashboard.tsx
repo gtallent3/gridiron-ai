@@ -14,6 +14,8 @@ import { TradeAnalyzer } from "@/components/league/trade/TradeAnalyzer";
 import { TradeFinder } from "@/components/league/trade/TradeFinder";
 import { PositionImprover } from "@/components/league/trade/PositionImprover";
 import { LeagueAIAssistant } from "@/components/league/LeagueAIAssistant";
+import { PositionalRankings } from "@/components/league/PositionalRankings";
+import { ImprovePosition } from "@/components/league/ImprovePosition";
 
 type League = {
   id: string;
@@ -258,10 +260,11 @@ export default function LeagueDashboard() {
 
           <TabsContent value="trade" className="mt-4 sm:mt-6">
             <Tabs defaultValue="analyzer" className="spacing-mobile">
-              <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 max-w-2xl mx-auto h-auto">
+              <TabsList className="grid w-full grid-cols-1 sm:grid-cols-4 max-w-3xl mx-auto h-auto">
                 <TabsTrigger value="analyzer" className="text-sm py-2 sm:py-3">Grade Trade</TabsTrigger>
                 <TabsTrigger value="finder" className="text-sm py-2 sm:py-3">Find Trades</TabsTrigger>
                 <TabsTrigger value="improve" className="text-sm py-2 sm:py-3">Improve Position</TabsTrigger>
+                <TabsTrigger value="rankings" className="text-sm py-2 sm:py-3">Rankings</TabsTrigger>
               </TabsList>
 
               <TabsContent value="analyzer">
@@ -273,7 +276,16 @@ export default function LeagueDashboard() {
               </TabsContent>
 
               <TabsContent value="improve">
-                <PositionImprover league={league} userTeam={userTeam!} allTeams={allTeams} />
+                <ImprovePosition 
+                  leagueId={league.id}
+                  myTeamId={userTeam!.team_id}
+                  myTeam={userTeam}
+                  allTeams={allTeams}
+                />
+              </TabsContent>
+
+              <TabsContent value="rankings">
+                <PositionalRankings leagueId={league.id} teams={allTeams} />
               </TabsContent>
             </Tabs>
           </TabsContent>

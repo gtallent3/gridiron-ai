@@ -1,0 +1,167 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// Default lineup requirements
+const DEFAULT_STARTERS: Record<string, number> = {
+  QB: 1,
+  RB: 2,
+  WR: 2,
+  TE: 1,
+  FLEX: 1,
+  K: 1,
+  DST: 1,
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const authHeader = req.headers.get('Authorization')!;
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const { leagueId } = await req.json();
+
+    if (!leagueId) {
+      return new Response(JSON.stringify({ error: 'leagueId required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Fetch all teams in the league
+    const { data: teams, error: teamsError } = await supabase
+      .from('user_teams')
+      .select('*')
+      .eq('league_id', leagueId);
+
+    if (teamsError) throw teamsError;
+
+    // Fetch player value cache for this league
+    const { data: playerValues, error: valuesError } = await supabase
+      .from('player_value_cache')
+      .select('*')
+      .eq('league_id', leagueId);
+
+    if (valuesError) throw valuesError;
+
+    // Build player value map
+    const valueMap = new Map<string, any>();
+    for (const pv of playerValues || []) {
+      valueMap.set(pv.player_id, pv);
+    }
+
+    // Calculate PSS for each team and position
+    const positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
+    const teamPSS: Map<string, Map<string, number>> = new Map();
+
+    for (const team of teams || []) {
+      const roster = team.roster as any[];
+      const teamMap = new Map<string, number>();
+
+      for (const pos of positions) {
+        const N = (DEFAULT_STARTERS[pos] || 1) + 1; // starters + 1 bench
+        
+        // Get all players at this position
+        const posPlayers = roster
+          .filter(p => p.position === pos)
+          .map(p => {
+            const value = valueMap.get(p.player_id);
+            return value ? value.value_score : 0;
+          })
+          .sort((a, b) => b - a); // descending
+
+        // Sum top N
+        const pss = posPlayers.slice(0, N).reduce((sum, v) => sum + v, 0);
+        teamMap.set(pos, pss);
+      }
+
+      teamPSS.set(team.team_id, teamMap);
+    }
+
+    // Calculate league-wide stats per position and assign ranks
+    const strengthResults = [];
+
+    for (const pos of positions) {
+      const allPSS = Array.from(teamPSS.values()).map(m => m.get(pos) || 0);
+      
+      // Sort for ranking
+      const sorted = [...allPSS].sort((a, b) => b - a);
+      const mean = allPSS.reduce((a, b) => a + b, 0) / allPSS.length;
+      const variance = allPSS.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / allPSS.length;
+      const stdDev = Math.sqrt(variance);
+      const median = calculateMedian(allPSS);
+
+      for (const [teamId, teamMap] of teamPSS.entries()) {
+        const pss = teamMap.get(pos) || 0;
+        const rank = sorted.indexOf(pss) + 1;
+        const zScore = stdDev > 0 ? (pss - mean) / stdDev : 0;
+        const deltaVsMedian = pss - median;
+
+        strengthResults.push({
+          league_id: leagueId,
+          team_id: teamId,
+          position: pos,
+          pss,
+          rank,
+          z_score: zScore,
+          delta_vs_median: deltaVsMedian,
+          updated_at: new Date().toISOString(),
+        });
+      }
+    }
+
+    // Upsert results
+    if (strengthResults.length > 0) {
+      const { error: upsertError } = await supabase
+        .from('team_positional_strengths')
+        .upsert(strengthResults, { onConflict: 'league_id,team_id,position' });
+
+      if (upsertError) throw upsertError;
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        teamsProcessed: teams?.length || 0,
+        positionsProcessed: positions.length,
+        message: 'Positional strengths computed',
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('Error computing positional strengths:', error);
+    return new Response(
+      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+function calculateMedian(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[mid - 1] + sorted[mid]) / 2
+    : sorted[mid];
+}

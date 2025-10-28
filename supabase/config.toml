@@ -65,3 +65,12 @@ verify_jwt = true
 
 [functions.reconcile-stats]
 verify_jwt = true
+
+[functions.compute-player-values]
+verify_jwt = true
+
+[functions.compute-positional-strengths]
+verify_jwt = true
+
+[functions.evaluate-trade-v3]
+verify_jwt = true

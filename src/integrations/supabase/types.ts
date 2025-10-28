@@ -518,6 +518,62 @@ export type Database = {
         }
         Relationships: []
       }
+      player_value_cache: {
+        Row: {
+          consistency_multiplier: number
+          created_at: string
+          id: string
+          league_id: string
+          player_id: string
+          player_name: string
+          position: string
+          projected_fp_ros: number
+          risk_adjustment: number
+          schedule_factor: number
+          team: string | null
+          updated_at: string
+          value_score: number
+        }
+        Insert: {
+          consistency_multiplier?: number
+          created_at?: string
+          id?: string
+          league_id: string
+          player_id: string
+          player_name: string
+          position: string
+          projected_fp_ros?: number
+          risk_adjustment?: number
+          schedule_factor?: number
+          team?: string | null
+          updated_at?: string
+          value_score?: number
+        }
+        Update: {
+          consistency_multiplier?: number
+          created_at?: string
+          id?: string
+          league_id?: string
+          player_id?: string
+          player_name?: string
+          position?: string
+          projected_fp_ros?: number
+          risk_adjustment?: number
+          schedule_factor?: number
+          team?: string | null
+          updated_at?: string
+          value_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_value_cache_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "connected_leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -654,6 +710,53 @@ export type Database = {
             columns: ["prop_id"]
             isOneToOne: false
             referencedRelation: "weekly_props"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_positional_strengths: {
+        Row: {
+          created_at: string
+          delta_vs_median: number
+          id: string
+          league_id: string
+          position: string
+          pss: number
+          rank: number
+          team_id: string
+          updated_at: string
+          z_score: number
+        }
+        Insert: {
+          created_at?: string
+          delta_vs_median?: number
+          id?: string
+          league_id: string
+          position: string
+          pss?: number
+          rank?: number
+          team_id: string
+          updated_at?: string
+          z_score?: number
+        }
+        Update: {
+          created_at?: string
+          delta_vs_median?: number
+          id?: string
+          league_id?: string
+          position?: string
+          pss?: number
+          rank?: number
+          team_id?: string
+          updated_at?: string
+          z_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_positional_strengths_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "connected_leagues"
             referencedColumns: ["id"]
           },
         ]
