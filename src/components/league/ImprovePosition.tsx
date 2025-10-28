@@ -54,12 +54,23 @@ export function ImprovePosition({
 
       if (error) throw error;
 
-      setPackages(data?.tradeProposals || []);
+      // Map the proposals to match expected structure
+      const mappedProposals = (data?.proposals || []).map((p: any) => ({
+        partner_team_id: p.theirTeam?.team_id,
+        partner_team_name: p.theirTeam?.team_name || 'Unknown Team',
+        my_gives: p.myPlayers || [],
+        i_receive: p.theirPlayers || [],
+        value_delta: p.valueDiff || 0,
+        explanation: p.rationale || '',
+        positional_gain: p.positionGain || 0,
+      }));
+
+      setPackages(mappedProposals);
       
-      if (data?.tradeProposals?.length === 0) {
+      if (mappedProposals.length === 0) {
         toast.info('No suitable trade packages found for this position');
       } else {
-        toast.success(`Found ${data.tradeProposals.length} trade packages`);
+        toast.success(`Found ${mappedProposals.length} trade packages`);
       }
     } catch (error) {
       console.error('Error finding trades:', error);
