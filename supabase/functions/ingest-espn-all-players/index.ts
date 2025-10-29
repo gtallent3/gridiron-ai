@@ -110,6 +110,21 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Check content type before parsing
+    const contentType = espnResponse.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const responseText = await espnResponse.text();
+      console.error('ESPN returned non-JSON response:', responseText.substring(0, 500));
+      return new Response(
+        JSON.stringify({ 
+          error: 'ESPN credentials may be expired or invalid',
+          message: 'Received HTML instead of JSON - please re-authenticate with ESPN',
+          debug: responseText.substring(0, 200)
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const espnData = await espnResponse.json();
     const players = espnData.players || [];
 
