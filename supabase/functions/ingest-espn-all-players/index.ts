@@ -122,6 +122,9 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching all players for ESPN league ${espnLeagueId}, season ${season}, week ${week}`);
     
+    const PAGE_SIZE = 400;
+    const ROW_CHUNK = 250;
+
     // Build headers once (prefer espn_s2 first in cookie)
     const headers = {
       'Cookie': `espn_s2=${espnS2Val}; SWID=${swidCookie}`,
@@ -130,13 +133,6 @@ Deno.serve(async (req) => {
       'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0)',
       'Referer': 'https://fantasy.espn.com',
     };
-
-    // 1) Try global players endpoint first (more consistent for stats hydration)
-    const espnUrlPlayers = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/players?scoringPeriodId=${week}&view=kona_player_info`;
-    // 2) League endpoint as fallback
-    const espnUrlLeague = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info&view=kona_playercard`;
-
-    let players: any[] = [];
 
     async function fetchJson(url: string) {
       const r = await fetch(url, { headers });
@@ -149,173 +145,220 @@ Deno.serve(async (req) => {
         const parsed = JSON.parse(t);
         return { ok: true as const, json: parsed as any };
       } catch (e) {
-        console.error('Failed to parse ESPN JSON:', (e as Error).message, t.substring(0, 200));
+        console.error('Failed to parse ESPN JSON:', (e as Error).message, t.substring(0, 100));
         return { ok: false as const, status: 502, text: t };
       }
     }
 
-    // Try players endpoint
-    const playersResp = await fetchJson(espnUrlPlayers);
-    if (playersResp.ok && Array.isArray(playersResp.json)) {
-      const arr = playersResp.json as any[];
-      // Check if we actually got week stats hydrated
-      const hasWeekStats = arr.some((p: any) => {
-        const root = Array.isArray(p.stats) ? p.stats : [];
-        const nested = Array.isArray(p.player?.stats) ? p.player.stats : [];
-        const all = [...root, ...nested];
-        return all.some((s: any) => s?.scoringPeriodId === week && (s?.statSourceId === 0 || s?.statSourceId === 1));
-      });
-
-      if (hasWeekStats) {
-        players = arr;
-        console.log(`Using players endpoint, received ${players.length} items with hydrated stats`);
-      } else {
-        console.warn('Players endpoint returned no hydrated stats, falling back to league endpoint');
-      }
+    function playersUrl(offset: number) {
+      return `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/players?scoringPeriodId=${week}&view=kona_player_info&limit=${PAGE_SIZE}&offset=${offset}`;
     }
 
-    // Fallback to league if needed
-    if (players.length === 0) {
+    let totalSeen = 0;
+    let totalUpserts = 0;
+    let totalProj = 0;
+    let totalActual = 0;
+
+    // Page through players endpoint
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const url = playersUrl(offset);
+      const res = await fetchJson(url);
+      if (!res.ok) {
+        console.log(`Players endpoint failed at offset ${offset}, stopping pagination`);
+        break;
+      }
+
+      const page = res.json as any[];
+      if (!Array.isArray(page) || page.length === 0) break;
+
+      totalSeen += page.length;
+      console.log(`Processing page at offset ${offset}, ${page.length} players`);
+
+      let buffer: any[] = [];
+
+      for (const p of page) {
+        const espnId = p.id?.toString();
+        if (!espnId) continue;
+
+        const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
+        const positionId = p.defaultPositionId ?? p.player?.defaultPositionId;
+        const position = getPosition(positionId);
+        const proTeamId = p.proTeamId ?? p.player?.proTeamId;
+        const team = getTeamAbbreviation(proTeamId);
+
+        const playerData = p.player ?? p;
+        let waiverStatus = 'ROSTERED';
+        if (playerData.status === 'FREEAGENT') waiverStatus = 'FREEAGENT';
+        else if (playerData.status === 'WAIVERS') waiverStatus = 'WAIVERS';
+
+        const root = Array.isArray(p.stats) ? p.stats : [];
+        const nested = Array.isArray(p.player?.stats) ? p.player.stats : [];
+        const statsArray = root.length ? root : nested;
+
+        if (!statsArray?.length) continue;
+
+        for (const s of statsArray) {
+          if (s.scoringPeriodId !== week) continue;
+          const src = s.statSourceId;
+          if (src !== 0 && src !== 1) continue;
+
+          const appliedStats = s.appliedStats ?? s.stats ?? {};
+          let appliedTotal = s.appliedTotal;
+          if ((appliedTotal == null || Number.isNaN(appliedTotal)) && appliedStats && Object.keys(appliedStats).length) {
+            appliedTotal = Object.values(appliedStats).reduce(
+              (sum: number, v: any) => sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0), 0
+            );
+          }
+          if ((appliedTotal == null || appliedTotal === 0) && Object.keys(appliedStats).length === 0) continue;
+
+          buffer.push({
+            league_id: leagueData.id,
+            espn_league_id: espnLeagueId,
+            season,
+            week,
+            player_id: `espn_${espnId}`,
+            player_name: name,
+            position,
+            team,
+            waiver_status: waiverStatus,
+            source: src === 1 ? 'espn_projection' : 'espn_actual',
+            projected_fp: appliedTotal || 0,
+            stats: s.stats || {},
+            applied_breakdown: appliedStats,
+            provider_ids: { espn: espnId },
+            percent_owned: p.ownership?.percentOwned || 0,
+            percent_started: p.ownership?.percentStarted || 0,
+            is_owned: waiverStatus === 'ROSTERED',
+            confidence: src === 1 ? 0.8 : 1.0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+          if (src === 1) totalProj++; else totalActual++;
+
+          // Flush buffer to DB to cap memory
+          if (buffer.length >= ROW_CHUNK) {
+            const { error } = await supabase.from('player_pool')
+              .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
+            if (error) throw error;
+            totalUpserts += buffer.length;
+            buffer = [];
+          }
+        }
+      }
+
+      // Flush remainder for the page
+      if (buffer.length) {
+        const { error } = await supabase.from('player_pool')
+          .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
+        if (error) throw error;
+        totalUpserts += buffer.length;
+        buffer = [];
+      }
+
+      // Stop if page < PAGE_SIZE (no more pages)
+      if (page.length < PAGE_SIZE) break;
+    }
+
+    // Fallback to league endpoint if no stats were found
+    if (totalUpserts === 0) {
+      console.log('No stats from players endpoint, trying league endpoint fallback');
+      const espnUrlLeague = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info&view=kona_playercard`;
       const leagueResp = await fetchJson(espnUrlLeague);
+      
       if (!leagueResp.ok) {
-        console.error('ESPN returned non-JSON on both endpoints. League status:', (leagueResp as any).status, 'First 300 chars:', (leagueResp as any).text?.substring(0,300));
+        console.error('ESPN returned non-JSON on league endpoint:', leagueResp.status);
         return new Response(
           JSON.stringify({
             error: 'ESPN credentials expired or invalid',
             message: 'Please reconnect your ESPN league.',
-            status: (leagueResp as any).status ?? 401
+            status: leagueResp.status ?? 401
           }),
           { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+
       const obj = leagueResp.json as any;
-      players = (obj?.players ?? []);
-    }
+      const players = obj?.players ?? [];
+      console.log(`League endpoint returned ${players.length} players`);
 
-    console.log(`Received ${players.length} players from ESPN`);
-    
-    // Debug: log first player structure to understand what we're getting
-    if (players.length > 0) {
-      const sample = players[0];
-      console.log('Sample player structure:', JSON.stringify({
-        id: sample.id,
-        hasRootStats: Array.isArray(sample.stats) && sample.stats.length > 0,
-        hasNestedStats: Array.isArray(sample.player?.stats) && sample.player.stats.length > 0,
-        weeksRoot: (sample.stats || []).map((x: any) => x.scoringPeriodId).slice(0, 5),
-        weeksNested: (sample.player?.stats || []).map((x: any) => x.scoringPeriodId).slice(0, 5),
-        hasFilterHeader: !!headers['X-Fantasy-Filter']
-      }, null, 2));
-    }
+      // Process league endpoint data with same streaming logic
+      let buffer: any[] = [];
+      for (const p of players) {
+        const espnId = p.id?.toString();
+        if (!espnId) continue;
 
-    const poolRows: any[] = [];
-    let projectionsCount = 0;
-    let actualsCount = 0;
-    let skippedNoStats = 0;
-    let skippedWrongWeek = 0;
+        const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
+        const positionId = p.defaultPositionId ?? p.player?.defaultPositionId;
+        const position = getPosition(positionId);
+        const proTeamId = p.proTeamId ?? p.player?.proTeamId;
+        const team = getTeamAbbreviation(proTeamId);
 
-    for (const player of players) {
-      const espnId = player.id?.toString();
-      if (!espnId) continue;
+        const playerData = p.player ?? p;
+        let waiverStatus = 'ROSTERED';
+        if (playerData.status === 'FREEAGENT') waiverStatus = 'FREEAGENT';
+        else if (playerData.status === 'WAIVERS') waiverStatus = 'WAIVERS';
 
-      const playerName = player.fullName ?? player.player?.fullName ?? 'Unknown';
-      const positionId = player.defaultPositionId ?? player.player?.defaultPositionId;
-      const position = getPosition(positionId);
-      const proTeamId = player.proTeamId ?? player.player?.proTeamId;
-      const team = getTeamAbbreviation(proTeamId);
-      
-      // Determine waiver status
-      const ownership = player.ownership || {};
-      const playerData = player.player ?? player;
-      let waiverStatus = 'ROSTERED';
-      if (playerData.status === 'FREEAGENT') waiverStatus = 'FREEAGENT';
-      else if (playerData.status === 'WAIVERS') waiverStatus = 'WAIVERS';
+        const root = Array.isArray(p.stats) ? p.stats : [];
+        const nested = Array.isArray(p.player?.stats) ? p.player.stats : [];
+        const statsArray = root.length ? root : nested;
 
-      // Process both projection and actual stats for this player
-      // ESPN can nest stats under player.stats OR player.player.stats
-      const statsArray =
-        (player.stats && Array.isArray(player.stats) ? player.stats : []) ||
-        (player.player?.stats && Array.isArray(player.player.stats) ? player.player.stats : []);
-      
-      if (statsArray.length === 0) {
-        skippedNoStats++;
-        continue;
-      }
-      
-      for (const statEntry of statsArray) {
-        if (statEntry.scoringPeriodId !== week) {
-          skippedWrongWeek++;
-          continue;
-        }
-        
-        const sourceId = statEntry.statSourceId;
-        const sourceType = sourceId === 1 ? 'projection' : sourceId === 0 ? 'actual' : null;
-        if (!sourceType) continue;
+        if (!statsArray?.length) continue;
 
-        const appliedStats = statEntry.appliedStats || statEntry.stats || {};
-        let appliedTotal = statEntry.appliedTotal;
-        
-        // Compute appliedTotal if missing
-        if ((appliedTotal == null || Number.isNaN(appliedTotal)) && appliedStats && Object.keys(appliedStats).length > 0) {
-          appliedTotal = Object.values(appliedStats).reduce(
-            (sum: number, val: any) => sum + (typeof val === 'number' ? val : parseFloat(String(val)) || 0),
-            0
-          );
-        }
+        for (const s of statsArray) {
+          if (s.scoringPeriodId !== week) continue;
+          const src = s.statSourceId;
+          if (src !== 0 && src !== 1) continue;
 
-        // Skip if no stats available
-        if ((appliedTotal == null || appliedTotal === 0) && Object.keys(appliedStats).length === 0) {
-          continue;
-        }
+          const appliedStats = s.appliedStats ?? s.stats ?? {};
+          let appliedTotal = s.appliedTotal;
+          if ((appliedTotal == null || Number.isNaN(appliedTotal)) && appliedStats && Object.keys(appliedStats).length) {
+            appliedTotal = Object.values(appliedStats).reduce(
+              (sum: number, v: any) => sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0), 0
+            );
+          }
+          if ((appliedTotal == null || appliedTotal === 0) && Object.keys(appliedStats).length === 0) continue;
 
-        const row = {
-          league_id: leagueData.id,
-          espn_league_id: espnLeagueId,
-          season,
-          week,
-          player_id: `espn_${espnId}`,
-          player_name: playerName,
-          position,
-          team,
-          waiver_status: waiverStatus,
-          source: sourceType === 'projection' ? 'espn_projection' : 'espn_actual',
-          projected_fp: appliedTotal || 0,
-          stats: statEntry.stats || {},
-          applied_breakdown: appliedStats,
-          provider_ids: { espn: espnId },
-          percent_owned: ownership.percentOwned || 0,
-          percent_started: ownership.percentStarted || 0,
-          is_owned: waiverStatus === 'ROSTERED',
-          confidence: sourceType === 'projection' ? 0.8 : 1.0,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        poolRows.push(row);
-        
-        if (sourceType === 'projection') projectionsCount++;
-        else actualsCount++;
-      }
-    }
-
-    console.log(`Parsed ${poolRows.length} total rows (${projectionsCount} projections, ${actualsCount} actuals)`);
-    console.log(`Skipped: ${skippedNoStats} players with no stats, ${skippedWrongWeek} entries for wrong week`);
-
-    // Upsert to player_pool in chunks
-    if (poolRows.length > 0) {
-      const chunkSize = 500;
-      for (let i = 0; i < poolRows.length; i += chunkSize) {
-        const chunk = poolRows.slice(i, i + chunkSize);
-        const { error: upsertError } = await supabase
-          .from('player_pool')
-          .upsert(chunk, {
-            onConflict: 'league_id,season,week,player_id,source',
-            ignoreDuplicates: false,
+          buffer.push({
+            league_id: leagueData.id,
+            espn_league_id: espnLeagueId,
+            season,
+            week,
+            player_id: `espn_${espnId}`,
+            player_name: name,
+            position,
+            team,
+            waiver_status: waiverStatus,
+            source: src === 1 ? 'espn_projection' : 'espn_actual',
+            projected_fp: appliedTotal || 0,
+            stats: s.stats || {},
+            applied_breakdown: appliedStats,
+            provider_ids: { espn: espnId },
+            percent_owned: p.ownership?.percentOwned || 0,
+            percent_started: p.ownership?.percentStarted || 0,
+            is_owned: waiverStatus === 'ROSTERED',
+            confidence: src === 1 ? 0.8 : 1.0,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           });
 
-        if (upsertError) {
-          console.error(`Error upserting chunk ${i / chunkSize + 1}:`, upsertError);
-          throw upsertError;
+          if (src === 1) totalProj++; else totalActual++;
+
+          if (buffer.length >= ROW_CHUNK) {
+            const { error } = await supabase.from('player_pool')
+              .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
+            if (error) throw error;
+            totalUpserts += buffer.length;
+            buffer = [];
+          }
         }
+      }
+
+      if (buffer.length) {
+        const { error } = await supabase.from('player_pool')
+          .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
+        if (error) throw error;
+        totalUpserts += buffer.length;
       }
     }
 
@@ -323,10 +366,10 @@ Deno.serve(async (req) => {
       success: true,
       season,
       week,
-      players_seen: players.length,
-      inserted_or_updated: poolRows.length,
-      projections: projectionsCount,
-      actuals: actualsCount,
+      players_seen: totalSeen,
+      inserted_or_updated: totalUpserts,
+      projections: totalProj,
+      actuals: totalActual,
     };
 
     console.log('Ingest complete:', summary);
