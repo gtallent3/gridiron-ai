@@ -298,7 +298,8 @@ serve(async (req) => {
         const subscription = event.data.object;
         logStep("Subscription event", { 
           type: event.type,
-          subscriptionId: subscription.id 
+          subscriptionId: subscription.id,
+          status: subscription.status
         });
 
         const userId = subscription.metadata?.user_id;
@@ -306,6 +307,9 @@ serve(async (req) => {
           const periodStart = new Date(subscription.current_period_start * 1000);
           const periodEnd = new Date(subscription.current_period_end * 1000);
           const productId = subscription.items.data[0]?.price?.product as string;
+
+          // Check if subscription should have unlimited tokens (active or trialing)
+          const isUnlimitedActive = subscription.status === 'active' || subscription.status === 'trialing';
 
           // Upsert subscription
           await supabaseClient
@@ -321,6 +325,20 @@ serve(async (req) => {
               trial_end: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
               updated_at: new Date().toISOString(),
             }, { onConflict: 'stripe_subscription_id' });
+
+          // Update user_tokens with unlimited access for active/trialing subscriptions
+          const { error: tokensError } = await supabaseClient
+            .from('user_tokens')
+            .upsert({
+              user_id: userId,
+              has_unlimited_subscription: isUnlimitedActive,
+              subscription_expires_at: isUnlimitedActive ? periodEnd.toISOString() : null,
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'user_id' });
+
+          if (tokensError) {
+            logStep('Error updating user tokens', { error: tokensError });
+          }
 
           // Update app_users
           await supabaseClient
@@ -338,7 +356,11 @@ serve(async (req) => {
             })
             .eq("user_id", userId);
 
-          logStep("Subscription synced to DB");
+          logStep("Subscription synced to DB", { 
+            userId, 
+            unlimitedActive: isUnlimitedActive,
+            status: subscription.status 
+          });
         }
         break;
       }
@@ -354,6 +376,20 @@ serve(async (req) => {
             .update({ status: 'canceled' })
             .eq("stripe_subscription_id", subscription.id);
 
+          // Remove unlimited token access
+          const { error: tokensError } = await supabaseClient
+            .from('user_tokens')
+            .update({
+              has_unlimited_subscription: false,
+              subscription_expires_at: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', userId);
+
+          if (tokensError) {
+            logStep('Error removing unlimited token access', { error: tokensError });
+          }
+
           await supabaseClient
             .from("app_users")
             .update({
@@ -362,7 +398,7 @@ serve(async (req) => {
             })
             .eq("user_id", userId);
 
-          logStep("Subscription cancellation synced");
+          logStep("Subscription cancellation synced", { userId, unlimitedRemoved: true });
         }
         break;
       }
@@ -422,12 +458,26 @@ serve(async (req) => {
               invoice_pdf: invoice.invoice_pdf,
             }, { onConflict: 'stripe_invoice_id' });
 
+          // Remove unlimited token access on payment failure
+          const { error: tokensError } = await supabaseClient
+            .from('user_tokens')
+            .update({
+              has_unlimited_subscription: false,
+              subscription_expires_at: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', appUser.user_id);
+
+          if (tokensError) {
+            logStep('Error removing unlimited token access', { error: tokensError });
+          }
+
           await supabaseClient
             .from("app_users")
             .update({ sub_status: 'past_due' })
             .eq("user_id", appUser.user_id);
 
-          logStep("Payment failure synced");
+          logStep("Payment failure synced", { userId: appUser.user_id, unlimitedRemoved: true });
         }
         break;
       }
