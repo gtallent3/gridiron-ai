@@ -168,7 +168,7 @@ Deno.serve(async (req) => {
           if (buffer.length >= ROW_CHUNK) {
             const { error } = await supabase
               .from('player_pool')
-              .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
+              .upsert(buffer, { onConflict: 'league_id,player_id,season,week', ignoreDuplicates: false });
             if (error) throw error;
             totalUpserts += buffer.length;
             buffer.length = 0;
@@ -186,7 +186,7 @@ Deno.serve(async (req) => {
       if (buffer.length) {
         const { error } = await supabase
           .from('player_pool')
-          .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
+          .upsert(buffer, { onConflict: 'league_id,player_id,season,week', ignoreDuplicates: false });
         if (error) throw error;
         totalUpserts += buffer.length;
         buffer.length = 0;
