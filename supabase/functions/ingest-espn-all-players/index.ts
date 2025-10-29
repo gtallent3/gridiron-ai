@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
 
     // -------- Memory-safe, paginated ingest via players endpoint --------
     const SLOT_IDS = [0, 2, 4, 6, 17, 16]; // QB, RB, WR, TE, K, DST
-    const PAGE_SIZE = 80;
+    const PAGE_SIZE = 40;
     const ROW_CHUNK = 40;
     const MAX_PAGES_PER_SLOT = 50;
 
@@ -151,28 +151,21 @@ Deno.serve(async (req) => {
         const offset = page * PAGE_SIZE;
         const url = playersUrl(offset);
 
-        let text = '';
+        let arr: any[] | null = null;
         try {
           const resp = await fetch(url, {
             headers: { ...baseHeaders, 'X-Fantasy-Filter': JSON.stringify(filter) },
           });
-          text = await resp.text();
-          if (!resp.ok || text.trim().startsWith('<') || text.includes('<html')) {
-            // HTML indicates auth wall or error — stop this slot's pagination
+          const contentType = resp.headers.get('content-type') || '';
+          if (!resp.ok || !contentType.includes('application/json')) {
+            // Non-JSON (likely HTML auth wall) — stop this slot's pagination
             break;
           }
-        } catch {
-          break;
-        }
-
-        let arr: any[] | null = null;
-        try {
-          const parsed = JSON.parse(text);
+          const parsed = await resp.json();
           arr = Array.isArray(parsed) ? parsed : null;
         } catch {
           arr = null;
         }
-        text = '' as any; // release big string ASAP
 
         if (!arr || arr.length === 0) break;
 
