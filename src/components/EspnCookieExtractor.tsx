@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ExternalLink, Copy, Check, AlertCircle, Cookie } from "lucide-react";
+import { ExternalLink, Copy, Check, AlertCircle, Cookie, Smartphone, Monitor } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,7 +20,16 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
   const [leagueId, setLeagueId] = useState('');
   const [isValidating, setIsValidating] = useState(false);
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsMobile(mobile);
+    };
+    checkMobile();
+  }, []);
 
   const extractionScript = `
 // Paste this in ESPN's browser console
@@ -33,16 +42,19 @@ cookies.forEach(c => {
 console.log('Copy these values:', espnCreds);
 espnCreds;`.trim();
 
+  const bookmarkletCode = `javascript:(function(){var c=document.cookie.split(';'),e={};c.forEach(x=>{if(x.includes('SWID='))e.swid=x.split('=')[1].trim();if(x.includes('espn_s2='))e.espn_s2=x.split('=')[1].trim();});if(e.swid&&e.espn_s2){prompt('Copy SWID:',e.swid);prompt('Copy espn_s2:',e.espn_s2);}else{alert('Please log into ESPN first!');}})();`;
+
   const openEspnLogin = () => {
     window.open('https://www.espn.com/login', '_blank', 'width=800,height=600');
     setStep('extract');
   };
 
   const copyScript = () => {
-    navigator.clipboard.writeText(extractionScript);
+    const textToCopy = isMobile ? bookmarkletCode : extractionScript;
+    navigator.clipboard.writeText(textToCopy);
     toast({
-      title: "Script copied!",
-      description: "Paste it in ESPN's browser console (F12)",
+      title: isMobile ? "Bookmarklet copied!" : "Script copied!",
+      description: isMobile ? "Follow the instructions to save as bookmark" : "Paste it in ESPN's browser console (F12)",
     });
   };
 
@@ -120,8 +132,12 @@ espnCreds;`.trim();
           {step === 'intro' && (
             <div className="space-y-4">
               <Alert>
-                <AlertCircle className="h-4 w-4" />
+                <div className="flex items-center gap-2">
+                  {isMobile ? <Smartphone className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+                  <AlertCircle className="h-4 w-4" />
+                </div>
                 <AlertDescription>
+                  {isMobile ? "Mobile device detected! " : "Desktop device detected! "}
                   Due to browser security, we can't automatically capture ESPN cookies. 
                   This quick 3-step process takes less than 1 minute.
                   <Button 
@@ -147,7 +163,9 @@ espnCreds;`.trim();
                   <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold flex-shrink-0">2</div>
                   <div>
                     <h4 className="font-medium">Extract cookies</h4>
-                    <p className="text-sm text-muted-foreground">Run a simple script in browser console</p>
+                    <p className="text-sm text-muted-foreground">
+                      {isMobile ? "Tap a bookmark on ESPN's page" : "Run a script in browser console"}
+                    </p>
                   </div>
                 </div>
 
@@ -167,10 +185,10 @@ espnCreds;`.trim();
             </div>
           )}
 
-          {step === 'extract' && (
+          {step === 'extract' && !isMobile && (
             <div className="space-y-4">
               <Alert>
-                <AlertCircle className="h-4 w-4" />
+                <Monitor className="h-4 w-4" />
                 <AlertDescription>
                   After logging in, open browser DevTools (F12) and go to the Console tab
                 </AlertDescription>
@@ -198,6 +216,59 @@ espnCreds;`.trim();
                 </p>
 
                 <Label>Step 3: Copy the values below</Label>
+              </div>
+
+              <Button onClick={() => setStep('validate')} className="w-full">
+                I've got the cookies
+              </Button>
+            </div>
+          )}
+
+          {step === 'extract' && isMobile && (
+            <div className="space-y-4">
+              <Alert>
+                <Smartphone className="h-4 w-4" />
+                <AlertDescription>
+                  Mobile browsers don't have DevTools. We'll use a bookmarklet instead!
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-base font-semibold">Step 1: Copy the bookmarklet code</Label>
+                  <div className="relative">
+                    <pre className="bg-muted p-3 rounded text-xs overflow-x-auto break-all">
+                      {bookmarkletCode}
+                    </pre>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="absolute top-2 right-2"
+                      onClick={copyScript}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
+                  <Label className="text-base font-semibold">Step 2: Create a bookmark</Label>
+                  <ol className="text-sm space-y-2 list-decimal list-inside text-muted-foreground">
+                    <li>Bookmark any page (tap share → Add to Bookmarks)</li>
+                    <li>Edit the bookmark and replace the URL with the code you copied</li>
+                    <li>Name it "ESPN Cookie Extractor"</li>
+                  </ol>
+                </div>
+
+                <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
+                  <Label className="text-base font-semibold">Step 3: Use the bookmarklet</Label>
+                  <ol className="text-sm space-y-2 list-decimal list-inside text-muted-foreground">
+                    <li>Go to ESPN's website and log in</li>
+                    <li>Tap the bookmarks icon and select "ESPN Cookie Extractor"</li>
+                    <li>Two popup boxes will appear with your SWID and espn_s2 values</li>
+                    <li>Copy both values</li>
+                  </ol>
+                </div>
               </div>
 
               <Button onClick={() => setStep('validate')} className="w-full">
