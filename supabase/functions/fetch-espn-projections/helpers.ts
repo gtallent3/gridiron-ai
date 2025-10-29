@@ -78,14 +78,40 @@ export function processPlayerStats(
     normalizedStats.xp_made = parseFloat(rawStats['85']) || 0;
   }
 
+  // Calculate projected fantasy points
   let projected_fp: number | undefined;
-  if (isK && appliedStats && Object.keys(appliedStats).length > 0) {
+  
+  // Try appliedTotal first (works for most positions including DST)
+  if (typeof weekProjection.appliedTotal === 'number') {
+    projected_fp = weekProjection.appliedTotal;
+  } 
+  // Fallback to summing appliedStats if appliedTotal is missing
+  else if (appliedStats && Object.keys(appliedStats).length > 0) {
     projected_fp = Object.values(appliedStats).reduce((sum: number, val: any) => {
       const num = typeof val === 'number' ? val : parseFloat(val || '0') || 0;
       return sum + num;
     }, 0);
-  } else if (typeof weekProjection.appliedTotal === 'number') {
-    projected_fp = weekProjection.appliedTotal;
+  }
+  // For K/DST with no applied stats but has raw stats, estimate from stats
+  else if ((isK || isDST) && rawStats && Object.keys(rawStats).length > 0) {
+    if (isK) {
+      // Estimate kicker points: 3pts per FG, 1pt per XP (basic scoring)
+      const fgMade = (parseFloat(rawStats['80']) || 0) + 
+                     (parseFloat(rawStats['81']) || 0) + 
+                     (parseFloat(rawStats['82']) || 0) + 
+                     (parseFloat(rawStats['83']) || 0) + 
+                     (parseFloat(rawStats['84']) || 0);
+      const xpMade = parseFloat(rawStats['85']) || 0;
+      projected_fp = (fgMade * 3) + xpMade;
+    } else {
+      // Estimate DST points: basic defensive scoring
+      const sacks = parseFloat(rawStats['99']) || 0;
+      const ints = parseFloat(rawStats['95']) || 0;
+      const fumRec = parseFloat(rawStats['96']) || 0;
+      const defTDs = (parseFloat(rawStats['103']) || 0) + (parseFloat(rawStats['104']) || 0);
+      const safeties = parseFloat(rawStats['98']) || 0;
+      projected_fp = (sacks * 1) + (ints * 2) + (fumRec * 2) + (defTDs * 6) + (safeties * 2);
+    }
   }
 
   return {
