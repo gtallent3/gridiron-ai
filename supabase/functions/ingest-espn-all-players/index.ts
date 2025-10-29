@@ -1,30 +1,55 @@
+// deno-lint-ignore-file no-explicit-any
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const POSITION_MAP: Record<number, string> = { 1:'QB', 2:'RB', 3:'WR', 4:'TE', 5:'K', 16:'DST' };
+// Position ID to string mapping
+const POSITION_MAP: Record<number, string> = {
+  1: 'QB',
+  2: 'RB',
+  3: 'WR',
+  4: 'TE',
+  5: 'K',
+  16: 'DST',
+};
+
+// Team ID to abbreviation mapping
 const TEAM_MAP: Record<number, string> = {
-  1:'ATL',2:'BUF',3:'CHI',4:'CIN',5:'CLE',6:'DAL',7:'DEN',8:'DET',9:'GB',10:'TEN',11:'IND',12:'KC',
-  13:'LV',14:'LAR',15:'MIA',16:'MIN',17:'NE',18:'NO',19:'NYG',20:'NYJ',21:'PHI',22:'ARI',23:'PIT',
-  24:'LAC',25:'SF',26:'SEA',27:'TB',28:'WSH',29:'CAR',30:'JAX',33:'BAL',34:'HOU'
+  1: 'ATL', 2: 'BUF', 3: 'CHI', 4: 'CIN', 5: 'CLE', 6: 'DAL', 7: 'DEN', 8: 'DET',
+  9: 'GB', 10: 'TEN', 11: 'IND', 12: 'KC', 13: 'LV', 14: 'LAR', 15: 'MIA',
+  16: 'MIN', 17: 'NE', 18: 'NO', 19: 'NYG', 20: 'NYJ', 21: 'PHI', 22: 'ARI',
+  23: 'PIT', 24: 'LAC', 25: 'SF', 26: 'SEA', 27: 'TB', 28: 'WSH',
+  29: 'CAR', 30: 'JAX', 33: 'BAL', 34: 'HOU',
 };
-const SLOT_IDS = [0, 2, 4, 6, 17, 16];    // QB, RB, WR, TE, K, DST
-const PAGE_SIZE = 80;                      // small page => small memory
-const ROW_CHUNK = 40;                      // frequent DB flushes
-const MAX_PAGES_PER_SLOT = 50;            // safety valve
 
-const getTeam = (id?: number) => TEAM_MAP[id ?? -1] ?? 'FA';
-const getPos  = (id?: number) => POSITION_MAP[id ?? -1] ?? 'FLEX';
-
-function playersUrl(season: number, week: number, offset: number, limit: number) {
-  return `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/players?scoringPeriodId=${week}&view=kona_player_info&limit=${limit}&offset=${offset}`;
+function getTeamAbbreviation(teamId: number): string {
+  return TEAM_MAP[teamId] || 'FA';
+}
+function getPosition(positionId: number): string {
+  return POSITION_MAP[positionId] || 'FLEX';
+}
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+function computeAppliedTotal(applied: Record<string, any> | undefined, fallback: any) {
+  let fp = fallback;
+  if ((fp == null || Number.isNaN(fp)) && applied && Object.keys(applied).length) {
+    fp = Object.values(applied).reduce(
+      (sum: number, v: any) => sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0),
+      0
+    );
+  }
+  return fp;
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -35,26 +60,32 @@ Deno.serve(async (req) => {
     const week = Number(rawWeek);
 
     if (!leagueId || !season || !week) {
-      return new Response(JSON.stringify({ error: 'Missing required parameters: leagueId, season, week' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      return new Response(
+        JSON.stringify({ error: 'Missing required parameters: leagueId, season, week' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Resolve league and credentials
+    // Get league data
     const { data: leagueData, error: leagueError } = await supabase
       .from('connected_leagues')
       .select('league_id, id, platform, user_id')
       .eq('id', leagueId)
       .single();
+
     if (leagueError || !leagueData) {
       return new Response(JSON.stringify({ error: 'League not found' }), {
-        status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const espnLeagueId = leagueData.league_id; // kept for provenance on rows
 
+    const espnLeagueId = leagueData.league_id; // kept for summary & schema symmetry if needed
+
+    // Resolve credentials
     let swidVal: string | undefined = bodySwid;
     let espnS2Val: string | undefined = bodyEspnS2;
+
     if (!swidVal || !espnS2Val) {
       const { data: cred, error: credError } = await supabase
         .from('espn_credentials')
@@ -62,71 +93,100 @@ Deno.serve(async (req) => {
         .eq('user_id', leagueData.user_id)
         .eq('league_id', espnLeagueId)
         .maybeSingle();
+
       if (credError || !cred) {
-        return new Response(JSON.stringify({ error: 'Missing ESPN credentials — please sign in with ESPN again.' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return new Response(
+          JSON.stringify({ error: 'Missing ESPN credentials — please sign in with ESPN again.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
       if (!cred.expires_at || new Date(cred.expires_at) <= new Date()) {
-        return new Response(JSON.stringify({ error: 'ESPN credentials expired — please sign in with ESPN again.' }), {
-          status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        });
+        return new Response(
+          JSON.stringify({ error: 'ESPN credentials expired — please sign in with ESPN again.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
       swidVal = cred.swid_encrypted;
       espnS2Val = cred.espn_s2_encrypted;
     }
+
+    // Ensure SWID has braces
     const swidCookie = swidVal!.startsWith('{') ? swidVal! : `{${swidVal}}`;
 
-    // ---------- START PAGINATED INGEST (memory-safe) ----------
+    // -------- Memory-safe, paginated ingest via players endpoint --------
+    const SLOT_IDS = [0, 2, 4, 6, 17, 16]; // QB, RB, WR, TE, K, DST
+    const PAGE_SIZE = 80;
+    const ROW_CHUNK = 40;
+    const MAX_PAGES_PER_SLOT = 50;
+
     const baseHeaders = {
-      'Cookie': `espn_s2=${espnS2Val}; SWID=${swidCookie}`,
+      'Cookie': `espn_s2=${espnS2Val}; SWID=${swidCookie}`, // espn_s2 first
       'Accept': 'application/json',
       'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0)',
       'Referer': 'https://fantasy.espn.com',
     };
 
-    // Valid X-Fantasy-Filter (numeric value; no statSplitTypeId)
     const makeFilter = (slotId?: number) => ({
       players: {
         ...(slotId != null ? { filterSlotIds: { value: [slotId] } } : {}),
         filterStatsForExternalIds: { value: [season] },
-        filterStatsForSourceIds:   { value: [0, 1] },                 // 0=actuals, 1=projections
+        filterStatsForSourceIds: { value: [0, 1] }, // 0=actuals, 1=projections
         filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [week] },
-        sortAppliedStatTotal: { sortAsc: false, sortPriority: 1, value: 1027 },
+        sortAppliedStatTotal: { sortAsc: false, sortPriority: 1, value: 1027 }, // number, not string
       },
     });
 
-    const getTeamAbbr = (id?: number) => TEAM_MAP[id ?? -1] ?? 'FA';
-    const getPos      = (id?: number) => POSITION_MAP[id ?? -1] ?? 'FLEX';
+    const playersUrl = (offset: number) =>
+      `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/players?scoringPeriodId=${week}&view=kona_player_info&limit=${PAGE_SIZE}&offset=${offset}`;
 
-    let totalSeen = 0, totalUpserts = 0, totalProj = 0, totalActual = 0;
+    let totalSeen = 0;
+    let totalUpserts = 0;
+    let totalProj = 0;
+    let totalActual = 0;
 
     for (const slotId of SLOT_IDS) {
       const filter = makeFilter(slotId);
 
       for (let page = 0; page < MAX_PAGES_PER_SLOT; page++) {
         const offset = page * PAGE_SIZE;
-        const url = playersUrl(season, week, offset, PAGE_SIZE);
+        const url = playersUrl(offset);
 
-        const resp = await fetch(url, {
-          headers: { ...baseHeaders, 'X-Fantasy-Filter': JSON.stringify(filter) }
-        });
-        const txt = await resp.text();
-        if (!resp.ok || txt.trim().startsWith('<')) break;
+        let text = '';
+        try {
+          const resp = await fetch(url, {
+            headers: { ...baseHeaders, 'X-Fantasy-Filter': JSON.stringify(filter) },
+          });
+          text = await resp.text();
+          if (!resp.ok || text.trim().startsWith('<') || text.includes('<html')) {
+            // HTML indicates auth wall or error — stop this slot's pagination
+            break;
+          }
+        } catch {
+          break;
+        }
 
-        let arr: any[];
-        try { arr = JSON.parse(txt); } catch { break; }
-        if (!Array.isArray(arr) || arr.length === 0) break;
+        let arr: any[] | null = null;
+        try {
+          const parsed = JSON.parse(text);
+          arr = Array.isArray(parsed) ? parsed : null;
+        } catch {
+          arr = null;
+        }
+        text = '' as any; // release big string ASAP
+
+        if (!arr || arr.length === 0) break;
 
         totalSeen += arr.length;
 
         let buffer: any[] = [];
-        for (const p of arr) {
-          const espnId = p?.id?.toString(); if (!espnId) continue;
+        for (let i = 0; i < arr.length; i++) {
+          const p = arr[i];
+          const espnId = p?.id?.toString();
+          if (!espnId) { arr[i] = null; continue; }
 
           const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
-          const pos  = getPos(p.defaultPositionId ?? p.player?.defaultPositionId);
-          const team = getTeamAbbr(p.proTeamId ?? p.player?.proTeamId);
+          const pos = getPosition(p.defaultPositionId ?? p.player?.defaultPositionId);
+          const team = getTeamAbbreviation(p.proTeamId ?? p.player?.proTeamId);
 
           const pdata = p.player ?? p;
           let waiver = 'ROSTERED';
@@ -136,25 +196,23 @@ Deno.serve(async (req) => {
           const root = Array.isArray(p.stats) ? p.stats : [];
           const nested = Array.isArray(p.player?.stats) ? p.player.stats : [];
           const stats = root.length ? root : nested;
-          if (!stats?.length) continue;
+          if (!stats?.length) { arr[i] = null; continue; }
 
-          for (const s of stats) {
+          for (let j = 0; j < stats.length; j++) {
+            const s = stats[j];
             if (s.scoringPeriodId !== week) continue;
             if (s.statSourceId !== 0 && s.statSourceId !== 1) continue;
 
             const applied = s.appliedStats ?? s.stats ?? {};
-            let fp = s.appliedTotal;
-            if ((fp == null || Number.isNaN(fp)) && applied && Object.keys(applied).length) {
-              fp = Object.values(applied).reduce((sum: number, v: any) =>
-                sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0), 0);
-            }
+            const fp = computeAppliedTotal(applied, s.appliedTotal);
             if ((fp == null || fp === 0) && Object.keys(applied).length === 0) continue;
 
-            // Keep rows tiny: do NOT store raw stats blobs
+            // Keep row small — do not store bulky stats/applied blobs
             buffer.push({
               league_id: leagueData.id,
               espn_league_id: espnLeagueId,
-              season, week,
+              season,
+              week,
               player_id: `espn_${espnId}`,
               player_name: name,
               position: pos,
@@ -173,50 +231,59 @@ Deno.serve(async (req) => {
             if (s.statSourceId === 1) totalProj++; else totalActual++;
 
             if (buffer.length >= ROW_CHUNK) {
-              const { error } = await supabase.from('player_pool')
+              const { error } = await supabase
+                .from('player_pool')
                 .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
               if (error) throw error;
               totalUpserts += buffer.length;
-              buffer.length = 0;
+              buffer.length = 0; // release references
             }
           }
+
+          // Aggressively drop per-player references
+          if (p.stats) delete p.stats;
+          if (p.player?.stats) delete p.player.stats;
+          arr[i] = null;
         }
 
         if (buffer.length) {
-          const { error } = await supabase.from('player_pool')
+          const { error } = await supabase
+            .from('player_pool')
             .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
           if (error) throw error;
           totalUpserts += buffer.length;
           buffer.length = 0;
         }
 
-        // yield to GC
-        await new Promise((r) => setTimeout(r, 0));
+        // Yield to GC between pages
+        await sleep(0);
 
-        if (arr.length < PAGE_SIZE) break; // no more pages for this slot
+        if (arr.length < PAGE_SIZE) break; // reached end of this slot
       }
     }
 
     const summary = {
       success: true,
-      season, week,
+      season,
+      week,
+      espn_league_id: espnLeagueId,
       players_seen: totalSeen,
       inserted_or_updated: totalUpserts,
       projections: totalProj,
       actuals: totalActual,
     };
-    console.log(`ingest ok s${season} w${week} seen=${totalSeen} upserts=${totalUpserts} proj=${totalProj} act=${totalActual}`);
+    console.log('ingest summary', summary);
 
     return new Response(JSON.stringify(summary), {
-      status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-    // ---------- END PAGINATED INGEST ----------
-
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    console.error('ingest error:', msg);
-    return new Response(JSON.stringify({ error: msg }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    console.error('Error in ingest-espn-all-players:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
