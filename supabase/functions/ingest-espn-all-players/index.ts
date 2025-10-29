@@ -123,10 +123,10 @@ Deno.serve(async (req) => {
 
     const swidCookie = swidVal!.startsWith('{') ? swidVal! : `{${swidVal}}`;
 
-    // Pagination tuning — tiny pages + tiny DB batches
-    const PAGE_SIZE = 30;     // keep very small
-    const ROW_CHUNK = 30;     // upsert often
-    const MAX_PAGES = 60;     // hard stop safety
+    // Pagination tuning — ultra-tiny pages to avoid memory limits
+    const PAGE_SIZE = 10;     // extremely small
+    const ROW_CHUNK = 10;     // upsert very frequently
+    const MAX_PAGES = 100;    // compensate for smaller pages
 
     const baseHeaders = {
       'Cookie': `espn_s2=${espnS2Val}; SWID=${swidCookie}`, // espn_s2 first
