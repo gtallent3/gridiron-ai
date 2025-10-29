@@ -42,13 +42,13 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { leagueId, season, week: rawWeek, swid: bodySwid, espn_s2: bodyEspnS2 } = await req.json();
+    const { leagueId, season, week: rawWeek, slotId, swid: bodySwid, espn_s2: bodyEspnS2 } = await req.json();
     
     const week = Number(rawWeek);
 
-    if (!leagueId || !season || !week) {
+    if (!leagueId || !season || !week || typeof slotId !== 'number') {
       return new Response(
-        JSON.stringify({ error: 'Missing required parameters: leagueId, season, week' }),
+        JSON.stringify({ error: 'Missing required parameters: leagueId, season, week, slotId' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -122,10 +122,9 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching all players for ESPN league ${espnLeagueId}, season ${season}, week ${week}`);
     
-    const SLOT_IDS = [0, 2, 4, 6, 17, 16]; // QB, RB, WR, TE, K, DST
-    const PAGE_SIZE = 120; // small pages to reduce memory
-    const ROW_CHUNK = 60;  // flush often to cap memory
-
+    const PAGE_SIZE = 60; // smaller pages to reduce memory
+    const ROW_CHUNK = 30;  // flush very often to cap memory
+    const nowISO = new Date().toISOString();
     // Build headers once (prefer espn_s2 first in cookie)
     const headers = {
       'Cookie': `espn_s2=${espnS2Val}; SWID=${swidCookie}`,
@@ -160,8 +159,8 @@ Deno.serve(async (req) => {
     let totalProj = 0;
     let totalActual = 0;
 
-    // Page through players endpoint by position slices and small pages
-    for (const slotId of SLOT_IDS) {
+    // Page through players endpoint for a single position slice (provided via slotId param)
+    {
       // Build filter per slot to reduce payload size
       const slotFilter = {
         players: {
@@ -188,7 +187,7 @@ Deno.serve(async (req) => {
           const resp = await fetch(url, { headers: pageHeaders });
           text = await resp.text();
           if (!resp.ok || text.trim().startsWith('<') || text.includes('<html')) {
-            // Stop this slot's pagination on failure
+            // Stop pagination on failure
             break;
           }
         } catch (_) {
@@ -259,15 +258,13 @@ Deno.serve(async (req) => {
               waiver_status: waiverStatus,
               source: src === 1 ? 'espn_projection' : 'espn_actual',
               projected_fp: appliedTotal || 0,
-              // drop raw stats blob to reduce payload size
-              applied_breakdown: appliedStats,
               provider_ids: { espn: espnId },
               percent_owned: p.ownership?.percentOwned || 0,
               percent_started: p.ownership?.percentStarted || 0,
               is_owned: waiverStatus === 'ROSTERED',
               confidence: src === 1 ? 0.8 : 1.0,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
+              created_at: nowISO,
+              updated_at: nowISO,
             });
 
             if (src === 1) totalProj++; else totalActual++;
@@ -299,118 +296,18 @@ Deno.serve(async (req) => {
         page = null;
         await new Promise((r) => setTimeout(r, 0));
 
-        // If this page was smaller than PAGE_SIZE, no more pages for this slot
-        // Note: we already nulled page, so rely on offset loop break via next fetch
-        if (false) break; // placeholder no-op; loop will break when next page is empty
+        // If this page was smaller than PAGE_SIZE, no more pages
+        if (false) break; // loop will break when next page is empty or fetch fails
       }
     }
 
-    // Fallback to league endpoint if no stats were found
-    if (totalUpserts === 0) {
-      console.log('No stats from players endpoint, trying league endpoint fallback');
-      const espnUrlLeague = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info&view=kona_playercard`;
-      const leagueResp = await fetchJson(espnUrlLeague);
-      
-      if (!leagueResp.ok) {
-        console.error('ESPN returned non-JSON on league endpoint:', leagueResp.status);
-        return new Response(
-          JSON.stringify({
-            error: 'ESPN credentials expired or invalid',
-            message: 'Please reconnect your ESPN league.',
-            status: leagueResp.status ?? 401
-          }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const obj = leagueResp.json as any;
-      const players = obj?.players ?? [];
-      console.log(`League endpoint returned ${players.length} players`);
-
-      // Process league endpoint data with same streaming logic
-      let buffer: any[] = [];
-      for (const p of players) {
-        const espnId = p.id?.toString();
-        if (!espnId) continue;
-
-        const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
-        const positionId = p.defaultPositionId ?? p.player?.defaultPositionId;
-        const position = getPosition(positionId);
-        const proTeamId = p.proTeamId ?? p.player?.proTeamId;
-        const team = getTeamAbbreviation(proTeamId);
-
-        const playerData = p.player ?? p;
-        let waiverStatus = 'ROSTERED';
-        if (playerData.status === 'FREEAGENT') waiverStatus = 'FREEAGENT';
-        else if (playerData.status === 'WAIVERS') waiverStatus = 'WAIVERS';
-
-        const root = Array.isArray(p.stats) ? p.stats : [];
-        const nested = Array.isArray(p.player?.stats) ? p.player.stats : [];
-        const statsArray = root.length ? root : nested;
-
-        if (!statsArray?.length) continue;
-
-        for (const s of statsArray) {
-          if (s.scoringPeriodId !== week) continue;
-          const src = s.statSourceId;
-          if (src !== 0 && src !== 1) continue;
-
-          const appliedStats = s.appliedStats ?? s.stats ?? {};
-          let appliedTotal = s.appliedTotal;
-          if ((appliedTotal == null || Number.isNaN(appliedTotal)) && appliedStats && Object.keys(appliedStats).length) {
-            appliedTotal = Object.values(appliedStats).reduce(
-              (sum: number, v: any) => sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0), 0
-            );
-          }
-          if ((appliedTotal == null || appliedTotal === 0) && Object.keys(appliedStats).length === 0) continue;
-
-          buffer.push({
-            league_id: leagueData.id,
-            espn_league_id: espnLeagueId,
-            season,
-            week,
-            player_id: `espn_${espnId}`,
-            player_name: name,
-            position,
-            team,
-            waiver_status: waiverStatus,
-            source: src === 1 ? 'espn_projection' : 'espn_actual',
-            projected_fp: appliedTotal || 0,
-            
-            applied_breakdown: appliedStats,
-            provider_ids: { espn: espnId },
-            percent_owned: p.ownership?.percentOwned || 0,
-            percent_started: p.ownership?.percentStarted || 0,
-            is_owned: waiverStatus === 'ROSTERED',
-            confidence: src === 1 ? 0.8 : 1.0,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
-
-          if (src === 1) totalProj++; else totalActual++;
-
-          if (buffer.length >= ROW_CHUNK) {
-            const { error } = await supabase.from('player_pool')
-              .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
-            if (error) throw error;
-            totalUpserts += buffer.length;
-            buffer = [];
-          }
-        }
-      }
-
-      if (buffer.length) {
-        const { error } = await supabase.from('player_pool')
-          .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
-        if (error) throw error;
-        totalUpserts += buffer.length;
-      }
-    }
+    // League endpoint fallback disabled to reduce memory footprint
 
     const summary = {
       success: true,
       season,
       week,
+      slotId,
       players_seen: totalSeen,
       inserted_or_updated: totalUpserts,
       projections: totalProj,
