@@ -681,26 +681,50 @@ serve(async (req) => {
     }
 
     // Populate player pool with all players (rostered + FA/waivers)
+    // Call ingest-espn-all-players once per position slot: QB(0), RB(2), WR(4), TE(6), K(17), DST(16)
     try {
       console.log('Populating player pool...');
-      const { data: poolData, error: poolError } = await supabase.functions.invoke(
-        'ingest-espn-all-players',
-        {
-          body: {
-            leagueId: leagueId,
-            season: currentYear,
-            week: currentWeek,
-            swid: swid,
-            espn_s2: espn_s2
-          }
-        }
-      );
+      const slots = [
+        { id: 0, name: 'QB' },
+        { id: 2, name: 'RB' },
+        { id: 4, name: 'WR' },
+        { id: 6, name: 'TE' },
+        { id: 17, name: 'K' },
+        { id: 16, name: 'DST' }
+      ];
+      
+      let totalInserted = 0, totalProj = 0, totalActual = 0;
+      
+      for (const slot of slots) {
+        try {
+          const { data: poolData, error: poolError } = await supabase.functions.invoke(
+            'ingest-espn-all-players',
+            {
+              body: {
+                leagueId: leagueId,
+                season: currentYear,
+                week: currentWeek,
+                slotId: slot.id,
+                swid: swid,
+                espn_s2: espn_s2
+              }
+            }
+          );
 
-      if (poolError) {
-        console.error('Failed to populate player pool (non-critical):', poolError);
-      } else {
-        console.log(`Player pool populated: ${poolData?.inserted_or_updated || 0} rows (${poolData?.projections || 0} projections, ${poolData?.actuals || 0} actuals)`);
+          if (poolError) {
+            console.error(`Failed to populate player pool for ${slot.name} (slot ${slot.id}):`, poolError);
+          } else if (poolData) {
+            totalInserted += poolData.inserted_or_updated || 0;
+            totalProj += poolData.projections || 0;
+            totalActual += poolData.actuals || 0;
+            console.log(`Player pool: ${slot.name} done (${poolData.inserted_or_updated || 0} rows)`);
+          }
+        } catch (slotErr) {
+          console.error(`Player pool error for ${slot.name}:`, slotErr);
+        }
       }
+      
+      console.log(`Player pool complete: ${totalInserted} total rows (${totalProj} projections, ${totalActual} actuals)`);
     } catch (poolErr) {
       // Don't fail the resync if player pool population fails
       console.error('Player pool population failed (non-critical):', poolErr);
