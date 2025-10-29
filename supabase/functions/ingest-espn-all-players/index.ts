@@ -126,8 +126,10 @@ Deno.serve(async (req) => {
     
     const headers = {
       'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
+      'X-Fantasy-Filter': JSON.stringify(filter),
       'Accept': 'application/json',
       'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0)',
+      'Referer': 'https://fantasy.espn.com',
     };
 
     const resp = await fetch(espnUrlReads, { headers });
@@ -138,12 +140,11 @@ Deno.serve(async (req) => {
       console.error('ESPN returned non-JSON (status:', resp.status, '). First 300 chars:', text.substring(0, 300));
       return new Response(
         JSON.stringify({
-          error: 'ESPN API error',
-          status: resp.status,
-          message: text.includes('messages') ? JSON.parse(text).messages?.[0] : 'Please reconnect your ESPN league.',
-          debug: text.substring(0, 300)
+          error: 'ESPN credentials expired or invalid',
+          message: 'Please reconnect your ESPN league.',
+          status: resp.status
         }),
-        { status: resp.ok ? 401 : resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -173,7 +174,9 @@ Deno.serve(async (req) => {
           scoringPeriodId: sample.stats[0].scoringPeriodId,
           statSourceId: sample.stats[0].statSourceId,
           hasAppliedTotal: !!sample.stats[0].appliedTotal
-        } : null
+        } : null,
+        anyWeekMatch: sample.stats?.some((s: any) => s.scoringPeriodId === week),
+        hasFilterHeader: !!headers['X-Fantasy-Filter']
       }, null, 2));
     }
 
