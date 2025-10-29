@@ -121,8 +121,8 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching all players for ESPN league ${espnLeagueId}, season ${season}, week ${week}`);
 
-    // Use a simpler approach: query params only, no X-Fantasy-Filter
-    const espnUrlReads = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info`;
+    // Use view=kona_player_info&view=kona_playercard to get stats
+    const espnUrlReads = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info&view=kona_playercard`;
     
     const headers = {
       'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
@@ -160,10 +160,28 @@ Deno.serve(async (req) => {
     const players = espnData.players || [];
 
     console.log(`Received ${players.length} players from ESPN`);
+    
+    // Debug: log first player structure to understand what we're getting
+    if (players.length > 0) {
+      const sample = players[0];
+      console.log('Sample player structure:', JSON.stringify({
+        id: sample.id,
+        fullName: sample.fullName,
+        hasStats: !!sample.stats,
+        statsLength: sample.stats?.length || 0,
+        firstStat: sample.stats?.[0] ? {
+          scoringPeriodId: sample.stats[0].scoringPeriodId,
+          statSourceId: sample.stats[0].statSourceId,
+          hasAppliedTotal: !!sample.stats[0].appliedTotal
+        } : null
+      }, null, 2));
+    }
 
     const poolRows: any[] = [];
     let projectionsCount = 0;
     let actualsCount = 0;
+    let skippedNoStats = 0;
+    let skippedWrongWeek = 0;
 
     for (const player of players) {
       const espnId = player.id?.toString();
@@ -185,8 +203,16 @@ Deno.serve(async (req) => {
       // Process both projection and actual stats for this player
       const statsArray = player.stats || [];
       
+      if (statsArray.length === 0) {
+        skippedNoStats++;
+        continue;
+      }
+      
       for (const statEntry of statsArray) {
-        if (statEntry.scoringPeriodId !== week) continue;
+        if (statEntry.scoringPeriodId !== week) {
+          skippedWrongWeek++;
+          continue;
+        }
         
         const sourceId = statEntry.statSourceId;
         const sourceType = sourceId === 1 ? 'projection' : sourceId === 0 ? 'actual' : null;
@@ -239,6 +265,7 @@ Deno.serve(async (req) => {
     }
 
     console.log(`Parsed ${poolRows.length} total rows (${projectionsCount} projections, ${actualsCount} actuals)`);
+    console.log(`Skipped: ${skippedNoStats} players with no stats, ${skippedWrongWeek} entries for wrong week`);
 
     // Upsert to player_pool in chunks
     if (poolRows.length > 0) {
