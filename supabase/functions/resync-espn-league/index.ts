@@ -580,14 +580,19 @@ serve(async (req) => {
         const waiverStatus = playerData.status === 'FREEAGENT' ? 'FREEAGENT' : 'WAIVERS';
         
         // Try to get projection (sourceId=1) first, fallback to actuals (sourceId=0)
+        // Relaxed seasonId check - ESPN often omits it for projections
         let weekProjection = player.stats?.find((stat: any) =>
-          stat.statSourceId === 1 && stat.scoringPeriodId === currentWeek && stat.seasonId === currentYear
+          stat.statSourceId === 1 && 
+          stat.scoringPeriodId === currentWeek && 
+          (stat.seasonId == null || stat.seasonId === currentYear)
         );
         
         // If no projection available, use actual stats for current week
         if (!weekProjection || !weekProjection.stats || Object.keys(weekProjection.stats || {}).length === 0) {
           weekProjection = player.stats?.find((stat: any) =>
-            stat.statSourceId === 0 && stat.scoringPeriodId === currentWeek && stat.seasonId === currentYear
+            stat.statSourceId === 0 && 
+            stat.scoringPeriodId === currentWeek && 
+            (stat.seasonId == null || stat.seasonId === currentYear)
           );
         }
         
@@ -611,20 +616,65 @@ serve(async (req) => {
         if (weekProjection?.stats || weekProjection?.appliedStats) {
           waiverRow.stats = weekProjection.stats || {};
           waiverRow.applied_breakdown = weekProjection.appliedStats || {};
-          waiverRow.projected_fp = weekProjection.appliedTotal || 0;
-          waiverRow.confidence = weekProjection.statSourceId === 1 ? 0.8 : 1.0; // Higher confidence for actuals
+          
+          // Calculate projected_fp: prefer appliedTotal, fallback to summing appliedStats
+          let projected_fp = weekProjection.appliedTotal;
+          if (projected_fp == null && Object.keys(weekProjection.appliedStats || {}).length > 0) {
+            projected_fp = Object.values(weekProjection.appliedStats).reduce(
+              (sum: number, val: any) => sum + (typeof val === 'number' ? val : parseFloat(val || '0') || 0),
+              0
+            );
+            console.log(`Calculated projected_fp from appliedStats for ${normalizedPlayer.player_name}: ${projected_fp}`);
+          }
+          
+          waiverRow.projected_fp = projected_fp || 0;
+          waiverRow.confidence = weekProjection.statSourceId === 1 ? 0.8 : 1.0;
           waiverRow.source = weekProjection.statSourceId === 1 ? 'espn_projection' : 'espn_actual';
           waiverRow.last_updated = new Date().toISOString();
         } else {
-          // Log when no stats are available to help debug
           console.log(`No stats available for waiver player: ${normalizedPlayer.player_name} (ESPN ID: ${espnId})`);
         }
         
         waiverRows.push(waiverRow);
       }
+      
+      // Upsert to waiver_wire_players table
       if (waiverRows.length > 0) {
-        await supabase.from('waiver_wire_players').upsert(waiverRows, { onConflict: 'league_id,season,week,player_id', ignoreDuplicates: false });
+        await supabase.from('waiver_wire_players').upsert(waiverRows, { 
+          onConflict: 'league_id,season,week,player_id', 
+          ignoreDuplicates: false 
+        });
         console.log(`Resync: inserted ${waiverRows.length} waiver players for week ${currentWeek}`);
+        
+        // Also upsert to projected_player_stats so UI can query it
+        const projectedRows = waiverRows
+          .filter(row => row.projected_fp > 0)
+          .map(row => ({
+            player_id: row.player_id,
+            player_name: row.player_name,
+            team: row.team,
+            position: row.position,
+            season: row.season,
+            week: row.week,
+            source: row.source || 'espn_projection',
+            stats: row.stats || {},
+            applied_breakdown: row.applied_breakdown || {},
+            projected_fp: row.projected_fp,
+            waiver_status: row.waiver_status,
+            percent_owned: row.percent_owned || 0,
+            percent_started: row.percent_started || 0,
+            provider_ids: row.provider_ids || {},
+            confidence: row.confidence || 0.8,
+            last_updated: new Date().toISOString(),
+          }));
+        
+        if (projectedRows.length > 0) {
+          await supabase.from('projected_player_stats').upsert(projectedRows, {
+            onConflict: 'player_id,season,week,source',
+            ignoreDuplicates: false
+          });
+          console.log(`Resync: also inserted ${projectedRows.length} waiver projections into projected_player_stats`);
+        }
       }
     } catch (waiverErr) {
       console.error('Resync: waiver sync error', waiverErr);
