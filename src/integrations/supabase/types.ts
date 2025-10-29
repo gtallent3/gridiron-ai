@@ -232,6 +232,42 @@ export type Database = {
           },
         ]
       }
+      espn_credentials: {
+        Row: {
+          created_at: string | null
+          espn_s2_encrypted: string
+          expires_at: string | null
+          id: string
+          last_synced_at: string | null
+          league_id: string
+          swid_encrypted: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          espn_s2_encrypted: string
+          expires_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          league_id: string
+          swid_encrypted: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          espn_s2_encrypted?: string
+          expires_at?: string | null
+          id?: string
+          last_synced_at?: string | null
+          league_id?: string
+          swid_encrypted?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       invoices: {
         Row: {
           amount_due: number

@@ -10,6 +10,8 @@ import { Loader2, HelpCircle, ExternalLink, CheckCircle, Copy } from "lucide-rea
 import { z } from "zod";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { EspnCookieExtractor } from "@/components/EspnCookieExtractor";
+import { Separator } from "@/components/ui/separator";
 
 const sleeperSchema = z.object({
   username: z.string().trim().min(3, "Username must be at least 3 characters").max(25, "Username is too long").regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, hyphens, and underscores"),
@@ -326,6 +328,16 @@ export default function ConnectLeague() {
     });
   };
 
+  const handleEspnCookieSuccess = (credentials: { swid: string; espn_s2: string; leagueId: string }) => {
+    setEspnCredentials(credentials);
+    toast({
+      title: "Credentials validated!",
+      description: "Proceeding to sync your league...",
+    });
+    // Auto-trigger the connection
+    setTimeout(() => handleEspnConnect(), 1000);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20">
       <div className="container mx-auto px-4 py-20">
@@ -390,6 +402,25 @@ export default function ConnectLeague() {
                 <CardDescription>One-time setup - your credentials are encrypted</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Cookie Extractor - Recommended Method */}
+                <div className="text-center">
+                  <EspnCookieExtractor onSuccess={handleEspnCookieSuccess} />
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Guided 3-step process
+                  </p>
+                </div>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <Separator />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">
+                      Or enter manually
+                    </span>
+                  </div>
+                </div>
+
                 {/* Step-by-step Progress */}
                 <div className="space-y-2 p-3 bg-accent/5 rounded-lg">
                   <div className="flex items-center gap-2 text-sm">
