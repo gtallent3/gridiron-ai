@@ -47,11 +47,15 @@ serve(async (req) => {
 
     // Test ESPN API connection
     console.log('Testing ESPN API connection...');
+    
+    // Ensure SWID is wrapped in braces for cookie format
+    const swidCookie = swid.startsWith('{') ? swid : `{${swid}}`;
+    
     const testResponse = await fetch(
       `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2025/segments/0/leagues/${leagueId}?view=mSettings`,
       {
         headers: {
-          'Cookie': `swid=${swid}; espn_s2=${espn_s2}`,
+          'Cookie': `SWID=${swidCookie}; espn_s2=${espn_s2}`,
         },
       }
     );
