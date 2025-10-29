@@ -43,7 +43,13 @@ serve(async (req) => {
       .select('*')
       .eq('league_id', leagueId);
 
-    if (valuesError) throw valuesError;
+    if (valuesError) {
+      console.error('Error fetching player values:', valuesError);
+      return new Response(
+        JSON.stringify({ error: 'Unable to fetch player data' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const valueMap = new Map<string, any>();
     for (const pv of playerValues || []) {
@@ -57,7 +63,13 @@ serve(async (req) => {
       .eq('league_id', leagueId)
       .in('team_id', [teamAId, teamBId]);
 
-    if (strengthsError) throw strengthsError;
+    if (strengthsError) {
+      console.error('Error fetching team strengths:', strengthsError);
+      return new Response(
+        JSON.stringify({ error: 'Unable to fetch team data' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     const teamAStrengths = new Map<string, any>();
     const teamBStrengths = new Map<string, any>();
@@ -360,7 +372,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error evaluating trade:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: 'Unable to evaluate trade' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }

@@ -77,73 +77,46 @@ export default function Auth() {
         // Generate device fingerprint
         const fingerprint = await generateDeviceFingerprint();
         
-        // Check signup risk
-        const { data: riskCheck, error: riskError } = await supabase.functions.invoke('check-signup-risk', {
+        // Call server-side signup handler that captures real IP
+        const { data: signupResult, error: signupError } = await supabase.functions.invoke('handle-signup', {
           body: {
             email: validEmail,
-            provider: 'email',
-            provider_uid: validEmail,
+            password: validPassword,
+            username: validUsername,
             fingerprint,
-            ip: 'client',
           },
         });
 
-        if (riskError || riskCheck?.blocked) {
-          setRiskWarning(riskCheck?.reasons?.[0] || 'Account creation blocked for security reasons. Please contact support if you believe this is an error.');
+        if (signupError) {
+          setRiskWarning('Unable to create account. Please try again later.');
           setIsLoading(false);
           return;
         }
 
-        if (riskCheck?.requires_verification) {
-          setRiskWarning('Additional verification required. Please contact support to complete signup.');
+        if (signupResult?.blocked) {
+          setRiskWarning(signupResult.message || 'Account creation blocked for security reasons.');
           setIsLoading(false);
           return;
         }
 
-        // Check if username already exists
-        if (validUsername) {
-          const { data: existingUser } = await supabase
-            .from("profiles")
-            .select("username")
-            .eq("username", validUsername)
-            .maybeSingle();
-
-          if (existingUser) {
-            toast({
-              title: "Username Taken",
-              description: "This username is already in use. Please choose another.",
-              variant: "destructive",
-            });
-            setIsLoading(false);
-            return;
-          }
+        if (signupResult?.requires_verification) {
+          setRiskWarning(signupResult.message || 'Additional verification required.');
+          setIsLoading(false);
+          return;
         }
 
-        const { data: authData, error } = await supabase.auth.signUp({
-          email: validEmail,
-          password: validPassword,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-            data: {
-              username: validUsername,
-            },
-          },
-        });
-
-        if (error) throw error;
-
-        // Link identity after successful signup
-        if (authData?.user) {
-          await supabase.functions.invoke('link-user-identity', {
-            body: {
-              user_id: authData.user.id,
-              email: validEmail,
-              provider: 'email',
-              provider_uid: validEmail,
-              fingerprint,
-              ip: 'client',
-            },
+        if (signupResult?.error === 'username_taken') {
+          toast({
+            title: "Username Taken",
+            description: signupResult.message,
+            variant: "destructive",
           });
+          setIsLoading(false);
+          return;
+        }
+
+        if (!signupResult?.success) {
+          throw new Error(signupResult?.error || 'Signup failed');
         }
 
         toast({

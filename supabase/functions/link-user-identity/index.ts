@@ -169,9 +169,8 @@ Deno.serve(async (req) => {
     );
   } catch (error) {
     console.error('Error in link-user-identity:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ error: 'Unable to complete user registration' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
     );
   }

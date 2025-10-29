@@ -81,7 +81,7 @@ serve(async (req) => {
     if (error) {
       console.error('Error deducting tokens:', error);
       return new Response(
-        JSON.stringify({ error: error.message }),
+        JSON.stringify({ error: 'Unable to process token transaction' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -108,7 +108,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in deduct-token function:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: 'Service temporarily unavailable' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
