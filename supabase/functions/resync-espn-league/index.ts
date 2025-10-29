@@ -527,11 +527,14 @@ serve(async (req) => {
     // Also fetch waiver/free agent list for current week and populate waiver_wire_players
     try {
       const swidCookie = swid?.startsWith('{') ? swid : `{${swid}}`;
+      
+      // Fetch waiver players with BOTH projections (sourceId=1) AND actuals (sourceId=0)
+      // ESPN often doesn't provide projections, so we'll try to get actuals as fallback
       const waiverFilter = {
         players: {
           filterStatus: { value: ["FREEAGENT", "WAIVERS"] },
           filterStatsForExternalIds: { value: [currentYear] },
-          filterStatsForSourceIds: { value: [1] },
+          filterStatsForSourceIds: { value: [0, 1] }, // 0=actuals, 1=projections
           filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [currentWeek] },
           limit: 2000,
           sortPercOwned: { sortPriority: 1, sortAsc: false }
@@ -576,10 +579,17 @@ serve(async (req) => {
         const ownership = playerData.ownership || {};
         const waiverStatus = playerData.status === 'FREEAGENT' ? 'FREEAGENT' : 'WAIVERS';
         
-        // Extract projection data from the player stats
-        const weekProjection = player.stats?.find((stat: any) =>
+        // Try to get projection (sourceId=1) first, fallback to actuals (sourceId=0)
+        let weekProjection = player.stats?.find((stat: any) =>
           stat.statSourceId === 1 && stat.scoringPeriodId === currentWeek && stat.seasonId === currentYear
         );
+        
+        // If no projection available, use actual stats for current week
+        if (!weekProjection || !weekProjection.stats || Object.keys(weekProjection.stats || {}).length === 0) {
+          weekProjection = player.stats?.find((stat: any) =>
+            stat.statSourceId === 0 && stat.scoringPeriodId === currentWeek && stat.seasonId === currentYear
+          );
+        }
         
         const waiverRow: any = {
           league_id: updatedLeague.id,
@@ -597,14 +607,17 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         };
         
-        // Add projection stats if available
+        // Add projection/actual stats if available
         if (weekProjection?.stats || weekProjection?.appliedStats) {
           waiverRow.stats = weekProjection.stats || {};
           waiverRow.applied_breakdown = weekProjection.appliedStats || {};
           waiverRow.projected_fp = weekProjection.appliedTotal || 0;
-          waiverRow.confidence = 0.8;
-          waiverRow.source = 'espn_projection';
+          waiverRow.confidence = weekProjection.statSourceId === 1 ? 0.8 : 1.0; // Higher confidence for actuals
+          waiverRow.source = weekProjection.statSourceId === 1 ? 'espn_projection' : 'espn_actual';
           waiverRow.last_updated = new Date().toISOString();
+        } else {
+          // Log when no stats are available to help debug
+          console.log(`No stats available for waiver player: ${normalizedPlayer.player_name} (ESPN ID: ${espnId})`);
         }
         
         waiverRows.push(waiverRow);
