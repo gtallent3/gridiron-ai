@@ -1,5 +1,8 @@
 project_id = "zeklwogchobqttevcckl"
 
+[functions.ingest-espn-all-players]
+verify_jwt = true
+
 [functions.fantasy-ai-chat]
 verify_jwt = true
 
