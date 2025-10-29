@@ -680,6 +680,32 @@ serve(async (req) => {
       console.error('Resync: waiver sync error', waiverErr);
     }
 
+    // Populate player pool with all players (rostered + FA/waivers)
+    try {
+      console.log('Populating player pool...');
+      const { data: poolData, error: poolError } = await supabase.functions.invoke(
+        'ingest-espn-all-players',
+        {
+          body: {
+            leagueId: leagueId,
+            season: currentYear,
+            week: currentWeek,
+            swid: swid,
+            espn_s2: espn_s2
+          }
+        }
+      );
+
+      if (poolError) {
+        console.error('Failed to populate player pool (non-critical):', poolError);
+      } else {
+        console.log(`Player pool populated: ${poolData?.inserted_or_updated || 0} rows (${poolData?.projections || 0} projections, ${poolData?.actuals || 0} actuals)`);
+      }
+    } catch (poolErr) {
+      // Don't fail the resync if player pool population fails
+      console.error('Player pool population failed (non-critical):', poolErr);
+    }
+
     // Trigger post-sync compute for trade intelligence
     try {
       console.log('Triggering post-sync compute for trade intelligence...');

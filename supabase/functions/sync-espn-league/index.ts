@@ -571,6 +571,32 @@ serve(async (req) => {
         // Don't fail the sync if projections fail
       }
 
+      // Populate player pool with all players (rostered + FA/waivers)
+      try {
+        console.log('Populating player pool...');
+        const { data: poolData, error: poolError } = await supabase.functions.invoke(
+          'ingest-espn-all-players',
+          {
+            body: {
+              leagueId: leagueRecord.id,
+              season: currentYear,
+              week: currentWeek,
+              swid: swid,
+              espn_s2: espn_s2
+            }
+          }
+        );
+
+        if (poolError) {
+          console.error('Failed to populate player pool (non-critical):', poolError);
+        } else {
+          console.log(`Player pool populated: ${poolData?.inserted_or_updated || 0} rows (${poolData?.projections || 0} projections, ${poolData?.actuals || 0} actuals)`);
+        }
+      } catch (poolErr) {
+        // Don't fail the sync if player pool population fails
+        console.error('Player pool population failed (non-critical):', poolErr);
+      }
+
     return new Response(
       JSON.stringify({
         message: `Successfully synced ESPN league: ${leagueData.settings.name}`,
