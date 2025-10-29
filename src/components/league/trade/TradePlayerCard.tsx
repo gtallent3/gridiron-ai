@@ -53,7 +53,7 @@ export function TradePlayerCard({ player, isSelected, onToggle }: TradePlayerCar
                 BYE
               </Badge>
             )}
-            {player.injury_status && (
+            {player.injury_status && !player.is_bye_week && (
               <Badge 
                 variant="secondary" 
                 className={cn(
@@ -104,8 +104,9 @@ export function TradePlayerCard({ player, isSelected, onToggle }: TradePlayerCar
                   <p>ROS Total: {(player.ros_projection ?? 0).toFixed(1)} pts</p>
                   <p>PPG: {(player.ppg_projection ?? 0).toFixed(1)} pts/game</p>
                   <p>This Week: {player.projected.toFixed(1)} pts</p>
-                  {player.is_bye_week && <p className="text-yellow-400 mt-2">Team on bye this week</p>}
-                  {player.injury_status && (
+                  {player.is_bye_week ? (
+                    <p className="text-yellow-400 mt-2">Team on bye this week</p>
+                  ) : player.injury_status ? (
                     <div className="mt-2">
                       <p>Status: {player.injury_status}</p>
                       {player.injury_duration_weeks && player.injury_duration_weeks >= 4 && (
@@ -118,7 +119,7 @@ export function TradePlayerCard({ player, isSelected, onToggle }: TradePlayerCar
                         <p className="text-yellow-400">Short-term injury (~1 week)</p>
                       )}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </TooltipContent>
             </Tooltip>

@@ -64,7 +64,7 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly, showActual 
                 BYE
               </Badge>
             )}
-            {player.injury_status && (
+            {player.injury_status && !player.is_bye_week && (
               <Badge 
                 variant="secondary" 
                 className={cn(
@@ -126,14 +126,15 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly, showActual 
                         ? '0 (Bye Week)' 
                         : player.injury_status 
                           ? '0 (Injured)'
-                          : 'N/A'
+                          : '0'
                   )}
                 </p>
               </TooltipTrigger>
               {(player.is_bye_week || player.injury_status) && (
                 <TooltipContent>
-                  {player.is_bye_week && <p>Player's team is on bye this week - no long-term impact</p>}
-                  {player.injury_status && (
+                  {player.is_bye_week ? (
+                    <p>Player's team is on bye this week - no long-term impact</p>
+                  ) : player.injury_status ? (
                     <div>
                       <p>Status: {player.injury_status}</p>
                       {player.injury_duration_weeks && player.injury_duration_weeks >= 4 && (
@@ -146,7 +147,7 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly, showActual 
                         <p className="text-yellow-400">Short-term injury (~1 week)</p>
                       )}
                     </div>
-                  )}
+                  ) : null}
                 </TooltipContent>
               )}
             </Tooltip>
