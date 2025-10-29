@@ -13,16 +13,17 @@ const TEAM_MAP: Record<number, string> = {
   23:'PIT',24:'LAC',25:'SF',26:'SEA',27:'TB',28:'WSH',29:'CAR',30:'JAX',33:'BAL',34:'HOU',
 };
 
-const getTeam = (id?: number) => TEAM_MAP[id as number] || 'FA';
-const getPos  = (id?: number) => POSITION_MAP[id as number] || 'FLEX';
+const getTeamAbbreviation = (id?: number) => TEAM_MAP[id as number] || 'FA';
+const getPosition  = (id?: number) => POSITION_MAP[id as number] || 'FLEX';
 
 function makeSlotFilter(season: number, week: number, slotId: number) {
   return {
     players: {
       filterSlotIds: { value: [slotId] },
       filterStatsForExternalIds: { value: [season] },
-      filterStatsForSourceIds: { value: [0, 1] }, // 0 actuals, 1 projections
-      filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [week] }, // value is NUMBER, additionalValue is ARRAY
+      filterStatsForSourceIds: { value: [0, 1] },
+      filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [week] },
+      sortAppliedStatTotal: { sortAsc: false, sortPriority: 1, value: 1027 },
     },
   };
 }
@@ -78,8 +79,8 @@ Deno.serve(async (req) => {
 
     const swidCookie = swidVal!.startsWith('{') ? swidVal! : `{${swidVal}}`;
 
-    const PAGE_SIZE = 60;
-    const ROW_CHUNK = 30;
+    const PAGE_SIZE = 80;
+    const ROW_CHUNK = 40;
     const nowISO = new Date().toISOString();
 
     let totalSeen = 0, totalUpserts = 0, totalProj = 0, totalActual = 0;
@@ -94,68 +95,66 @@ Deno.serve(async (req) => {
       };
 
       const resp = await fetch(playersUrl(season, week, offset, PAGE_SIZE), { headers });
-      let text = await resp.text();
+      const text = await resp.text();
       if (!resp.ok || text.trim().startsWith('<') || text.includes('<html')) break;
 
-      let page: any[] | null = null;
-      try { const parsed = JSON.parse(text); page = Array.isArray(parsed) ? parsed : null; } catch { page = null; }
-      text = ''; // free memory
+      let page: any[];
+      try { 
+        const parsed = JSON.parse(text); 
+        page = Array.isArray(parsed) ? parsed : []; 
+      } catch { 
+        break; 
+      }
 
       if (!page || page.length === 0) break;
       totalSeen += page.length;
 
       let buffer: any[] = [];
 
-      for (let i = 0; i < page.length; i++) {
-        const p = page[i];
-        const espnId = p?.id?.toString(); if (!espnId) { page[i] = null; continue; }
+      for (const p of page) {
+        const espnId = p?.id?.toString(); 
+        if (!espnId) continue;
 
         const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
-        const pos = getPos(p.defaultPositionId ?? p.player?.defaultPositionId);
-        const team = getTeam(p.proTeamId ?? p.player?.proTeamId);
+        const positionId = p.defaultPositionId ?? p.player?.defaultPositionId;
+        const position = getPosition(positionId);
+        const proTeamId = p.proTeamId ?? p.player?.proTeamId;
+        const team = getTeamAbbreviation(proTeamId);
 
-        const pData = p.player ?? p;
+        const pdata = p.player ?? p;
         let waiver = 'ROSTERED';
-        if (pData.status === 'FREEAGENT') waiver = 'FREEAGENT';
-        else if (pData.status === 'WAIVERS') waiver = 'WAIVERS';
+        if (pdata.status === 'FREEAGENT') waiver = 'FREEAGENT';
+        else if (pdata.status === 'WAIVERS') waiver = 'WAIVERS';
 
-        const statsArr = Array.isArray(p.stats) ? p.stats : (Array.isArray(p.player?.stats) ? p.player.stats : []);
-        if (!statsArr?.length) { page[i] = null; continue; }
+        const root = Array.isArray(p.stats) ? p.stats : [];
+        const nested = Array.isArray(p.player?.stats) ? p.player.stats : [];
+        const statsArr = root.length ? root : nested;
+        if (!statsArr?.length) continue;
 
-        for (let j = 0; j < statsArr.length; j++) {
-          const s = statsArr[j];
+        for (const s of statsArr) {
           if (s.scoringPeriodId !== week) continue;
           if (s.statSourceId !== 0 && s.statSourceId !== 1) continue;
 
           const applied = s.appliedStats ?? s.stats ?? {};
           let fp = s.appliedTotal;
           if ((fp == null || Number.isNaN(fp)) && applied && Object.keys(applied).length) {
-            fp = Object.values(applied).reduce((sum: number, v: any) => sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0), 0);
+            fp = Object.values(applied).reduce((sum: number, v: any) =>
+              sum + (typeof v === 'number' ? v : parseFloat(String(v)) || 0), 0);
           }
           if ((fp == null || fp === 0) && Object.keys(applied).length === 0) continue;
-
-          // keep only a tiny subset
-          const stats = {
-            passYds: applied['3'] ?? undefined,
-            passTd:  applied['4'] ?? undefined,
-            rushYds: applied['24'] ?? undefined,
-            rec:     applied['53'] ?? undefined,
-            recYds:  applied['42'] ?? undefined,
-            recTd:   applied['43'] ?? undefined,
-          };
 
           buffer.push({
             league_id: leagueData.id,
             espn_league_id: leagueData.league_id,
-            season, week,
+            season, 
+            week,
             player_id: `espn_${espnId}`,
             player_name: name,
-            position: pos,
+            position, 
             team,
             waiver_status: waiver,
             source: s.statSourceId === 1 ? 'espn_projection' : 'espn_actual',
             projected_fp: fp || 0,
-            stats,
             provider_ids: { espn: espnId },
             percent_owned: p.ownership?.percentOwned || 0,
             percent_started: p.ownership?.percentStarted || 0,
@@ -165,6 +164,8 @@ Deno.serve(async (req) => {
             updated_at: nowISO,
           });
 
+          if (s.statSourceId === 1) totalProj++; else totalActual++;
+
           if (buffer.length >= ROW_CHUNK) {
             const { error } = await supabase
               .from('player_pool')
@@ -173,14 +174,7 @@ Deno.serve(async (req) => {
             totalUpserts += buffer.length;
             buffer.length = 0;
           }
-
-          if (s.statSourceId === 1) totalProj++; else totalActual++;
         }
-
-        // drop heavy refs
-        if (p.stats) delete p.stats;
-        if (p.player?.stats) delete p.player.stats;
-        page[i] = null;
       }
 
       if (buffer.length) {
@@ -192,8 +186,7 @@ Deno.serve(async (req) => {
         buffer.length = 0;
       }
 
-      page = null;
-      await new Promise(r => setTimeout(r, 0)); // yield to GC
+      await new Promise(r => setTimeout(r, 0));
     }
 
     return new Response(JSON.stringify({
