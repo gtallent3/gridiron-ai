@@ -101,7 +101,7 @@ serve(async (req) => {
         const projectionStat = playerStats.find((s: any) => 
           s.scoringPeriodId === week && 
           s.statSourceId === 1 && // projections
-          s.seasonId === season
+          (s.seasonId == null || s.seasonId === season) // relaxed seasonId check
         );
 
         if (!projectionStat) {
@@ -109,9 +109,19 @@ serve(async (req) => {
           continue;
         }
 
-        const appliedTotal = projectionStat.appliedTotal || 0;
         const appliedStats = projectionStat.appliedStats || {};
         const rawStats = projectionStat.stats || {};
+        
+        // Calculate projected_fp: prefer appliedTotal, fallback to summing appliedStats
+        let appliedTotal = projectionStat.appliedTotal;
+        if (appliedTotal == null && Object.keys(appliedStats).length > 0) {
+          appliedTotal = Object.values(appliedStats).reduce(
+            (sum: number, val: any) => sum + (typeof val === 'number' ? val : parseFloat(val || '0') || 0),
+            0
+          );
+          console.log(`Calculated projected_fp from appliedStats for ${playerName}: ${appliedTotal}`);
+        }
+        appliedTotal = appliedTotal || 0;
 
         // Build normalized stats structure
         const stats: any = {
@@ -133,7 +143,7 @@ serve(async (req) => {
           fumbles_lost: rawStats['72'] || 0,
         };
 
-        // For kickers and DST, rely on applied stats
+        // For kickers and DST, add position-specific stats
         if (position === 'K') {
           stats.fg_made_0_19 = rawStats['80'] || 0;
           stats.fg_made_20_29 = rawStats['81'] || 0;
@@ -141,6 +151,19 @@ serve(async (req) => {
           stats.fg_made_40_49 = rawStats['83'] || 0;
           stats.fg_made_50_plus = rawStats['84'] || 0;
           stats.xp_made = rawStats['86'] || 0;
+        }
+        
+        if (position === 'DST') {
+          stats.sacks = rawStats['99'] || 0;
+          stats.interceptions = rawStats['95'] || 0;
+          stats.fumbles_recovered = rawStats['96'] || 0;
+          stats.defensive_tds = rawStats['101'] || 0;
+          stats.safeties = rawStats['98'] || 0;
+          stats.blocked_kicks = rawStats['97'] || 0;
+          stats.kick_return_tds = rawStats['103'] || 0;
+          stats.punt_return_tds = rawStats['104'] || 0;
+          stats.points_allowed = rawStats['120'] || 0;
+          stats.yards_allowed = rawStats['121'] || 0;
         }
 
         // Check for bye week

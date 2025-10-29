@@ -67,24 +67,25 @@ export function WaiverWire({ league }: WaiverWireProps) {
       const currentWeek = leagueData?.current_week || 1;
 
       const { data, error } = await supabase
-        .from('waiver_wire_players')
-        .select('id, player_name, position, team, projected_fp, waiver_status, percent_owned, season, week')
-        .eq('league_id', league.id)
+        .from('projected_player_stats')
+        .select('player_id, player_name, position, team, projected_fp, waiver_status, percent_owned, season, week')
         .eq('season', currentSeason)
         .eq('week', currentWeek)
-        .order('projected_fp', { ascending: false, nullsFirst: false })
-        .limit(20);
+        .in('waiver_status', ['FREEAGENT', 'WAIVERS'])
+        .not('projected_fp', 'is', null)
+        .order('projected_fp', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
 
       const mapped = (data || [])
-        .filter(p => p && p.player_name && p.position)
+        .filter(p => p && p.player_name && p.position && (p.projected_fp ?? 0) > 0)
         .map(p => ({
-          id: p.id,
+          id: p.player_id,
           name: p.player_name,
           position: p.position,
           team: p.team || 'FA',
-          projected: typeof (p as any).projected_fp === 'number' ? Number((p as any).projected_fp) : 0,
+          projected: typeof p.projected_fp === 'number' ? Number(p.projected_fp) : 0,
         }));
 
       setWaiverPlayers(mapped);
