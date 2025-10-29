@@ -307,7 +307,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         const chosenStats = isHistorical ? (actualStats || projStats) : (projStats || actualStats);
         
         const projectedPoints = !isHistorical
-          ? (positionName === 'K' || positionName === 'DST'
+          ? (positionName === 'K' || positionName === 'DST' || positionName === 'DEF'
               ? (projStats?.projected_fp ?? projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0)
               : (projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0))
           : 0;
