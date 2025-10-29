@@ -42,7 +42,9 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { leagueId, season, week, swid: bodySwid, espn_s2: bodyEspnS2 } = await req.json();
+    const { leagueId, season, week: rawWeek, swid: bodySwid, espn_s2: bodyEspnS2 } = await req.json();
+    
+    const week = Number(rawWeek);
 
     if (!leagueId || !season || !week) {
       return new Response(
@@ -106,7 +108,7 @@ Deno.serve(async (req) => {
         filterStatsForExternalIds: { value: [season] },
         filterStatsForSourceIds: { value: [0, 1] }, // 0=actuals, 1=projections
         filterStatsForTopScoringPeriodIds: {
-          value: [2],              // MUST be an array
+          value: 2,                // MUST be a NUMBER, not array
           additionalValue: [week]  // MUST be an array
         },
         limit: 5000,
