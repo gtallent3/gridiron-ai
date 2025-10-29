@@ -168,15 +168,10 @@ Deno.serve(async (req) => {
       const sample = players[0];
       console.log('Sample player structure:', JSON.stringify({
         id: sample.id,
-        fullName: sample.fullName,
-        hasStats: !!sample.stats,
-        statsLength: sample.stats?.length || 0,
-        firstStat: sample.stats?.[0] ? {
-          scoringPeriodId: sample.stats[0].scoringPeriodId,
-          statSourceId: sample.stats[0].statSourceId,
-          hasAppliedTotal: !!sample.stats[0].appliedTotal
-        } : null,
-        anyWeekMatch: sample.stats?.some((s: any) => s.scoringPeriodId === week),
+        hasRootStats: Array.isArray(sample.stats) && sample.stats.length > 0,
+        hasNestedStats: Array.isArray(sample.player?.stats) && sample.player.stats.length > 0,
+        weeksRoot: (sample.stats || []).map((x: any) => x.scoringPeriodId).slice(0, 5),
+        weeksNested: (sample.player?.stats || []).map((x: any) => x.scoringPeriodId).slice(0, 5),
         hasFilterHeader: !!headers['X-Fantasy-Filter']
       }, null, 2));
     }
@@ -191,21 +186,24 @@ Deno.serve(async (req) => {
       const espnId = player.id?.toString();
       if (!espnId) continue;
 
-      const playerName = player.fullName || player.player?.fullName || 'Unknown';
-      const positionId = player.defaultPositionId || player.player?.defaultPositionId;
+      const playerName = player.fullName ?? player.player?.fullName ?? 'Unknown';
+      const positionId = player.defaultPositionId ?? player.player?.defaultPositionId;
       const position = getPosition(positionId);
-      const proTeamId = player.proTeamId || player.player?.proTeamId;
+      const proTeamId = player.proTeamId ?? player.player?.proTeamId;
       const team = getTeamAbbreviation(proTeamId);
       
       // Determine waiver status
       const ownership = player.ownership || {};
-      const playerData = player.player || player;
+      const playerData = player.player ?? player;
       let waiverStatus = 'ROSTERED';
       if (playerData.status === 'FREEAGENT') waiverStatus = 'FREEAGENT';
       else if (playerData.status === 'WAIVERS') waiverStatus = 'WAIVERS';
 
       // Process both projection and actual stats for this player
-      const statsArray = player.stats || [];
+      // ESPN can nest stats under player.stats OR player.player.stats
+      const statsArray =
+        (player.stats && Array.isArray(player.stats) ? player.stats : []) ||
+        (player.player?.stats && Array.isArray(player.player.stats) ? player.player.stats : []);
       
       if (statsArray.length === 0) {
         skippedNoStats++;
@@ -222,13 +220,13 @@ Deno.serve(async (req) => {
         const sourceType = sourceId === 1 ? 'projection' : sourceId === 0 ? 'actual' : null;
         if (!sourceType) continue;
 
-        const appliedStats = statEntry.appliedStats || {};
+        const appliedStats = statEntry.appliedStats || statEntry.stats || {};
         let appliedTotal = statEntry.appliedTotal;
         
         // Compute appliedTotal if missing
-        if (appliedTotal == null && Object.keys(appliedStats).length > 0) {
+        if ((appliedTotal == null || Number.isNaN(appliedTotal)) && appliedStats && Object.keys(appliedStats).length > 0) {
           appliedTotal = Object.values(appliedStats).reduce(
-            (sum: number, val: any) => sum + (typeof val === 'number' ? val : parseFloat(val || '0') || 0),
+            (sum: number, val: any) => sum + (typeof val === 'number' ? val : parseFloat(String(val)) || 0),
             0
           );
         }
