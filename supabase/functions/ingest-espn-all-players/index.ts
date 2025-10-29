@@ -7,10 +7,11 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// ESPN slotId map: QB 0, RB 2, WR 4, TE 6, K 17, DST 16
+// ESPN slotId map
 const SLOT_NAME_TO_ID: Record<string, number> = {
   QB: 0, RB: 2, WR: 4, TE: 6, K: 17, DST: 16,
 };
+const SLOT_NAMES = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
 
 const POSITION_MAP: Record<number, string> = {
   1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST',
