@@ -121,45 +121,76 @@ Deno.serve(async (req) => {
     };
 
     console.log(`Fetching all players for ESPN league ${espnLeagueId}, season ${season}, week ${week}`);
-
-    // Use view=kona_player_info&view=kona_playercard to get stats
-    const espnUrlReads = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info&view=kona_playercard`;
     
+    // Build headers once (prefer espn_s2 first in cookie)
     const headers = {
-      'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
+      'Cookie': `espn_s2=${espnS2Val}; SWID=${swidCookie}`,
       'X-Fantasy-Filter': JSON.stringify(filter),
       'Accept': 'application/json',
       'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0)',
       'Referer': 'https://fantasy.espn.com',
     };
 
-    const resp = await fetch(espnUrlReads, { headers });
-    const text = await resp.text();
-    const looksHtml = text.trim().startsWith('<') || text.includes('<html');
+    // 1) Try global players endpoint first (more consistent for stats hydration)
+    const espnUrlPlayers = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/players?scoringPeriodId=${week}&view=kona_player_info`;
+    // 2) League endpoint as fallback
+    const espnUrlLeague = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info&view=kona_playercard`;
 
-    if (!resp.ok || looksHtml) {
-      console.error('ESPN returned non-JSON (status:', resp.status, '). First 300 chars:', text.substring(0, 300));
-      return new Response(
-        JSON.stringify({
-          error: 'ESPN credentials expired or invalid',
-          message: 'Please reconnect your ESPN league.',
-          status: resp.status
-        }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    let players: any[] = [];
+
+    async function fetchJson(url: string) {
+      const r = await fetch(url, { headers });
+      const t = await r.text();
+      const html = t.trim().startsWith('<') || t.includes('<html');
+      if (!r.ok || html) {
+        return { ok: false as const, status: r.status, text: t };
+      }
+      try {
+        const parsed = JSON.parse(t);
+        return { ok: true as const, json: parsed as any };
+      } catch (e) {
+        console.error('Failed to parse ESPN JSON:', (e as Error).message, t.substring(0, 200));
+        return { ok: false as const, status: 502, text: t };
+      }
     }
 
-    let espnData: any;
-    try {
-      espnData = JSON.parse(text);
-    } catch (e) {
-      console.error('Failed to parse ESPN JSON:', (e as Error).message, text.substring(0, 200));
-      return new Response(
-        JSON.stringify({ error: 'Invalid JSON from ESPN', message: 'Please try again later.' }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Try players endpoint
+    const playersResp = await fetchJson(espnUrlPlayers);
+    if (playersResp.ok && Array.isArray(playersResp.json)) {
+      const arr = playersResp.json as any[];
+      // Check if we actually got week stats hydrated
+      const hasWeekStats = arr.some((p: any) => {
+        const root = Array.isArray(p.stats) ? p.stats : [];
+        const nested = Array.isArray(p.player?.stats) ? p.player.stats : [];
+        const all = [...root, ...nested];
+        return all.some((s: any) => s?.scoringPeriodId === week && (s?.statSourceId === 0 || s?.statSourceId === 1));
+      });
+
+      if (hasWeekStats) {
+        players = arr;
+        console.log(`Using players endpoint, received ${players.length} items with hydrated stats`);
+      } else {
+        console.warn('Players endpoint returned no hydrated stats, falling back to league endpoint');
+      }
     }
-    const players = espnData.players || [];
+
+    // Fallback to league if needed
+    if (players.length === 0) {
+      const leagueResp = await fetchJson(espnUrlLeague);
+      if (!leagueResp.ok) {
+        console.error('ESPN returned non-JSON on both endpoints. League status:', (leagueResp as any).status, 'First 300 chars:', (leagueResp as any).text?.substring(0,300));
+        return new Response(
+          JSON.stringify({
+            error: 'ESPN credentials expired or invalid',
+            message: 'Please reconnect your ESPN league.',
+            status: (leagueResp as any).status ?? 401
+          }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      const obj = leagueResp.json as any;
+      players = (obj?.players ?? []);
+    }
 
     console.log(`Received ${players.length} players from ESPN`);
     
