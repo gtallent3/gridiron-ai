@@ -104,8 +104,11 @@ Deno.serve(async (req) => {
     const filter = {
       players: {
         filterStatsForExternalIds: { value: [season] },
-        filterStatsForSourceIds: { value: [0, 1] }, // Both actuals and projections
-        filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [week] },
+        filterStatsForSourceIds: { value: [0, 1] }, // 0=actuals, 1=projections
+        filterStatsForTopScoringPeriodIds: {
+          value: [2],              // MUST be an array
+          additionalValue: [week]  // MUST be an array
+        },
         limit: 5000,
         sortAppliedStatTotal: { 
           statSplitTypeId: 1, 
@@ -124,117 +127,31 @@ Deno.serve(async (req) => {
       'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
       'X-Fantasy-Filter': JSON.stringify(filter),
       'Accept': 'application/json, text/plain, */*',
-      'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0; +https://gtdataandinsights.com)',
+      'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0)',
       'Referer': 'https://fantasy.espn.com',
     };
 
-    // Try multiple strategies to get JSON reliably
-    const baseReads = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}`;
-    const baseLegacy = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}`;
+    const resp = await fetch(espnUrlReads, { headers });
+    const text = await resp.text();
+    const looksHtml = text.trim().startsWith('<') || text.includes('<html');
 
-    const commonHeaders: Record<string, string> = {
-      'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
-      'Accept': 'application/json, text/plain, */*',
-      'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0; +https://gtdataandinsights.com)',
-      'Referer': 'https://fantasy.espn.com',
-      'X-Fantasy-Filter': JSON.stringify(filter),
-      'X-Fantasy-Platform': 'kona',
-    };
-
-    let bodyText = '';
-    let looksHtml = false;
-    let espnResponse: Response | null = null;
-
-    // Attempt 1: Reads host GET
-    try {
-      const url1 = `${baseReads}?scoringPeriodId=${week}&view=kona_player_info`;
-      espnResponse = await fetch(url1, { headers: commonHeaders });
-      bodyText = await espnResponse.text();
-      looksHtml = bodyText.trim().startsWith('<!DOCTYPE html') || bodyText.includes('<html');
-      if (espnResponse.ok && !looksHtml) {
-        // success
-      } else {
-        console.warn('Reads GET did not return JSON (status:', espnResponse.status, ')');
-        espnResponse = null;
-      }
-    } catch (e) {
-      console.warn('Reads GET request failed:', (e as Error).message);
-      espnResponse = null;
-    }
-
-    // Attempt 2: Reads host POST /players with JSON body
-    if (!espnResponse) {
-      try {
-        const url2 = `${baseReads}/players?scoringPeriodId=${week}&view=kona_player_info`;
-        const headers2 = { ...commonHeaders, 'Content-Type': 'application/json' };
-        const resp2 = await fetch(url2, { method: 'POST', headers: headers2, body: JSON.stringify(filter) });
-        const txt2 = await resp2.text();
-        const html2 = txt2.trim().startsWith('<!DOCTYPE html') || txt2.includes('<html');
-        if (resp2.ok && !html2) {
-          espnResponse = resp2;
-          bodyText = txt2;
-        } else {
-          console.warn('Reads POST /players did not return JSON (status:', resp2.status, ')');
-        }
-      } catch (e) {
-        console.warn('Reads POST /players failed:', (e as Error).message);
-      }
-    }
-
-    // Attempt 3: Legacy host GET
-    if (!espnResponse) {
-      try {
-        const url3 = `${baseLegacy}?scoringPeriodId=${week}&view=kona_player_info`;
-        const resp3 = await fetch(url3, { headers: commonHeaders });
-        const txt3 = await resp3.text();
-        const html3 = txt3.trim().startsWith('<!DOCTYPE html') || txt3.includes('<html');
-        if (resp3.ok && !html3) {
-          espnResponse = resp3;
-          bodyText = txt3;
-        } else {
-          console.warn('Legacy GET did not return JSON (status:', resp3.status, ')');
-        }
-      } catch (e) {
-        console.warn('Legacy GET request failed:', (e as Error).message);
-      }
-    }
-
-    // Attempt 4: Legacy host POST /players
-    if (!espnResponse) {
-      try {
-        const url4 = `${baseLegacy}/players?scoringPeriodId=${week}&view=kona_player_info`;
-        const headers4 = { ...commonHeaders, 'Content-Type': 'application/json' };
-        const resp4 = await fetch(url4, { method: 'POST', headers: headers4, body: JSON.stringify(filter) });
-        const txt4 = await resp4.text();
-        const html4 = txt4.trim().startsWith('<!DOCTYPE html') || txt4.includes('<html');
-        if (resp4.ok && !html4) {
-          espnResponse = resp4;
-          bodyText = txt4;
-        } else {
-          console.error('Legacy POST /players also failed (status:', resp4.status, '). First 200 chars:', txt4.substring(0, 200));
-        }
-      } catch (e) {
-        console.error('Legacy POST /players failed:', (e as Error).message);
-      }
-    }
-
-    if (!espnResponse) {
+    if (!resp.ok || looksHtml) {
+      console.error('ESPN returned non-JSON (status:', resp.ok ? 200 : resp.status, '). First 300 chars:', text.substring(0, 300));
       return new Response(
         JSON.stringify({
-          error: 'ESPN returned non-JSON (likely auth/expired cookies)',
-          status: 401,
-          message: 'Please reconnect your ESPN league (SWID/espn_s2 may be expired).',
+          error: 'ESPN returned non-JSON (likely expired credentials or invalid filter)',
+          status: resp.status,
+          message: 'Please reconnect your ESPN league.',
         }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // We have JSON now
     let espnData: any;
     try {
-      espnData = JSON.parse(bodyText);
+      espnData = JSON.parse(text);
     } catch (e) {
-      console.error('Failed to parse ESPN JSON:', (e as Error).message, bodyText.substring(0, 200));
+      console.error('Failed to parse ESPN JSON:', (e as Error).message, text.substring(0, 200));
       return new Response(
         JSON.stringify({ error: 'Invalid JSON from ESPN', message: 'Please try again later.' }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
