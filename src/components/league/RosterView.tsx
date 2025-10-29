@@ -162,6 +162,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
               actualPoints += (stats.receiving_2pt_conversions || 0) * (scoringSettings.receiving_2pt_conversions || 2);
             }
             
+            const injuryStatus = valuation?.injury_status ?? player.injury_status ?? null;
+            const isByeWeek = valuation?.is_bye_week ?? false;
+            
             const playerDataObj = {
               id: playerId || playerName,
               name: playerName,
@@ -170,8 +173,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
               projected: 0,
               actualPoints: Math.round(actualPoints * 100) / 100,
               status: isStarter ? 'starter' : 'bench',
-              is_bye_week: valuation?.is_bye_week ?? false,
-              injury_status: valuation?.injury_status ?? player.injury_status ?? null,
+              is_bye_week: isByeWeek,
+              injury_status: injuryStatus,
               week: week,
             };
             
@@ -236,16 +239,20 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             // Get week-specific valuation data
             const valuation = valuationsByName.get(playerName);
             
+            const projectedPoints = projection?.projected_fp || player.projected || 0;
+            const injuryStatus = valuation?.injury_status ?? player.injury_status ?? null;
+            const isByeWeek = valuation?.is_bye_week ?? (projectedPoints === 0 && !injuryStatus);
+            
             const playerDataObj = {
               id: playerId || playerName,
               name: playerName,
               position: positionName,
               team: projection?.team || player.team || 'NFL',
-              projected: projection?.projected_fp || player.projected || 0,
+              projected: projectedPoints,
               actualPoints: 0,
               status: isStarter ? 'starter' : 'bench',
-              is_bye_week: valuation?.is_bye_week ?? false,
-              injury_status: valuation?.injury_status ?? player.injury_status ?? null,
+              is_bye_week: isByeWeek,
+              injury_status: injuryStatus,
               week: week,
             };
             
@@ -344,23 +351,28 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         // Get week-specific valuation data
         const valuation = valuationsByName.get(playerName);
         
+        const projectedPoints = !isHistorical
+          ? (positionName === 'K'
+              ? (typeof (projStats?.stats as any)?.projected_fp === 'number'
+                  ? (projStats!.stats as any).projected_fp
+                  : (projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0))
+              : (projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0))
+          : 0;
+        
+        const actualPoints = isHistorical ? ((actualStats?.fantasy_points ?? projStats?.fantasy_points ?? 0)) : 0;
+        const injuryStatus = valuation?.injury_status ?? player.injury_status ?? null;
+        const isByeWeek = valuation?.is_bye_week ?? (!isHistorical && projectedPoints === 0 && !injuryStatus);
+        
         const playerDataObj = {
           id: playerId || playerName,
           name: playerName,
           position: positionName,
           team: chosenStats?.team || player.team || 'NFL',
-          // Use fantasy_points from calculated data, but for K projected use projected_fp if available
-          projected: !isHistorical
-            ? (positionName === 'K'
-                ? (typeof (projStats?.stats as any)?.projected_fp === 'number'
-                    ? (projStats!.stats as any).projected_fp
-                    : (projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0))
-                : (projStats?.fantasy_points ?? actualStats?.fantasy_points ?? 0))
-            : 0,
-          actualPoints: isHistorical ? ((actualStats?.fantasy_points ?? projStats?.fantasy_points ?? 0)) : 0,
+          projected: projectedPoints,
+          actualPoints: actualPoints,
           status: isStarter ? 'starter' : 'bench',
-          is_bye_week: valuation?.is_bye_week ?? false,
-          injury_status: valuation?.injury_status ?? player.injury_status ?? null,
+          is_bye_week: isByeWeek,
+          injury_status: injuryStatus,
           week: week,
         };
 
