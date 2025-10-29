@@ -484,6 +484,9 @@ serve(async (req) => {
       for (const proj of projections) {
         const normalizedStats = {
           ...proj.stats,
+          // Preserve projection helpers for UI/transparency
+          projected_fp: (proj as any).projected_fp,
+          __applied_breakdown: (proj as any).applied_breakdown ?? (proj as any).__applied_breakdown,
           player_id: proj.player_id,
           player_name: proj.player_name,
           team: proj.team,
@@ -533,7 +536,7 @@ serve(async (req) => {
       const playerStats = player.stats || player;
       
       // Only apply defensive scoring to DST positions
-      const isDST = player.position === 'D/ST' || player.position === 'DEF' || player.position === '16';
+      const isDST = player.position === 'D/ST' || player.position === 'DEF' || player.position === 'DST' || player.position === '16';
       const adjustedStats = { ...playerStats };
       
       // Zero out defensive stats for non-DST players to prevent incorrect scoring
@@ -553,7 +556,7 @@ serve(async (req) => {
       
       const { total, breakdown } = calculateFantasyPoints(adjustedStats, scoringSettings);
       
-      // Prefer ESPN kicker projected_fp for projections
+      // Prefer ESPN projected_fp or sum of __applied_breakdown for projections
       const isKicker = player.position === 'K' || player.position === '5';
       let kickerProjected: number | undefined = undefined;
       if (isKicker && player.source_type !== 'actual') {
@@ -569,9 +572,27 @@ serve(async (req) => {
         }
       }
 
-      const finalTotal = typeof kickerProjected === 'number' ? Math.round(kickerProjected * 100) / 100 : total;
-      const projectedFpForStats = typeof kickerProjected === 'number'
-        ? kickerProjected
+      const isDefense = isDST;
+      let defenseProjected: number | undefined = undefined;
+      if (isDefense && player.source_type !== 'actual') {
+        const pf = (player as any).projected_fp ?? (playerStats as any).projected_fp;
+        if (typeof pf === 'number' && !Number.isNaN(pf)) {
+          defenseProjected = pf;
+        } else {
+          const breakdownRaw = (player as any).__applied_breakdown ?? (playerStats as any).__applied_breakdown;
+          if (breakdownRaw && typeof breakdownRaw === 'object') {
+            defenseProjected = Object.values(breakdownRaw as Record<string, number | unknown>)
+              .reduce((acc: number, v: unknown) => acc + (typeof v === 'number' ? v : 0), 0);
+          }
+        }
+      }
+
+      const chosenProjected = typeof kickerProjected === 'number' ? kickerProjected
+        : (typeof defenseProjected === 'number' ? defenseProjected : undefined);
+
+      const finalTotal = typeof chosenProjected === 'number' ? Math.round(chosenProjected * 100) / 100 : total;
+      const projectedFpForStats = typeof chosenProjected === 'number'
+        ? chosenProjected
         : (typeof (playerStats as any)?.projected_fp === 'number' ? (playerStats as any).projected_fp : undefined);
       
       return {
@@ -584,8 +605,12 @@ serve(async (req) => {
         source_type: player.source_type,
         provenance: player.source_type === 'actual' ? 'player_stats' : 'espn_projection',
         projection_in_use: player.source_type !== 'actual',
+        // Surface projection helpers for UI
+        projected_fp: typeof chosenProjected === 'number' ? Math.round(chosenProjected * 100) / 100 : (player as any).projected_fp,
+        __applied_breakdown: (player as any).__applied_breakdown,
         stats: isDST ? {
           sacks: playerStats.sacks,
+          interceptions: playerStats.interceptions,
           fumbles_recovered: playerStats.fumbles_recovered,
           interception_tds: playerStats.interception_tds,
           fumble_recovery_tds: playerStats.fumble_recovery_tds,
@@ -609,7 +634,7 @@ serve(async (req) => {
           receiving_tds: playerStats.receiving_tds,
           receiving_2pt_conversions: playerStats.receiving_2pt_conversions,
           fumbles_lost: playerStats.fumbles_lost,
-          // Include projected_fp so the UI can prioritize it for kickers
+          // Include projected_fp so the UI can prioritize it for kickers/others
           projected_fp: projectedFpForStats,
         },
         fantasy_points: finalTotal,
