@@ -118,46 +118,52 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching all players for ESPN league ${espnLeagueId}, season ${season}, week ${week}`);
 
-    const espnUrl = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info`;
+    const espnUrlReads = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info`;
     
-    const espnResponse = await fetch(espnUrl, {
-      headers: {
-        'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
-        'X-Fantasy-Filter': JSON.stringify(filter),
-        'Referer': 'https://fantasy.espn.com',
-        'Accept': 'application/json, text/plain, */*',
-      },
-    });
+    const headers = {
+      'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
+      'X-Fantasy-Filter': JSON.stringify(filter),
+      'Accept': 'application/json, text/plain, */*',
+      'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0; +https://gtdataandinsights.com)',
+      'Referer': 'https://fantasy.espn.com',
+    };
 
-    if (!espnResponse.ok) {
-      const errorText = await espnResponse.text();
-      console.error('ESPN API error:', espnResponse.status, errorText);
-      return new Response(
-        JSON.stringify({ 
-          error: 'Failed to fetch from ESPN', 
-          status: espnResponse.status,
-          message: espnResponse.status === 401 ? 'Credentials expired or invalid' : 'ESPN API error'
-        }),
-        { status: espnResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Try the read host first
+    let espnResponse = await fetch(espnUrlReads, { headers });
+    let bodyText = await espnResponse.text();
+    let looksHtml = bodyText.trim().startsWith('<!DOCTYPE html') || bodyText.includes('<html');
+
+    if (!espnResponse.ok || looksHtml) {
+      console.warn('Reads host did not return JSON (status:', espnResponse.status, '), falling back to legacy host');
+      const espnUrlLegacy = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info`;
+      const resp2 = await fetch(espnUrlLegacy, { headers });
+      bodyText = await resp2.text();
+      looksHtml = bodyText.trim().startsWith('<!DOCTYPE html') || bodyText.includes('<html');
+
+      if (!resp2.ok || looksHtml) {
+        console.error('ESPN returned non-JSON response:', bodyText.substring(0, 500));
+        return new Response(
+          JSON.stringify({
+            error: 'ESPN returned non-JSON (likely auth/expired cookies)',
+            status: resp2.status,
+            message: 'Please reconnect your ESPN league (SWID/espn_s2 may be expired).',
+          }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
-    // Check content type before parsing
-    const contentType = espnResponse.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const responseText = await espnResponse.text();
-      console.error('ESPN returned non-JSON response:', responseText.substring(0, 500));
+    // We have JSON now
+    let espnData: any;
+    try {
+      espnData = JSON.parse(bodyText);
+    } catch (e) {
+      console.error('Failed to parse ESPN JSON:', (e as Error).message, bodyText.substring(0, 200));
       return new Response(
-        JSON.stringify({ 
-          error: 'ESPN credentials may be expired or invalid',
-          message: 'Received HTML instead of JSON - please re-authenticate with ESPN',
-          debug: responseText.substring(0, 200)
-        }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Invalid JSON from ESPN', message: 'Please try again later.' }),
+        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    const espnData = await espnResponse.json();
     const players = espnData.players || [];
 
     console.log(`Received ${players.length} players from ESPN`);
