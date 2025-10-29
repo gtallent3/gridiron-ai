@@ -42,11 +42,11 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { leagueId, season, week, swid, espn_s2 } = await req.json();
+    const { leagueId, season, week, swid: bodySwid, espn_s2: bodyEspnS2 } = await req.json();
 
-    if (!leagueId || !season || !week || !swid || !espn_s2) {
+    if (!leagueId || !season || !week) {
       return new Response(
-        JSON.stringify({ error: 'Missing required parameters: leagueId, season, week, swid, espn_s2' }),
+        JSON.stringify({ error: 'Missing required parameters: leagueId, season, week' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
     // Get league data to find ESPN league ID
     const { data: leagueData, error: leagueError } = await supabase
       .from('connected_leagues')
-      .select('league_id, id, platform')
+      .select('league_id, id, platform, user_id')
       .eq('id', leagueId)
       .single();
 
@@ -67,8 +67,38 @@ Deno.serve(async (req) => {
 
     const espnLeagueId = leagueData.league_id;
 
-    // Ensure SWID is wrapped in braces
-    const swidCookie = swid.startsWith('{') ? swid : `{${swid}}`;
+    // Resolve credentials: prefer body, fallback to stored, and validate expiry
+    let swidVal: string | undefined = bodySwid;
+    let espnS2Val: string | undefined = bodyEspnS2;
+
+    if (!swidVal || !espnS2Val) {
+      const { data: cred, error: credError } = await supabase
+        .from('espn_credentials')
+        .select('swid_encrypted, espn_s2_encrypted, expires_at')
+        .eq('user_id', leagueData.user_id)
+        .eq('league_id', espnLeagueId)
+        .maybeSingle();
+
+      if (credError || !cred) {
+        return new Response(
+          JSON.stringify({ error: 'Missing ESPN credentials — please sign in with ESPN again.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (!cred.expires_at || new Date(cred.expires_at) <= new Date()) {
+        return new Response(
+          JSON.stringify({ error: 'ESPN credentials expired — please sign in with ESPN again.' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      swidVal = cred.swid_encrypted;
+      espnS2Val = cred.espn_s2_encrypted;
+    }
+
+    // Ensure SWID is wrapped in braces and uppercase cookie name
+    const swidCookie = swidVal!.startsWith('{') ? swidVal! : `{${swidVal}}`;
 
     // Build X-Fantasy-Filter for all players with both actuals and projections
     const filter = {
@@ -92,8 +122,10 @@ Deno.serve(async (req) => {
     
     const espnResponse = await fetch(espnUrl, {
       headers: {
-        'Cookie': `SWID=${swidCookie}; espn_s2=${espn_s2}`,
+        'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
         'X-Fantasy-Filter': JSON.stringify(filter),
+        'Referer': 'https://fantasy.espn.com',
+        'Accept': 'application/json, text/plain, */*',
       },
     });
 
