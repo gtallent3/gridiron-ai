@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { isTeamOnBye } from "./byeWeekSchedule";
 
 export type RosterPlayer = {
   player_id?: string;
@@ -74,6 +75,7 @@ export async function enrichRosterWithValuations(
   return rosterArray.map((p: RosterPlayer) => {
     const key = (p.player_name || p.playerName || p.name) as string | undefined;
     const v = key ? valMap.get(key) : undefined;
+    const playerTeam = p.team;
 
     // Debug: Log what data we have for key players
     if (key && (key.includes('Mahomes') || key.includes('Hurts'))) {
@@ -95,13 +97,16 @@ export async function enrichRosterWithValuations(
       ? Number(v.ppg_projection)
       : Number(p.ppg_projection ?? 0);
 
+    // Use hardcoded bye week schedule instead of player_valuations
+    const isByeWeek = isTeamOnBye(playerTeam, week);
+
     return {
       ...p,
       ros_projection: chosenRos,
       ppg_projection: chosenPpg,
       next_3_weeks_projection: v?.next_3_weeks_projection ?? p.next_3_weeks_projection ?? 0,
-      // Always use valuations for flags (most up-to-date)
-      is_bye_week: v?.is_bye_week ?? p.is_bye_week ?? false,
+      // Use hardcoded schedule for bye weeks
+      is_bye_week: isByeWeek,
       injury_status: v?.injury_status ?? p.injury_status ?? null,
       injury_duration_weeks: v?.injury_duration_weeks ?? p.injury_duration_weeks ?? 0,
     };

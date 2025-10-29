@@ -9,6 +9,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PlayerStatsDialog } from "./PlayerStatsDialog";
 import { getCurrentNFLWeek } from "@/lib/nflWeekUtils";
+import { isTeamOnBye } from "@/lib/byeWeekSchedule";
 
 type League = {
   id: string;
@@ -81,19 +82,6 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             console.error('Error fetching player stats:', error);
           }
           
-          // Fetch week-specific bye and injury data from player_valuations
-          const playerNames = userTeam.roster.map((p: any) => p.player_name).filter(Boolean);
-          const { data: valuations } = await supabase
-            .from('player_valuations')
-            .select('player_name, is_bye_week, injury_status, injury_duration_weeks')
-            .eq('season', inferredSeason)
-            .eq('week', week)
-            .in('player_name', playerNames);
-          
-          const valuationsByName = new Map(
-            (valuations || []).map(v => [v.player_name, v])
-          );
-          
           // Create a map by normalized player name for matching
           const statsByName = new Map<string, any>();
           if (statsData) {
@@ -142,9 +130,6 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
             const stats = statsByName.get(normalizedName);
             
-            // Get week-specific valuation data
-            const valuation = valuationsByName.get(playerName);
-            
             let actualPoints = 0;
             if (stats) {
               // Calculate fantasy points based on stats
@@ -162,14 +147,15 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
               actualPoints += (stats.receiving_2pt_conversions || 0) * (scoringSettings.receiving_2pt_conversions || 2);
             }
             
-            const injuryStatus = valuation?.injury_status ?? player.injury_status ?? null;
-            const isByeWeek = valuation?.is_bye_week ?? false;
+            const playerTeam = stats?.team || player.team || 'NFL';
+            const injuryStatus = player.injury_status ?? null;
+            const isByeWeek = isTeamOnBye(playerTeam, week);
             
             const playerDataObj = {
               id: playerId || playerName,
               name: playerName,
               position: positionName,
-              team: stats?.team || player.team || 'NFL',
+              team: playerTeam,
               projected: 0,
               actualPoints: Math.round(actualPoints * 100) / 100,
               status: isStarter ? 'starter' : 'bench',
@@ -200,19 +186,6 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             console.error('Error fetching projected stats:', projError);
           }
           
-          // Fetch week-specific bye and injury data from player_valuations
-          const playerNames = userTeam.roster.map((p: any) => p.player_name).filter(Boolean);
-          const { data: valuations } = await supabase
-            .from('player_valuations')
-            .select('player_name, is_bye_week, injury_status, injury_duration_weeks')
-            .eq('season', inferredSeason)
-            .eq('week', week)
-            .in('player_name', playerNames);
-          
-          const valuationsByName = new Map(
-            (valuations || []).map(v => [v.player_name, v])
-          );
-          
           // Create a map by player_id and normalized name for matching
           const projByPlayerId = new Map<string, any>();
           const projByName = new Map<string, any>();
@@ -236,18 +209,16 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
             const projection = projByPlayerId.get(playerId) || projByName.get(normalizedName);
             
-            // Get week-specific valuation data
-            const valuation = valuationsByName.get(playerName);
-            
             const projectedPoints = projection?.projected_fp || player.projected || 0;
-            const injuryStatus = valuation?.injury_status ?? player.injury_status ?? null;
-            const isByeWeek = valuation?.is_bye_week ?? (projectedPoints === 0 && !injuryStatus);
+            const playerTeam = projection?.team || player.team || 'NFL';
+            const injuryStatus = player.injury_status ?? null;
+            const isByeWeek = isTeamOnBye(playerTeam, week);
             
             const playerDataObj = {
               id: playerId || playerName,
               name: playerName,
               position: positionName,
-              team: projection?.team || player.team || 'NFL',
+              team: playerTeam,
               projected: projectedPoints,
               actualPoints: 0,
               status: isStarter ? 'starter' : 'bench',
@@ -294,19 +265,6 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         return;
       }
 
-      // Fetch week-specific bye and injury data from player_valuations
-      const playerNames = userTeam.roster.map((p: any) => p.player_name || p.playerName || p.name).filter(Boolean);
-      const { data: valuations } = await supabase
-        .from('player_valuations')
-        .select('player_name, is_bye_week, injury_status, injury_duration_weeks')
-        .eq('season', inferredSeason)
-        .eq('week', week)
-        .in('player_name', playerNames);
-      
-      const valuationsByName = new Map(
-        (valuations || []).map(v => [v.player_name, v])
-      );
-
       // Create lookup maps separated by source type
       const projById = new Map(
         playerData.players.filter((p: any) => p.source_type === 'projected').map((p: any) => [String(p.player_id), p])
@@ -348,9 +306,6 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         const projStats = (projById.get(playerId) as any) || (playerName ? projByName.get(playerName.toLowerCase().trim()) as any : undefined);
         const chosenStats = isHistorical ? (actualStats || projStats) : (projStats || actualStats);
         
-        // Get week-specific valuation data
-        const valuation = valuationsByName.get(playerName);
-        
         const projectedPoints = !isHistorical
           ? (positionName === 'K'
               ? (typeof (projStats?.stats as any)?.projected_fp === 'number'
@@ -360,14 +315,15 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           : 0;
         
         const actualPoints = isHistorical ? ((actualStats?.fantasy_points ?? projStats?.fantasy_points ?? 0)) : 0;
-        const injuryStatus = valuation?.injury_status ?? player.injury_status ?? null;
-        const isByeWeek = valuation?.is_bye_week ?? (!isHistorical && projectedPoints === 0 && !injuryStatus);
+        const playerTeam = chosenStats?.team || player.team || 'NFL';
+        const injuryStatus = player.injury_status ?? null;
+        const isByeWeek = isTeamOnBye(playerTeam, week);
         
         const playerDataObj = {
           id: playerId || playerName,
           name: playerName,
           position: positionName,
-          team: chosenStats?.team || player.team || 'NFL',
+          team: playerTeam,
           projected: projectedPoints,
           actualPoints: actualPoints,
           status: isStarter ? 'starter' : 'bench',
