@@ -121,14 +121,13 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching all players for ESPN league ${espnLeagueId}, season ${season}, week ${week}`);
 
+    // Use a simpler approach: query params only, no X-Fantasy-Filter
     const espnUrlReads = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info`;
     
     const headers = {
       'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
-      'X-Fantasy-Filter': JSON.stringify(filter),
-      'Accept': 'application/json, text/plain, */*',
+      'Accept': 'application/json',
       'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0)',
-      'Referer': 'https://fantasy.espn.com',
     };
 
     const resp = await fetch(espnUrlReads, { headers });
@@ -136,14 +135,15 @@ Deno.serve(async (req) => {
     const looksHtml = text.trim().startsWith('<') || text.includes('<html');
 
     if (!resp.ok || looksHtml) {
-      console.error('ESPN returned non-JSON (status:', resp.ok ? 200 : resp.status, '). First 300 chars:', text.substring(0, 300));
+      console.error('ESPN returned non-JSON (status:', resp.status, '). First 300 chars:', text.substring(0, 300));
       return new Response(
         JSON.stringify({
-          error: 'ESPN returned non-JSON (likely expired credentials or invalid filter)',
+          error: 'ESPN API error',
           status: resp.status,
-          message: 'Please reconnect your ESPN league.',
+          message: text.includes('messages') ? JSON.parse(text).messages?.[0] : 'Please reconnect your ESPN league.',
+          debug: text.substring(0, 300)
         }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { status: resp.ok ? 401 : resp.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
