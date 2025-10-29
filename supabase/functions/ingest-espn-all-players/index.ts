@@ -113,10 +113,9 @@ Deno.serve(async (req) => {
         },
         limit: 5000,
         sortAppliedStatTotal: { 
-          statSplitTypeId: 1, 
           sortAsc: false, 
           sortPriority: 1, 
-          value: "1027" 
+          value: 1027
         },
       },
     };
