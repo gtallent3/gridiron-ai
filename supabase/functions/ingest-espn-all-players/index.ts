@@ -128,29 +128,105 @@ Deno.serve(async (req) => {
       'Referer': 'https://fantasy.espn.com',
     };
 
-    // Try the read host first
-    let espnResponse = await fetch(espnUrlReads, { headers });
-    let bodyText = await espnResponse.text();
-    let looksHtml = bodyText.trim().startsWith('<!DOCTYPE html') || bodyText.includes('<html');
+    // Try multiple strategies to get JSON reliably
+    const baseReads = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}`;
+    const baseLegacy = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}`;
 
-    if (!espnResponse.ok || looksHtml) {
-      console.warn('Reads host did not return JSON (status:', espnResponse.status, '), falling back to legacy host');
-      const espnUrlLegacy = `https://fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/segments/0/leagues/${espnLeagueId}?scoringPeriodId=${week}&view=kona_player_info`;
-      const resp2 = await fetch(espnUrlLegacy, { headers });
-      bodyText = await resp2.text();
+    const commonHeaders: Record<string, string> = {
+      'Cookie': `SWID=${swidCookie}; espn_s2=${espnS2Val}`,
+      'Accept': 'application/json, text/plain, */*',
+      'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0; +https://gtdataandinsights.com)',
+      'Referer': 'https://fantasy.espn.com',
+      'X-Fantasy-Filter': JSON.stringify(filter),
+      'X-Fantasy-Platform': 'kona',
+    };
+
+    let bodyText = '';
+    let looksHtml = false;
+    let espnResponse: Response | null = null;
+
+    // Attempt 1: Reads host GET
+    try {
+      const url1 = `${baseReads}?scoringPeriodId=${week}&view=kona_player_info`;
+      espnResponse = await fetch(url1, { headers: commonHeaders });
+      bodyText = await espnResponse.text();
       looksHtml = bodyText.trim().startsWith('<!DOCTYPE html') || bodyText.includes('<html');
-
-      if (!resp2.ok || looksHtml) {
-        console.error('ESPN returned non-JSON response:', bodyText.substring(0, 500));
-        return new Response(
-          JSON.stringify({
-            error: 'ESPN returned non-JSON (likely auth/expired cookies)',
-            status: resp2.status,
-            message: 'Please reconnect your ESPN league (SWID/espn_s2 may be expired).',
-          }),
-          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+      if (espnResponse.ok && !looksHtml) {
+        // success
+      } else {
+        console.warn('Reads GET did not return JSON (status:', espnResponse.status, ')');
+        espnResponse = null;
       }
+    } catch (e) {
+      console.warn('Reads GET request failed:', (e as Error).message);
+      espnResponse = null;
+    }
+
+    // Attempt 2: Reads host POST /players with JSON body
+    if (!espnResponse) {
+      try {
+        const url2 = `${baseReads}/players?scoringPeriodId=${week}&view=kona_player_info`;
+        const headers2 = { ...commonHeaders, 'Content-Type': 'application/json' };
+        const resp2 = await fetch(url2, { method: 'POST', headers: headers2, body: JSON.stringify(filter) });
+        const txt2 = await resp2.text();
+        const html2 = txt2.trim().startsWith('<!DOCTYPE html') || txt2.includes('<html');
+        if (resp2.ok && !html2) {
+          espnResponse = resp2;
+          bodyText = txt2;
+        } else {
+          console.warn('Reads POST /players did not return JSON (status:', resp2.status, ')');
+        }
+      } catch (e) {
+        console.warn('Reads POST /players failed:', (e as Error).message);
+      }
+    }
+
+    // Attempt 3: Legacy host GET
+    if (!espnResponse) {
+      try {
+        const url3 = `${baseLegacy}?scoringPeriodId=${week}&view=kona_player_info`;
+        const resp3 = await fetch(url3, { headers: commonHeaders });
+        const txt3 = await resp3.text();
+        const html3 = txt3.trim().startsWith('<!DOCTYPE html') || txt3.includes('<html');
+        if (resp3.ok && !html3) {
+          espnResponse = resp3;
+          bodyText = txt3;
+        } else {
+          console.warn('Legacy GET did not return JSON (status:', resp3.status, ')');
+        }
+      } catch (e) {
+        console.warn('Legacy GET request failed:', (e as Error).message);
+      }
+    }
+
+    // Attempt 4: Legacy host POST /players
+    if (!espnResponse) {
+      try {
+        const url4 = `${baseLegacy}/players?scoringPeriodId=${week}&view=kona_player_info`;
+        const headers4 = { ...commonHeaders, 'Content-Type': 'application/json' };
+        const resp4 = await fetch(url4, { method: 'POST', headers: headers4, body: JSON.stringify(filter) });
+        const txt4 = await resp4.text();
+        const html4 = txt4.trim().startsWith('<!DOCTYPE html') || txt4.includes('<html');
+        if (resp4.ok && !html4) {
+          espnResponse = resp4;
+          bodyText = txt4;
+        } else {
+          console.error('Legacy POST /players also failed (status:', resp4.status, '). First 200 chars:', txt4.substring(0, 200));
+        }
+      } catch (e) {
+        console.error('Legacy POST /players failed:', (e as Error).message);
+      }
+    }
+
+    if (!espnResponse) {
+      return new Response(
+        JSON.stringify({
+          error: 'ESPN returned non-JSON (likely auth/expired cookies)',
+          status: 401,
+          message: 'Please reconnect your ESPN league (SWID/espn_s2 may be expired).',
+        }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // We have JSON now
