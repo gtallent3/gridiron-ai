@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     }
     const swidCookie = swidVal!.startsWith('{') ? swidVal! : `{${swidVal}}`;
 
-    // Base headers (no giant strings in logs)
+    // ---------- START PAGINATED INGEST (memory-safe) ----------
     const baseHeaders = {
       'Cookie': `espn_s2=${espnS2Val}; SWID=${swidCookie}`,
       'Accept': 'application/json',
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       'Referer': 'https://fantasy.espn.com',
     };
 
-    // Valid filter (numeric value, no statSplitTypeId)
+    // Valid X-Fantasy-Filter (numeric value; no statSplitTypeId)
     const makeFilter = (slotId?: number) => ({
       players: {
         ...(slotId != null ? { filterSlotIds: { value: [slotId] } } : {}),
@@ -96,18 +96,21 @@ Deno.serve(async (req) => {
       },
     });
 
+    const getTeamAbbr = (id?: number) => TEAM_MAP[id ?? -1] ?? 'FA';
+    const getPos      = (id?: number) => POSITION_MAP[id ?? -1] ?? 'FLEX';
+
     let totalSeen = 0, totalUpserts = 0, totalProj = 0, totalActual = 0;
 
-    // Iterate by slot to keep payloads minimal
     for (const slotId of SLOT_IDS) {
       const filter = makeFilter(slotId);
 
       for (let page = 0; page < MAX_PAGES_PER_SLOT; page++) {
         const offset = page * PAGE_SIZE;
-        const resp = await fetch(playersUrl(season, week, offset, PAGE_SIZE), {
+        const url = playersUrl(season, week, offset, PAGE_SIZE);
+
+        const resp = await fetch(url, {
           headers: { ...baseHeaders, 'X-Fantasy-Filter': JSON.stringify(filter) }
         });
-
         const txt = await resp.text();
         if (!resp.ok || txt.trim().startsWith('<')) break;
 
@@ -123,7 +126,7 @@ Deno.serve(async (req) => {
 
           const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
           const pos  = getPos(p.defaultPositionId ?? p.player?.defaultPositionId);
-          const team = getTeam(p.proTeamId ?? p.player?.proTeamId);
+          const team = getTeamAbbr(p.proTeamId ?? p.player?.proTeamId);
 
           const pdata = p.player ?? p;
           let waiver = 'ROSTERED';
@@ -147,6 +150,7 @@ Deno.serve(async (req) => {
             }
             if ((fp == null || fp === 0) && Object.keys(applied).length === 0) continue;
 
+            // Keep rows tiny: do NOT store raw stats blobs
             buffer.push({
               league_id: leagueData.id,
               espn_league_id: espnLeagueId,
@@ -169,8 +173,7 @@ Deno.serve(async (req) => {
             if (s.statSourceId === 1) totalProj++; else totalActual++;
 
             if (buffer.length >= ROW_CHUNK) {
-              const { error } = await supabase
-                .from('player_pool')
+              const { error } = await supabase.from('player_pool')
                 .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
               if (error) throw error;
               totalUpserts += buffer.length;
@@ -180,15 +183,14 @@ Deno.serve(async (req) => {
         }
 
         if (buffer.length) {
-          const { error } = await supabase
-            .from('player_pool')
+          const { error } = await supabase.from('player_pool')
             .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
           if (error) throw error;
           totalUpserts += buffer.length;
           buffer.length = 0;
         }
 
-        // yield to GC between pages
+        // yield to GC
         await new Promise((r) => setTimeout(r, 0));
 
         if (arr.length < PAGE_SIZE) break; // no more pages for this slot
@@ -203,13 +205,12 @@ Deno.serve(async (req) => {
       projections: totalProj,
       actuals: totalActual,
     };
-
-    // tiny, safe log
     console.log(`ingest ok s${season} w${week} seen=${totalSeen} upserts=${totalUpserts} proj=${totalProj} act=${totalActual}`);
 
     return new Response(JSON.stringify(summary), {
       status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
+    // ---------- END PAGINATED INGEST ----------
 
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
