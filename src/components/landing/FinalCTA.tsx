@@ -35,8 +35,7 @@ export const FinalCTA = () => {
 
           {/* Subtext */}
           <p className="text-lg sm:text-xl text-muted-foreground max-w-2xl mx-auto">
-            Start your free trial and get unlimited access to AI-powered fantasy insights. 
-            No credit card required.
+            Start your free trial and get unlimited access to AI-powered fantasy insights.
           </p>
 
           {/* CTA Button */}
@@ -56,10 +55,6 @@ export const FinalCTA = () => {
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-primary" />
               <span>Free 7-day trial</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-primary" />
-              <span>No credit card required</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="h-2 w-2 rounded-full bg-primary" />
