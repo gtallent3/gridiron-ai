@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -12,6 +13,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useTokens } from '@/hooks/useTokens';
+import { getCurrentNFLWeek } from '@/lib/nflWeekUtils';
+import { Lock, CheckCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface PositionalStrength {
   team_id: string;
@@ -31,10 +38,47 @@ interface PositionalRankingsProps {
 export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps) {
   const [strengths, setStrengths] = useState<PositionalStrength[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+  const [showUnlockDialog, setShowUnlockDialog] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const [unlockedWeek, setUnlockedWeek] = useState<number | null>(null);
+  
+  const { subscription } = useSubscription();
+  const { balance, hasUnlimited, refreshBalance } = useTokens();
+  const currentWeekInfo = getCurrentNFLWeek();
+  const currentWeek = currentWeekInfo.week;
+  
+  // Check if user has access
+  const isSubscriber = subscription.subscribed || hasUnlimited;
 
   useEffect(() => {
     fetchPositionalStrengths();
+    checkUnlockStatus();
   }, [leagueId]);
+  
+  useEffect(() => {
+    checkUnlockStatus();
+  }, [currentWeek, isSubscriber]);
+
+  const checkUnlockStatus = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data, error } = await supabase
+        .from('user_tokens')
+        .select('rankings_unlocked_week')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error) throw error;
+      
+      setUnlockedWeek(data?.rankings_unlocked_week || null);
+      setIsUnlocked(isSubscriber || data?.rankings_unlocked_week === currentWeek);
+    } catch (error) {
+      console.error('Error checking unlock status:', error);
+    }
+  };
 
   const fetchPositionalStrengths = async () => {
     try {
@@ -51,6 +95,44 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       console.error('Error fetching positional strengths:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+  
+  const handleUnlock = async () => {
+    setShowUnlockDialog(false);
+    setIsUnlocking(true);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('unlock-rankings', {
+        body: { currentWeek },
+      });
+      
+      if (error) throw error;
+      
+      if (data.insufficient) {
+        toast.error('Insufficient Tokens', {
+          description: 'You need 1 token to unlock rankings. Visit the shop to get more tokens.',
+        });
+        return;
+      }
+      
+      if (data.success) {
+        setIsUnlocked(true);
+        setUnlockedWeek(currentWeek);
+        await refreshBalance();
+        toast.success('Rankings Unlocked!', {
+          description: data.unlimited 
+            ? 'Rankings unlocked with your subscription.' 
+            : `Rankings unlocked for Week ${currentWeek}.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error unlocking rankings:', error);
+      toast.error('Failed to unlock rankings', {
+        description: 'Please try again.',
+      });
+    } finally {
+      setIsUnlocking(false);
     }
   };
 
@@ -97,16 +179,62 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   const positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>League Positional Rankings</CardTitle>
-        <CardDescription>
-          Team strengths by position (hover for details)
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="rounded-md border overflow-x-auto">
-          <Table>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>League Positional Rankings</CardTitle>
+              <CardDescription>
+                Team strengths by position (hover for details)
+              </CardDescription>
+            </div>
+            {isSubscriber && (
+              <Badge variant="secondary" className="gap-1">
+                <CheckCircle className="h-3 w-3" />
+                Subscriber Access
+              </Badge>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="relative">
+            {!isUnlocked && (
+              <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-md rounded-md flex items-center justify-center">
+                <div className="text-center space-y-4 max-w-md p-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
+                    <Lock className="h-8 w-8 text-primary" />
+                  </div>
+                  <h3 className="text-xl font-semibold">Unlock This Week's Rankings</h3>
+                  <p className="text-muted-foreground">
+                    Get detailed positional strength analysis for Week {currentWeek}
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Button 
+                      onClick={() => setShowUnlockDialog(true)}
+                      disabled={isUnlocking}
+                      size="lg"
+                    >
+                      {isUnlocking ? 'Unlocking...' : 'Reveal Rankings (1 Token)'}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => window.location.href = '/shop'}
+                    >
+                      Subscribe for Unlimited Access
+                    </Button>
+                  </div>
+                  {balance !== null && !hasUnlimited && (
+                    <p className="text-sm text-muted-foreground">
+                      Your balance: {balance} token{balance !== 1 ? 's' : ''}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className={!isUnlocked ? 'filter blur-sm pointer-events-none' : ''}>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="min-w-[150px]">Team</TableHead>
@@ -179,7 +307,28 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
             </TableBody>
           </Table>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
+        </CardContent>
+      </Card>
+      
+      <AlertDialog open={showUnlockDialog} onOpenChange={setShowUnlockDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unlock Positional Rankings?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Spend 1 token to unlock this week's positional rankings analysis. 
+              This will remain unlocked for the entire week.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleUnlock}>
+              Confirm (1 Token)
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

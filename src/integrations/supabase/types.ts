@@ -1449,6 +1449,7 @@ export type Database = {
           lifetime_earned: number
           lifetime_purchased: number
           lifetime_spent: number
+          rankings_unlocked_week: number | null
           subscription_expires_at: string | null
           updated_at: string
           user_id: string
@@ -1462,6 +1463,7 @@ export type Database = {
           lifetime_earned?: number
           lifetime_purchased?: number
           lifetime_spent?: number
+          rankings_unlocked_week?: number | null
           subscription_expires_at?: string | null
           updated_at?: string
           user_id: string
@@ -1475,6 +1477,7 @@ export type Database = {
           lifetime_earned?: number
           lifetime_purchased?: number
           lifetime_spent?: number
+          rankings_unlocked_week?: number | null
           subscription_expires_at?: string | null
           updated_at?: string
           user_id?: string
@@ -1710,6 +1713,7 @@ export type Database = {
         | "prop_win"
         | "admin_adjustment"
         | "subscription"
+        | "ranking_unlock"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1868,6 +1872,7 @@ export const Constants = {
         "prop_win",
         "admin_adjustment",
         "subscription",
+        "ranking_unlock",
       ],
     },
   },
