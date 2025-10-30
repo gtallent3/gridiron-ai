@@ -32,11 +32,13 @@ export const HeroSection = () => {
         <div className="max-w-4xl mx-auto text-center space-y-8">
           {/* Headline */}
           <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold leading-tight">
-            <span className="bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent">
+            <span className="bg-gradient-to-t from-foreground to-primary bg-clip-text text-transparent">
               Dominate Your League
             </span>
             <br />
-            <span className="text-foreground">With AI Analytics</span>
+            <span className="bg-gradient-to-t from-foreground to-primary bg-clip-text text-transparent">
+              With AI Analytics
+            </span>
           </h1>
 
           {/* Subheadline */}
