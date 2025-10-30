@@ -100,7 +100,14 @@ Deno.serve(async (req) => {
     }
 
     /** Counts to use */
-    const COUNTS: Record<SlotName, number> = { ...DEFAULT_COUNTS, ...(countsOverride || {}) };
+    const COUNTS: Record<SlotName, number> = { ...DEFAULT_COUNTS };
+    if (countsOverride) {
+      Object.entries(countsOverride).forEach(([key, value]) => {
+        if (value !== undefined) {
+          COUNTS[key as SlotName] = value;
+        }
+      });
+    }
 
     /** Slots list to process */
     const SLOTS: SlotName[] = Array.isArray(slotsOverride) && slotsOverride.length
