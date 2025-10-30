@@ -60,7 +60,11 @@ serve(async (req) => {
       limit: 10,
     });
 
-    const activeSub = subscriptions.data.find((s: any) => s.status === 'active' || s.status === 'trialing');
+    const activeSub = subscriptions.data.find((s: any) => {
+      const statusOk = s.status === 'active' || s.status === 'trialing';
+      const endOk = typeof s.current_period_end === 'number' && (s.current_period_end * 1000) > Date.now();
+      return statusOk && endOk;
+    });
     
     if (!activeSub) {
       logStep("No active subscription");

@@ -44,13 +44,13 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   const [unlockedWeek, setUnlockedWeek] = useState<number | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   
-  const { subscription } = useSubscription();
+  const { subscription, loading: subLoading } = useSubscription();
   const { balance, hasUnlimited, refreshBalance } = useTokens();
   const currentWeekInfo = getCurrentNFLWeek();
   const currentWeek = currentWeekInfo.week;
   
   // Check if user has access - only count as subscriber if actively subscribed
-  const isActiveSubscriber = (subscription.subscribed && subscription.status === 'active') || hasUnlimited;
+  const isActiveSubscriber = (!subLoading) && (((subscription.subscribed && subscription.status === 'active') || hasUnlimited));
   const hasTokenAccess = isUnlocked && !isActiveSubscriber;
 
   useEffect(() => {
