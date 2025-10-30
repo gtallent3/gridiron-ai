@@ -19,10 +19,10 @@ export interface NFLWeekInfo {
 
 /**
  * 2025 NFL Season Schedule (approximate)
- * Week 1: Sept 3-8, 2025 (adjusted to match Sleeper API week tracking)
+ * Week 1: Sept 4-10, 2025 (adjusted to match current week 9 on Oct 30)
  * Week 18: Jan 5-9, 2026
  */
-const NFL_2025_START = new Date('2025-08-28T00:00:00-04:00'); // Adjusted to match Sleeper week 9 on Oct 28
+const NFL_2025_START = new Date('2025-09-04T00:00:00-04:00'); // Week 1 starts Sept 4
 const NFL_2025_END = new Date('2026-01-09T23:59:59-05:00'); // Week 18 end
 
 /**
