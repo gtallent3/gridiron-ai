@@ -1,21 +1,37 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Lock, Sparkles } from "lucide-react";
+import { Lock, Sparkles, TrendingUp, AlertCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useStartSitAnalysis } from "@/hooks/useStartSitAnalysis";
+import { Loader2 } from "lucide-react";
 
 export const FreeStartSitDemo = () => {
   const [player1, setPlayer1] = useState("");
   const [player2, setPlayer2] = useState("");
-  const [showResults, setShowResults] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const navigate = useNavigate();
+  const { analysis, loading, error, analyze } = useStartSitAnalysis();
 
-  const handleAnalyze = () => {
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleAnalyze = async () => {
     if (player1 && player2) {
-      setShowResults(true);
+      await analyze(player1, player2);
     }
   };
 
@@ -72,22 +88,137 @@ export const FreeStartSitDemo = () => {
               <Button 
                 onClick={handleAnalyze} 
                 className="w-full"
-                disabled={!player1 || !player2}
+                disabled={!player1 || !player2 || loading}
               >
-                Analyze Players
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  'Analyze Players'
+                )}
               </Button>
 
-              {showResults && (
-                <Alert className="border-primary/50 bg-primary/5">
-                  <AlertDescription className="text-center">
-                    <p className="font-medium mb-2">
-                      Demo results would appear here with basic projections
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      This is a simplified demo. Sign up for full league-based analysis with your actual scoring settings.
-                    </p>
-                  </AlertDescription>
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
                 </Alert>
+              )}
+
+              {analysis && (
+                <div className="relative">
+                  {/* Results Card */}
+                  <div className={`space-y-4 p-6 rounded-lg border ${
+                    !isLoggedIn ? 'blur-sm' : ''
+                  } bg-card transition-all duration-300`}>
+                    {/* Recommendation Header */}
+                    <div className="text-center space-y-2">
+                      <div className="flex items-center justify-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-primary" />
+                        <h3 className="text-xl font-semibold">Recommendation</h3>
+                      </div>
+                      <p className="text-2xl font-bold text-primary">
+                        Start {analysis.recommendation}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {analysis.confidence >= 80 ? 
+                          `Start ${analysis.recommendation} with confidence` : 
+                          analysis.confidence >= 60 ?
+                          `${analysis.recommendation} has the edge` :
+                          `Toss-up — ${analysis.recommendation} edges out slightly`
+                        }
+                      </p>
+                    </div>
+
+                    {/* Player Comparison */}
+                    <div className="grid sm:grid-cols-2 gap-4">
+                      {/* Player 1 */}
+                      <div className={`p-4 rounded-lg border ${
+                        analysis.player1.name === analysis.recommendation 
+                          ? 'border-primary bg-primary/5' 
+                          : 'border-border'
+                      }`}>
+                        <h4 className="font-semibold mb-2">{analysis.player1.name}</h4>
+                        {analysis.player1.team && (
+                          <p className="text-sm text-muted-foreground">{analysis.player1.team} • {analysis.player1.position}</p>
+                        )}
+                        <p className="text-2xl font-bold mt-2">
+                          {analysis.player1.projection?.toFixed(1)} pts
+                        </p>
+                        {analysis.player1.injury_status && (
+                          <p className="text-xs text-destructive mt-1">
+                            {analysis.player1.injury_status}
+                          </p>
+                        )}
+                        {!analysis.player1.eligible && (
+                          <p className="text-xs text-destructive mt-1">
+                            {analysis.player1.ineligibilityReason}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Player 2 */}
+                      <div className={`p-4 rounded-lg border ${
+                        analysis.player2.name === analysis.recommendation 
+                          ? 'border-primary bg-primary/5' 
+                          : 'border-border'
+                      }`}>
+                        <h4 className="font-semibold mb-2">{analysis.player2.name}</h4>
+                        {analysis.player2.team && (
+                          <p className="text-sm text-muted-foreground">{analysis.player2.team} • {analysis.player2.position}</p>
+                        )}
+                        <p className="text-2xl font-bold mt-2">
+                          {analysis.player2.projection?.toFixed(1)} pts
+                        </p>
+                        {analysis.player2.injury_status && (
+                          <p className="text-xs text-destructive mt-1">
+                            {analysis.player2.injury_status}
+                          </p>
+                        )}
+                        {!analysis.player2.eligible && (
+                          <p className="text-xs text-destructive mt-1">
+                            {analysis.player2.ineligibilityReason}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Reasoning */}
+                    <div className="p-4 rounded-lg bg-muted/50">
+                      <h4 className="font-semibold mb-2">Analysis</h4>
+                      <p className="text-sm text-muted-foreground">{analysis.reasoning}</p>
+                    </div>
+
+                    {/* Week Info */}
+                    <p className="text-xs text-center text-muted-foreground">
+                      Week {analysis.week} • Season {analysis.season}
+                    </p>
+                  </div>
+
+                  {/* Blur Overlay for Unsigned Users */}
+                  {!isLoggedIn && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-background/95 via-background/80 to-transparent rounded-lg">
+                      <div className="text-center space-y-4 p-6 animate-in fade-in zoom-in duration-500">
+                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
+                          <Lock className="h-8 w-8 text-primary animate-pulse" />
+                        </div>
+                        <h3 className="text-2xl font-bold">Want to see who to start?</h3>
+                        <p className="text-muted-foreground max-w-md">
+                          Sign up free to unlock full results and weekly AI insights
+                        </p>
+                        <Button 
+                          size="lg"
+                          onClick={() => navigate('/auth')}
+                          className="mt-4"
+                        >
+                          Unlock Results →
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
