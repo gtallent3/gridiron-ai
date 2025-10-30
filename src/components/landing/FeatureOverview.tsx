@@ -164,9 +164,11 @@ export const FeatureOverview = () => {
                           </a>
                         </Button>
                       )}
-                      <p className="text-[10px] text-center text-muted-foreground">
-                        Sign up now to receive 3 free tokens
-                      </p>
+                      {feature.title === "Props & Tokens" && (
+                        <p className="text-[10px] text-center text-muted-foreground">
+                          Sign up now to receive 3 free tokens
+                        </p>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
