@@ -23,17 +23,17 @@ export const TradeDemo = ({ isHovered }: TradeDemoProps) => {
   }, [isHovered]);
 
   return (
-    <div className="h-[200px] bg-muted/30 rounded-lg p-4 pointer-events-none overflow-hidden relative">
+    <div className="h-[240px] bg-muted/30 rounded-lg p-3 pointer-events-none overflow-hidden relative">
       <div className="space-y-2">
         {/* Side A */}
         <div
-          className={`p-3 rounded-lg border transition-all duration-500 ${
+          className={`p-2.5 rounded-lg border transition-all duration-500 ${
             showResult
               ? "border-primary bg-primary/10 scale-[1.02]"
               : "border-border bg-card/50"
           }`}
         >
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
               You Get
             </span>
@@ -48,7 +48,7 @@ export const TradeDemo = ({ isHovered }: TradeDemoProps) => {
         </div>
 
         {/* VS Divider */}
-        <div className="flex items-center justify-center py-1">
+        <div className="flex items-center justify-center py-0.5">
           <div className="h-px flex-1 bg-border" />
           <span className="px-3 text-[10px] text-muted-foreground font-semibold">FOR</span>
           <div className="h-px flex-1 bg-border" />
@@ -56,13 +56,13 @@ export const TradeDemo = ({ isHovered }: TradeDemoProps) => {
 
         {/* Side B */}
         <div
-          className={`p-3 rounded-lg border transition-all duration-500 space-y-2 ${
+          className={`p-2.5 rounded-lg border transition-all duration-500 space-y-1.5 ${
             showResult
               ? "border-border/30 bg-muted/20 opacity-60"
               : "border-border bg-card/50"
           }`}
         >
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-1.5">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
               You Give
             </span>
@@ -71,7 +71,7 @@ export const TradeDemo = ({ isHovered }: TradeDemoProps) => {
             <div className="text-xs font-semibold">RJ Harvey</div>
             <div className="text-[10px] text-muted-foreground">RB - BUF</div>
           </div>
-          <div className="pt-1 border-t border-border/30">
+          <div className="pt-1.5 border-t border-border/30">
             <div className="text-xs font-semibold">Michael Pittman Jr.</div>
             <div className="text-[10px] text-muted-foreground">WR - IND</div>
           </div>
@@ -87,7 +87,7 @@ export const TradeDemo = ({ isHovered }: TradeDemoProps) => {
         </div>
       )}
 
-      <div className="absolute bottom-2 right-2 text-[10px] text-muted-foreground">
+      <div className="absolute bottom-1.5 right-2 text-[10px] text-muted-foreground">
         AI Analysis
       </div>
     </div>
