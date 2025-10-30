@@ -9,7 +9,7 @@ import { FinalCTA } from "@/components/landing/FinalCTA";
 import { Footer } from "@/components/landing/Footer";
 import { ConnectedLeagues } from "@/components/ConnectedLeagues";
 import { StartSitAnalyzer } from "@/components/StartSitAnalyzer";
-import { TradeAnalyzer } from "@/components/TradeAnalyzer";
+import { PositionalRankingsSnapshot } from "@/components/PositionalRankingsSnapshot";
 import { AIAssistant } from "@/components/AIAssistant";
 
 const Index = () => {
@@ -44,7 +44,7 @@ const Index = () => {
             </div>
           </section>
           <StartSitAnalyzer />
-          <TradeAnalyzer />
+          <PositionalRankingsSnapshot />
           <AIAssistant />
         </>
       ) : (
