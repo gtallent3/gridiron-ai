@@ -133,7 +133,7 @@ export default function ConnectLeague() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-6 max-w-3xl mx-auto">
             {/* Sleeper Card */}
             <Card className="border-2 border-primary/50">
               <CardHeader>
@@ -190,6 +190,26 @@ export default function ConnectLeague() {
                   <EspnCookieExtractor onSuccess={handleEspnCookieSuccess} />
                   <p className="text-sm text-muted-foreground mt-3">
                     Guided setup with platform-specific instructions
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Yahoo Card - Coming Soon */}
+            <Card className="border-2 border-muted opacity-75">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <div className="h-10 w-10 rounded-full bg-purple-500/20 flex items-center justify-center">
+                    <span className="text-xl font-bold">Y</span>
+                  </div>
+                  Yahoo
+                </CardTitle>
+                <CardDescription>Coming Soon</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    Yahoo Fantasy integration is currently under development
                   </p>
                 </div>
               </CardContent>
