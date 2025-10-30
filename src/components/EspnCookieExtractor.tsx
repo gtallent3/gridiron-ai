@@ -239,6 +239,7 @@ espnCreds;`.trim();
                 </p>
               </div>
 
+              <div className="space-y-4">
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
                     <div className="w-full border-t" />
