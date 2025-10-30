@@ -49,6 +49,29 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
     return () => window.removeEventListener('message', onMsg);
   }, [toast]);
 
+  // Handle manual paste from clipboard fallback
+  const handleClipboardPaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const parsed = JSON.parse(text);
+      if (parsed.SWID && parsed.espn_s2) {
+        setSwid(parsed.SWID);
+        setEspn_s2(parsed.espn_s2);
+        setStep('validate');
+        toast({
+          title: "Cookies loaded!",
+          description: "Credentials pasted from clipboard. Add your League ID to continue.",
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Paste failed",
+        description: "Could not read credentials from clipboard",
+        variant: "destructive",
+      });
+    }
+  };
+
   const extractionScript = `
 // Paste this in ESPN's browser console
 var cookies = document.cookie.split(';');
@@ -60,7 +83,7 @@ cookies.forEach(c => {
 console.log('Copy these values:', espnCreds);
 espnCreds;`.trim();
 
-  const bookmarkletCode = `javascript:(async()=>{try{const need=['SWID','espn_s2'];const jar=Object.fromEntries(document.cookie.split('; ').map(s=>s.split('=')));const out={};need.forEach(k=>{if(jar[k])out[k]=decodeURIComponent(jar[k]);});if(Object.keys(out).length<2){alert('Could not find both SWID and espn_s2. Make sure you are logged into ESPN.');return;}alert('Found cookies! Returning to GridironGM...');window.opener?.postMessage({__GRIDIRONGM:'ESPN_COOKIES',data:out},'*');}catch(e){alert('Failed to capture cookies: '+e);}})();`;
+  const bookmarkletCode = `javascript:(async()=>{try{const need=['SWID','espn_s2'];const jar=Object.fromEntries(document.cookie.split('; ').map(s=>s.split('=')));const out={};need.forEach(k=>{if(jar[k])out[k]=decodeURIComponent(jar[k]);});if(Object.keys(out).length<2){alert('Could not find both SWID and espn_s2. Make sure you are logged into ESPN.');return;}if(window.opener){window.opener.postMessage({__GRIDIRONGM:'ESPN_COOKIES',data:out},'*');window.opener.focus();alert('Cookies sent! You can close this window and return to GridironGM.');window.close();}else{navigator.clipboard.writeText(JSON.stringify(out));alert('Cookies copied to clipboard! Close this window and paste in GridironGM.');}}catch(e){alert('Failed to capture cookies: '+e);}})();`;
 
   const openEspnLogin = () => {
     window.open('https://www.espn.com/login', '_blank', 'width=800,height=600');
@@ -354,6 +377,22 @@ espnCreds;`.trim();
 
           {step === 'validate' && (
             <div className="space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  If the bookmarklet didn't auto-fill, you can paste from clipboard or enter manually.
+                </AlertDescription>
+              </Alert>
+
+              <Button
+                onClick={handleClipboardPaste}
+                variant="outline"
+                className="w-full gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                Paste Cookies from Clipboard
+              </Button>
+
               <div className="space-y-2">
                 <Label htmlFor="swid">SWID</Label>
                 <div className="flex gap-2">
