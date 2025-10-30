@@ -128,7 +128,7 @@ export function TradeAnalyzerROS({ league, userTeam }: TradeAnalyzerROSProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-24">
       {/* Header */}
       <Card>
         <CardHeader>
