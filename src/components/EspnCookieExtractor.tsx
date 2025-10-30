@@ -38,10 +38,12 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
       if (msg && msg.__GRIDIRONGM === 'ESPN_COOKIES') {
         setSwid(msg.data.SWID || '');
         setEspn_s2(msg.data.espn_s2 || '');
+        setLeagueId(msg.data.leagueId || '');
         setStep('validate');
+        const hasLeagueId = msg.data.leagueId ? "League ID auto-detected!" : "Add your League ID to continue.";
         toast({
           title: "Cookies captured!",
-          description: "Auto-filled your ESPN credentials. Add your League ID to continue.",
+          description: hasLeagueId,
         });
       }
     };
@@ -57,10 +59,12 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
       if (parsed.SWID && parsed.espn_s2) {
         setSwid(parsed.SWID);
         setEspn_s2(parsed.espn_s2);
+        setLeagueId(parsed.leagueId || '');
         setStep('validate');
+        const leagueMsg = parsed.leagueId ? " League ID detected!" : " Add your League ID to continue.";
         toast({
           title: "Cookies loaded!",
-          description: "Credentials pasted from clipboard. Add your League ID to continue.",
+          description: "Credentials pasted from clipboard." + leagueMsg,
         });
       }
     } catch (error) {
@@ -83,10 +87,9 @@ cookies.forEach(c => {
 console.log('Copy these values:', espnCreds);
 espnCreds;`.trim();
 
-  const bookmarkletCode = `javascript:(async()=>{try{const need=['SWID','espn_s2'];const jar={};document.cookie.split('; ').forEach(c=>{const idx=c.indexOf('=');if(idx>0){const k=c.substring(0,idx);const v=c.substring(idx+1);jar[k]=v;}});const out={};need.forEach(k=>{if(jar[k])out[k]=jar[k];});if(Object.keys(out).length<2){alert('Could not find both SWID and espn_s2. Make sure you are logged into ESPN.');return;}if(window.opener){window.opener.postMessage({__GRIDIRONGM:'ESPN_COOKIES',data:out},'*');window.opener.focus();alert('Cookies sent! You can close this window and return to GridironGM.');window.close();}else{navigator.clipboard.writeText(JSON.stringify(out));alert('Cookies copied to clipboard! Close this window and paste in GridironGM.');}}catch(e){alert('Failed to capture cookies: '+e);}})();`;
+  const bookmarkletCode = `javascript:(async()=>{try{const need=['SWID','espn_s2'];const jar={};document.cookie.split('; ').forEach(c=>{const idx=c.indexOf('=');if(idx>0){const k=c.substring(0,idx);const v=c.substring(idx+1);jar[k]=v;}});const out={};need.forEach(k=>{if(jar[k])out[k]=jar[k];});if(Object.keys(out).length<2){alert('Could not find both SWID and espn_s2. Make sure you are logged into ESPN.');return;}const urlMatch=window.location.href.match(/leagueId[=/](\\d+)/);if(urlMatch){out.leagueId=urlMatch[1];}if(window.opener){window.opener.postMessage({__GRIDIRONGM:'ESPN_COOKIES',data:out},'*');window.opener.focus();const leagueMsg=out.leagueId?' League ID detected!':'';alert('Cookies sent!'+leagueMsg+' You can close this window and return to GridironGM.');window.close();}else{navigator.clipboard.writeText(JSON.stringify(out));const leagueMsg=out.leagueId?' League ID detected!':'';alert('Cookies copied to clipboard!'+leagueMsg+' Close this window and paste in GridironGM.');}}catch(e){alert('Failed to capture cookies: '+e);}})();`;
 
-  const openEspnLogin = () => {
-    window.open('https://www.espn.com/login', '_blank', 'width=800,height=600');
+  const goToExtractStep = () => {
     setStep('extract');
   };
 
@@ -196,16 +199,16 @@ espnCreds;`.trim();
                   <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold flex-shrink-0">1</div>
                   <div>
                     <h4 className="font-medium">Login to ESPN</h4>
-                    <p className="text-sm text-muted-foreground">We'll open ESPN in a new tab</p>
+                    <p className="text-sm text-muted-foreground">Go to fantasy.espn.com and sign in, then navigate to your league page</p>
                   </div>
                 </div>
 
                 <div className="flex items-start gap-3 p-3 border rounded-lg">
                   <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold flex-shrink-0">2</div>
                   <div>
-                    <h4 className="font-medium">Extract cookies</h4>
+                    <h4 className="font-medium">Extract cookies & league ID</h4>
                     <p className="text-sm text-muted-foreground">
-                      {isMobile ? "Tap a bookmark on ESPN's page" : "Run a script in browser console"}
+                      {isMobile ? "Use a bookmarklet on your league page to auto-detect everything" : "Use a bookmarklet or console script on your league page"}
                     </p>
                   </div>
                 </div>
@@ -213,15 +216,15 @@ espnCreds;`.trim();
                 <div className="flex items-start gap-3 p-3 border rounded-lg">
                   <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold flex-shrink-0">3</div>
                   <div>
-                    <h4 className="font-medium">Paste & sync</h4>
-                    <p className="text-sm text-muted-foreground">Paste values and we'll handle the rest</p>
+                    <h4 className="font-medium">Auto-fill & sync</h4>
+                    <p className="text-sm text-muted-foreground">Credentials and league ID will auto-fill, then click validate</p>
                   </div>
                 </div>
               </div>
 
-              <Button onClick={openEspnLogin} className="w-full gap-2">
+              <Button onClick={goToExtractStep} className="w-full gap-2">
                 <ExternalLink className="h-4 w-4" />
-                Open ESPN Login
+                Continue to Setup
               </Button>
             </div>
           )}
@@ -231,7 +234,7 @@ espnCreds;`.trim();
               <Alert>
                 <Monitor className="h-4 w-4" />
                 <AlertDescription>
-                  Use the bookmarklet for one-click auto-fill, or use DevTools for manual extraction
+                  Make sure you're on your ESPN league page (URL contains leagueId) before using the bookmarklet - it will auto-detect your League ID!
                 </AlertDescription>
               </Alert>
 
@@ -249,7 +252,7 @@ espnCreds;`.trim();
                   </a>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Drag the button above to your bookmarks bar
+                  Drag the button above to your bookmarks bar, then use it on your ESPN league page
                 </p>
               </div>
 
@@ -327,7 +330,7 @@ espnCreds;`.trim();
               <Alert>
                 <Smartphone className="h-4 w-4" />
                 <AlertDescription>
-                  Mobile browsers don't have DevTools. We'll use a bookmarklet with auto-fill!
+                  Navigate to your ESPN league page first - the bookmarklet will auto-detect your League ID from the URL!
                 </AlertDescription>
               </Alert>
 
@@ -362,9 +365,10 @@ espnCreds;`.trim();
                   <Label className="text-base font-semibold">Step 3: Use the bookmarklet</Label>
                   <ol className="text-sm space-y-2 list-decimal list-inside text-muted-foreground">
                     <li>Go to fantasy.espn.com and log in</li>
+                    <li>Navigate to your league page (URL should contain leagueId)</li>
                     <li>Tap the bookmarks icon and select "Get ESPN Cookies"</li>
-                    <li>You'll see an alert confirming cookies were found</li>
-                    <li>Your SWID and espn_s2 will auto-fill here!</li>
+                    <li>You'll see an alert confirming cookies and league ID were found</li>
+                    <li>Your SWID, espn_s2, and League ID will auto-fill here!</li>
                   </ol>
                 </div>
               </div>
@@ -435,12 +439,12 @@ espnCreds;`.trim();
                 <Label htmlFor="leagueId">League ID</Label>
                 <Input
                   id="leagueId"
-                  placeholder="Your ESPN League ID"
+                  placeholder="Auto-detected from ESPN URL (or enter manually)"
                   value={leagueId}
                   onChange={(e) => setLeagueId(e.target.value.trim())}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Find this in your league URL: .../leagueId/<strong>123456</strong>
+                  The bookmarklet auto-detects this from your league page URL: .../leagueId/<strong>123456</strong>
                 </p>
               </div>
 
