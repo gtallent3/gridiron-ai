@@ -69,7 +69,7 @@ export const TradeDemo = ({ isHovered }: TradeDemoProps) => {
           </div>
           <div>
             <div className="text-xs font-semibold">RJ Harvey</div>
-            <div className="text-[10px] text-muted-foreground">RB - BUF</div>
+            <div className="text-[10px] text-muted-foreground">RB - DEN</div>
           </div>
           <div className="pt-1.5 mt-1.5 border-t border-border/30">
             <div className="text-xs font-semibold">Michael Pittman Jr.</div>
