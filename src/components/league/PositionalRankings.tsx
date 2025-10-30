@@ -42,6 +42,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   const [showUnlockDialog, setShowUnlockDialog] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
   const [unlockedWeek, setUnlockedWeek] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<string>('');
   
   const { subscription } = useSubscription();
   const { balance, hasUnlimited, refreshBalance } = useTokens();
@@ -50,6 +51,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   
   // Check if user has access
   const isSubscriber = subscription.subscribed || hasUnlimited;
+  const hasTokenAccess = isUnlocked && !isSubscriber;
 
   useEffect(() => {
     fetchPositionalStrengths();
@@ -59,7 +61,45 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   useEffect(() => {
     checkUnlockStatus();
   }, [currentWeek, isSubscriber]);
+  
+  useEffect(() => {
+    if (hasTokenAccess) {
+      calculateTimeRemaining();
+      const interval = setInterval(calculateTimeRemaining, 60000); // Update every minute
+      return () => clearInterval(interval);
+    }
+  }, [hasTokenAccess]);
 
+  const calculateTimeRemaining = () => {
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=Sunday, 6=Saturday
+    const hourOfDay = now.getHours();
+    
+    // Calculate next Tuesday 3 AM (when week resets)
+    let daysUntilTuesday = (2 - dayOfWeek + 7) % 7;
+    if (daysUntilTuesday === 0 && (dayOfWeek !== 2 || hourOfDay >= 3)) {
+      daysUntilTuesday = 7; // Next Tuesday
+    }
+    
+    const nextReset = new Date(now);
+    nextReset.setDate(now.getDate() + daysUntilTuesday);
+    nextReset.setHours(3, 0, 0, 0);
+    
+    const diff = nextReset.getTime() - now.getTime();
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    
+    if (days > 0) {
+      setTimeRemaining(`${days}d ${hours}h remaining`);
+    } else if (hours > 0) {
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      setTimeRemaining(`${hours}h ${minutes}m remaining`);
+    } else {
+      const minutes = Math.floor(diff / (1000 * 60));
+      setTimeRemaining(`${minutes}m remaining`);
+    }
+  };
+  
   const checkUnlockStatus = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -193,6 +233,12 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
               <Badge variant="secondary" className="gap-1">
                 <CheckCircle className="h-3 w-3" />
                 Subscriber Access
+              </Badge>
+            )}
+            {hasTokenAccess && (
+              <Badge variant="outline" className="gap-1 border-primary/50 text-primary">
+                <CheckCircle className="h-3 w-3" />
+                Token Access • {timeRemaining}
               </Badge>
             )}
           </div>
