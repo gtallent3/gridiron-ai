@@ -26,12 +26,12 @@ export const StartSitDemo = () => {
           <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-primary" />
             <div>
-              <div className="text-xs font-semibold">Bijan Robinson</div>
-              <div className="text-[10px] text-muted-foreground">RB - ATL</div>
+              <div className="text-xs font-semibold">DK Metcalf</div>
+              <div className="text-[10px] text-muted-foreground">WR - PIT</div>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs font-bold filter blur-[2px]">18.5</div>
+            <div className="text-xs font-bold filter blur-[2px]">16.8</div>
             {showWinner && (
               <div className="text-[10px] text-primary font-bold animate-fade-in flex items-center gap-1">
                 <TrendingUp className="h-3 w-3" />
@@ -52,12 +52,17 @@ export const StartSitDemo = () => {
           <div className="flex items-center gap-2">
             <User className="h-4 w-4 text-muted-foreground" />
             <div>
-              <div className="text-xs font-semibold">Najee Harris</div>
-              <div className="text-[10px] text-muted-foreground">RB - PIT</div>
+              <div className="text-xs font-semibold">Michael Pittman Jr.</div>
+              <div className="text-[10px] text-muted-foreground">WR - IND</div>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs font-bold filter blur-[2px]">14.2</div>
+            <div className="text-xs font-bold filter blur-[2px]">13.4</div>
+            {!showWinner && (
+              <div className="text-[10px] text-muted-foreground font-bold animate-fade-in">
+                SIT
+              </div>
+            )}
           </div>
         </div>
       </div>

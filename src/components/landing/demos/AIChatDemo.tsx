@@ -10,11 +10,15 @@ export const AIChatDemo = () => {
   ];
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setMessageIndex((prev) => (prev + 1) % (messages.length + 1));
-    }, 2000);
+    const timeouts: NodeJS.Timeout[] = [];
     
-    return () => clearInterval(interval);
+    // Show first message after 500ms
+    timeouts.push(setTimeout(() => setMessageIndex(1), 500));
+    
+    // Show second message after 2500ms
+    timeouts.push(setTimeout(() => setMessageIndex(2), 2500));
+    
+    return () => timeouts.forEach(clearTimeout);
   }, []);
 
   return (
