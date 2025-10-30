@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Header } from "@/components/Header";
-import { Hero } from "@/components/Hero";
-import { Features } from "@/components/Features";
+import { HeroSection } from "@/components/landing/HeroSection";
+import { FeatureOverview } from "@/components/landing/FeatureOverview";
+import { FreeStartSitDemo } from "@/components/landing/FreeStartSitDemo";
+import { FeatureComparison } from "@/components/landing/FeatureComparison";
+import { Testimonials } from "@/components/landing/Testimonials";
+import { FinalCTA } from "@/components/landing/FinalCTA";
+import { Footer } from "@/components/landing/Footer";
+import { ConnectedLeagues } from "@/components/ConnectedLeagues";
 import { StartSitAnalyzer } from "@/components/StartSitAnalyzer";
 import { TradeAnalyzer } from "@/components/TradeAnalyzer";
 import { AIAssistant } from "@/components/AIAssistant";
-import { ConnectedLeagues } from "@/components/ConnectedLeagues";
 
 const Index = () => {
   const [user, setUser] = useState<any>(null);
@@ -28,40 +33,34 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header user={user} />
-      <Hero />
       
-      {/* Connected Leagues Section - Only show if logged in */}
-      {user && (
-        <section className="py-20">
-          <div className="container mx-auto px-4">
-            <div className="max-w-4xl mx-auto">
-              <ConnectedLeagues />
+      {user ? (
+        // Signed-in User Experience
+        <>
+          <section className="pt-20 py-12">
+            <div className="container mx-auto px-4">
+              <div className="max-w-4xl mx-auto">
+                <ConnectedLeagues />
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+          <StartSitAnalyzer />
+          <TradeAnalyzer />
+          <AIAssistant />
+        </>
+      ) : (
+        // Landing Page for Non-Signed-In Users
+        <>
+          <HeroSection />
+          <FeatureOverview />
+          <FreeStartSitDemo />
+          <FeatureComparison />
+          <Testimonials />
+          <FinalCTA />
+        </>
       )}
-
-      <Features />
-      <StartSitAnalyzer />
-      <TradeAnalyzer />
-      <AIAssistant />
       
-      {/* Footer */}
-      <footer className="border-t border-border/50 py-12 mt-20">
-        <div className="container mx-auto px-4">
-          <div className="text-center space-y-4">
-            <h3 className="text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-              Fantasy AI
-            </h3>
-            <p className="text-sm text-muted-foreground">
-              Dominate your fantasy football league with AI-powered insights
-            </p>
-            <p className="text-xs text-muted-foreground/60">
-              © 2025 Fantasy AI. All rights reserved.
-            </p>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 };
