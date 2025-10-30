@@ -1,16 +1,25 @@
 import { useState, useEffect } from "react";
 import { TrendingUp, User } from "lucide-react";
 
-export const StartSitDemo = () => {
+type StartSitDemoProps = {
+  isHovered: boolean;
+};
+
+export const StartSitDemo = ({ isHovered }: StartSitDemoProps) => {
   const [showWinner, setShowWinner] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setShowWinner((prev) => !prev);
-    }, 2500);
+    if (!isHovered) {
+      setShowWinner(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setShowWinner(true);
+    }, 800);
     
-    return () => clearInterval(interval);
-  }, []);
+    return () => clearTimeout(timeout);
+  }, [isHovered]);
 
   return (
     <div className="h-[200px] bg-muted/30 rounded-lg p-4 pointer-events-none overflow-hidden relative">

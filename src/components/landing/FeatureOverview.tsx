@@ -1,4 +1,5 @@
 import { Brain, TrendingUp, Zap, Trophy, ArrowRight } from "lucide-react";
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AIChatDemo } from "./demos/AIChatDemo";
@@ -42,6 +43,7 @@ const features = [
 ];
 
 export const FeatureOverview = () => {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   return (
     <section id="features" className="py-12 relative scroll-mt-20">
@@ -67,6 +69,8 @@ export const FeatureOverview = () => {
                 <Card
                   key={index}
                   className="border-border/50 bg-card/50 backdrop-blur-sm hover:border-primary/50 transition-all duration-300 hover:shadow-[0_0_30px_hsl(var(--primary)/0.15)] group overflow-hidden"
+                  onMouseEnter={() => setHoveredIndex(index)}
+                  onMouseLeave={() => setHoveredIndex(null)}
                 >
                   <CardHeader className="space-y-4">
                     <div className="flex items-start justify-between">
@@ -83,7 +87,7 @@ export const FeatureOverview = () => {
                     
                     {/* Demo Preview */}
                     <div className="relative">
-                      <DemoComponent />
+                      <DemoComponent isHovered={hoveredIndex === index} />
                     </div>
 
                     {/* CTA Section */}

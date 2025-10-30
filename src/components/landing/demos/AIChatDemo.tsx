@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
 import { MessageCircle, Bot } from "lucide-react";
 
-export const AIChatDemo = () => {
+type AIChatDemoProps = {
+  isHovered: boolean;
+};
+
+export const AIChatDemo = ({ isHovered }: AIChatDemoProps) => {
   const [messageIndex, setMessageIndex] = useState(0);
   
   const messages = [
@@ -10,16 +14,21 @@ export const AIChatDemo = () => {
   ];
 
   useEffect(() => {
+    if (!isHovered) {
+      setMessageIndex(0);
+      return;
+    }
+
     const timeouts: NodeJS.Timeout[] = [];
     
-    // Show first message after 500ms
-    timeouts.push(setTimeout(() => setMessageIndex(1), 500));
+    // Show first message after 300ms
+    timeouts.push(setTimeout(() => setMessageIndex(1), 300));
     
-    // Show second message after 2500ms
-    timeouts.push(setTimeout(() => setMessageIndex(2), 2500));
+    // Show second message after 1800ms
+    timeouts.push(setTimeout(() => setMessageIndex(2), 1800));
     
     return () => timeouts.forEach(clearTimeout);
-  }, []);
+  }, [isHovered]);
 
   return (
     <div className="h-[200px] bg-muted/30 rounded-lg p-4 pointer-events-none overflow-hidden relative">

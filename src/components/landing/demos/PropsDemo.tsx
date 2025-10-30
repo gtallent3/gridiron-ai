@@ -2,16 +2,29 @@ import { useState, useEffect } from "react";
 import { Coins, TrendingUp, TrendingDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-export const PropsDemo = () => {
+type PropsDemoProps = {
+  isHovered: boolean;
+};
+
+export const PropsDemo = ({ isHovered }: PropsDemoProps) => {
   const [phase, setPhase] = useState(0);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setPhase((prev) => (prev + 1) % 3);
-    }, 2000);
+    if (!isHovered) {
+      setPhase(0);
+      return;
+    }
+
+    const timeouts: NodeJS.Timeout[] = [];
     
-    return () => clearInterval(interval);
-  }, []);
+    // Show wager after 600ms
+    timeouts.push(setTimeout(() => setPhase(1), 600));
+    
+    // Show potential win after 1400ms
+    timeouts.push(setTimeout(() => setPhase(2), 1400));
+    
+    return () => timeouts.forEach(clearTimeout);
+  }, [isHovered]);
 
   return (
     <div className="h-[200px] bg-muted/30 rounded-lg p-4 pointer-events-none overflow-hidden relative">

@@ -2,16 +2,25 @@ import { useState, useEffect } from "react";
 import { TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
-export const TradeDemo = () => {
+type TradeDemoProps = {
+  isHovered: boolean;
+};
+
+export const TradeDemo = ({ isHovered }: TradeDemoProps) => {
   const [showResult, setShowResult] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setShowResult((prev) => !prev);
-    }, 2500);
+    if (!isHovered) {
+      setShowResult(false);
+      return;
+    }
+
+    const timeout = setTimeout(() => {
+      setShowResult(true);
+    }, 800);
     
-    return () => clearInterval(interval);
-  }, []);
+    return () => clearTimeout(timeout);
+  }, [isHovered]);
 
   return (
     <div className="h-[200px] bg-muted/30 rounded-lg p-4 pointer-events-none overflow-hidden relative">
