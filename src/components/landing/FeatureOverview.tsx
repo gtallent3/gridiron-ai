@@ -1,5 +1,5 @@
 import { Brain, TrendingUp, Zap, Trophy, ArrowRight } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AIChatDemo } from "./demos/AIChatDemo";
@@ -44,6 +44,15 @@ const features = [
 
 export const FeatureOverview = () => {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+
+  useEffect(() => {
+    // Detect if it's a touch device
+    const checkTouch = () => {
+      setIsTouchDevice('ontouchstart' in window || navigator.maxTouchPoints > 0);
+    };
+    checkTouch();
+  }, []);
 
   return (
     <section id="features" className="py-12 relative scroll-mt-20">
@@ -55,9 +64,11 @@ export const FeatureOverview = () => {
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
               Powerful AI tools designed to give you the edge in your fantasy league
             </p>
-            <p className="text-muted-foreground text-lg">
-              (Scroll for demos)
-            </p>
+            {!isTouchDevice && (
+              <p className="text-muted-foreground text-sm">
+                Hover over each card to see it in action
+              </p>
+            )}
           </div>
 
           {/* Features Grid */}
@@ -87,7 +98,16 @@ export const FeatureOverview = () => {
                     
                     {/* Demo Preview */}
                     <div className="relative">
-                      <DemoComponent isHovered={hoveredIndex === index} />
+                      <DemoComponent isHovered={isTouchDevice || hoveredIndex === index} />
+                      
+                      {/* Hover hint for desktop only */}
+                      {!isTouchDevice && hoveredIndex !== index && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px] rounded-lg pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <div className="text-xs text-muted-foreground font-medium px-3 py-1.5 bg-card border border-border rounded-full">
+                            Hover to preview
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* CTA Section */}
