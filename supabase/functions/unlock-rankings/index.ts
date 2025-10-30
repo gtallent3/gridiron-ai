@@ -31,7 +31,7 @@ serve(async (req) => {
     // Check user's token balance and subscription status
     const { data: userTokens, error: tokensError } = await supabaseClient
       .from("user_tokens")
-      .select("balance, has_unlimited_subscription, subscription_expires_at, rankings_unlocked_at, lifetime_spent")
+      .select("balance, has_unlimited_subscription, subscription_expires_at, rankings_unlocked_at, rankings_expires_at, lifetime_spent")
       .eq("user_id", user.id)
       .single();
 
@@ -45,10 +45,14 @@ serve(async (req) => {
 
     // If subscriber, just update timestamp (always have access)
     if (isActiveSubscriber) {
+      const unlockTime = new Date();
+      const expiryTime = new Date(unlockTime.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year for subscribers
+      
       const { error: updateError } = await supabaseClient
         .from("user_tokens")
         .update({ 
-          rankings_unlocked_at: new Date().toISOString(),
+          rankings_unlocked_at: unlockTime.toISOString(),
+          rankings_expires_at: expiryTime.toISOString(),
         })
         .eq("user_id", user.id);
 
@@ -64,12 +68,11 @@ serve(async (req) => {
       );
     }
 
-    // Check if already unlocked (within 7 days)
-    if (userTokens.rankings_unlocked_at) {
-      const unlockedAt = new Date(userTokens.rankings_unlocked_at);
-      const sevenDaysLater = new Date(unlockedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+    // Check if already unlocked and still valid
+    if (userTokens.rankings_expires_at) {
+      const expiryTime = new Date(userTokens.rankings_expires_at);
       
-      if (new Date() < sevenDaysLater) {
+      if (new Date() < expiryTime) {
         return new Response(
           JSON.stringify({
             success: true,
@@ -92,17 +95,19 @@ serve(async (req) => {
       );
     }
 
-    // Deduct 1 token and unlock
+    // Deduct 1 token and unlock for 7 days
     const newBalance = userTokens.balance - 1;
     const currentLifetimeSpent = userTokens.lifetime_spent || 0;
-    const unlockTimestamp = new Date().toISOString();
+    const unlockTimestamp = new Date();
+    const expiryTimestamp = new Date(unlockTimestamp.getTime() + 7 * 24 * 60 * 60 * 1000);
     
     const { error: updateError } = await supabaseClient
       .from("user_tokens")
       .update({
         balance: newBalance,
         lifetime_spent: currentLifetimeSpent + 1,
-        rankings_unlocked_at: unlockTimestamp,
+        rankings_unlocked_at: unlockTimestamp.toISOString(),
+        rankings_expires_at: expiryTimestamp.toISOString(),
       })
       .eq("user_id", user.id);
 

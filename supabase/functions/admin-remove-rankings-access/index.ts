@@ -44,12 +44,13 @@ serve(async (req) => {
       throw new Error("Missing userId parameter");
     }
 
-    // Remove rankings access by clearing the unlock timestamp
+    // Remove rankings access by clearing the unlock and expiry timestamps
     const { error: updateError } = await supabaseClient
       .from("user_tokens")
       .update({
         rankings_unlocked_at: null,
         rankings_unlocked_week: null,
+        rankings_expires_at: null,
       })
       .eq("user_id", userId);
 

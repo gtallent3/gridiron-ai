@@ -21,6 +21,7 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
   const [removing, setRemoving] = useState(false);
   const [userAccess, setUserAccess] = useState<{
     rankings_unlocked_at: string | null;
+    rankings_expires_at: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -39,7 +40,7 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
     try {
       const { data, error } = await supabase
         .from("user_tokens")
-        .select("rankings_unlocked_at")
+        .select("rankings_unlocked_at, rankings_expires_at")
         .eq("user_id", selectedUserId)
         .single();
 
@@ -53,10 +54,9 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
   };
 
   const calculateTimeRemaining = () => {
-    if (!userAccess?.rankings_unlocked_at) return null;
+    if (!userAccess?.rankings_expires_at) return null;
     
-    const unlockedAt = new Date(userAccess.rankings_unlocked_at);
-    const expiresAt = new Date(unlockedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const expiresAt = new Date(userAccess.rankings_expires_at);
     const now = new Date();
     const timeLeft = expiresAt.getTime() - now.getTime();
     

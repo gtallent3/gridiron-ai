@@ -1449,6 +1449,7 @@ export type Database = {
           lifetime_earned: number
           lifetime_purchased: number
           lifetime_spent: number
+          rankings_expires_at: string | null
           rankings_unlocked_at: string | null
           rankings_unlocked_week: number | null
           subscription_expires_at: string | null
@@ -1464,6 +1465,7 @@ export type Database = {
           lifetime_earned?: number
           lifetime_purchased?: number
           lifetime_spent?: number
+          rankings_expires_at?: string | null
           rankings_unlocked_at?: string | null
           rankings_unlocked_week?: number | null
           subscription_expires_at?: string | null
@@ -1479,6 +1481,7 @@ export type Database = {
           lifetime_earned?: number
           lifetime_purchased?: number
           lifetime_spent?: number
+          rankings_expires_at?: string | null
           rankings_unlocked_at?: string | null
           rankings_unlocked_week?: number | null
           subscription_expires_at?: string | null

@@ -52,28 +52,26 @@ serve(async (req) => {
       throw new Error("durationDays must be a positive number");
     }
 
-    // Set the unlock timestamp to now
-    // Access will expire at: rankings_unlocked_at + durationDays
+    // Set the unlock timestamp to now and calculate expiry
     const unlockTimestamp = new Date();
+    const expiryDate = new Date(unlockTimestamp.getTime() + durationDays * 24 * 60 * 60 * 1000);
 
     // Update user_tokens with rankings access
     const { error: updateError } = await supabaseClient
       .from("user_tokens")
       .update({
         rankings_unlocked_at: unlockTimestamp.toISOString(),
+        rankings_expires_at: expiryDate.toISOString(),
       })
       .eq("user_id", userId);
 
     if (updateError) throw updateError;
 
-    // Log the transaction
     const { data: userTokens } = await supabaseClient
       .from("user_tokens")
       .select("balance")
       .eq("user_id", userId)
       .single();
-
-    const expiryDate = new Date(unlockTimestamp.getTime() + durationDays * 24 * 60 * 60 * 1000);
 
     await supabaseClient.from("token_transactions").insert({
       user_id: userId,

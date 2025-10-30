@@ -41,7 +41,10 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [showUnlockDialog, setShowUnlockDialog] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [unlockedAt, setUnlockedAt] = useState<string | null>(null);
+  const [unlockedData, setUnlockedData] = useState<{
+    rankings_unlocked_at: string | null;
+    rankings_expires_at: string | null;
+  } | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   
   const { subscription, loading: subLoading } = useSubscription();
@@ -63,18 +66,17 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   }, [currentWeek, isActiveSubscriber]);
   
   useEffect(() => {
-    if (hasTokenAccess && unlockedAt) {
+    if (hasTokenAccess && unlockedData?.rankings_expires_at) {
       calculateTimeRemaining();
       const interval = setInterval(calculateTimeRemaining, 60000); // Update every minute
       return () => clearInterval(interval);
     }
-  }, [hasTokenAccess, unlockedAt]);
+  }, [hasTokenAccess, unlockedData?.rankings_expires_at]);
 
   const calculateTimeRemaining = () => {
-    if (!unlockedAt) return;
+    if (!unlockedData?.rankings_expires_at) return;
     
-    const unlockTime = new Date(unlockedAt);
-    const expiryTime = new Date(unlockTime.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from unlock
+    const expiryTime = new Date(unlockedData.rankings_expires_at);
     const now = new Date();
     
     const diff = expiryTime.getTime() - now.getTime();
@@ -105,20 +107,19 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       
       const { data, error } = await supabase
         .from('user_tokens')
-        .select('rankings_unlocked_at')
+        .select('rankings_unlocked_at, rankings_expires_at')
         .eq('user_id', user.id)
         .single();
       
       if (error) throw error;
       
-      setUnlockedAt(data?.rankings_unlocked_at || null);
+      setUnlockedData(data);
       
-      // Check if unlocked and still valid (within 7 days)
+      // Check if access is still valid using the stored expiry date
       let isValid = false;
-      if (data?.rankings_unlocked_at) {
-        const unlockTime = new Date(data.rankings_unlocked_at);
-        const sevenDaysLater = new Date(unlockTime.getTime() + 7 * 24 * 60 * 60 * 1000);
-        isValid = new Date() < sevenDaysLater;
+      if (data?.rankings_expires_at) {
+        const expiryTime = new Date(data.rankings_expires_at);
+        isValid = new Date() < expiryTime;
       }
       
       setIsUnlocked(isActiveSubscriber || isValid);
@@ -165,7 +166,11 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       
       if (data.success) {
         setIsUnlocked(true);
-        setUnlockedAt(new Date().toISOString());
+        const newUnlockData = {
+          rankings_unlocked_at: new Date().toISOString(),
+          rankings_expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        };
+        setUnlockedData(newUnlockData);
         await refreshBalance();
         toast.success('Rankings Unlocked!', {
           description: data.unlimited 
