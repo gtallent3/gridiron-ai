@@ -99,7 +99,7 @@ export const FeatureOverview = () => {
                         </a>
                       </Button>
                       <p className="text-[10px] text-center text-muted-foreground">
-                        Full access with free signup — 3 tokens to start
+                        Sign up now to receive 3 free tokens
                       </p>
                     </div>
                   </CardContent>
