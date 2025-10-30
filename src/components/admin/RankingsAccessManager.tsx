@@ -16,11 +16,10 @@ type RankingsAccessManagerProps = {
 
 export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAccessManagerProps) {
   const { toast } = useToast();
-  const [currentWeek, setCurrentWeek] = useState(10);
   const [durationDays, setDurationDays] = useState(7);
   const [granting, setGranting] = useState(false);
+  const [removing, setRemoving] = useState(false);
   const [userAccess, setUserAccess] = useState<{
-    rankings_unlocked_week: number | null;
     rankings_unlocked_at: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,7 +39,7 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
     try {
       const { data, error } = await supabase
         .from("user_tokens")
-        .select("rankings_unlocked_week, rankings_unlocked_at")
+        .select("rankings_unlocked_at")
         .eq("user_id", selectedUserId)
         .single();
 
@@ -66,7 +65,7 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
     const days = Math.floor(timeLeft / (1000 * 60 * 60 * 24));
     const hours = Math.floor((timeLeft % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     
-    return `${days}d ${hours}h remaining`;
+    return `${days}d ${hours}h left`;
   };
 
   const handleGrantAccess = async () => {
@@ -84,7 +83,6 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
       const { data, error } = await supabase.functions.invoke("admin-grant-rankings-access", {
         body: {
           userId: selectedUserId,
-          currentWeek,
           durationDays,
         },
       });
@@ -109,6 +107,44 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
     }
   };
 
+  const handleRemoveAccess = async () => {
+    if (!selectedUserId) {
+      toast({
+        title: "Select User",
+        description: "Please select a user first",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setRemoving(true);
+    try {
+      const { error } = await supabase.functions.invoke("admin-remove-rankings-access", {
+        body: {
+          userId: selectedUserId,
+        },
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Rankings Access Removed",
+        description: "User no longer has rankings access",
+      });
+
+      fetchUserAccess();
+      onSuccess();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to remove rankings access",
+        variant: "destructive",
+      });
+    } finally {
+      setRemoving(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -119,12 +155,18 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
         <CardDescription>Give users temporary access to positional rankings</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {!selectedUserId && (
+          <div className="p-4 bg-muted/50 rounded-lg text-center text-sm text-muted-foreground">
+            Select a user from the dropdown above to manage their rankings access
+          </div>
+        )}
+
         {selectedUserId && userAccess && !loading && (
           <div className="p-3 bg-muted rounded-lg space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Current Access Status</span>
-              <Badge variant={userAccess.rankings_unlocked_week ? "default" : "outline"}>
-                {userAccess.rankings_unlocked_week ? `Week ${userAccess.rankings_unlocked_week}` : "No Access"}
+              <Badge variant={userAccess.rankings_unlocked_at ? "default" : "outline"}>
+                {userAccess.rankings_unlocked_at ? "Active" : "No Access"}
               </Badge>
             </div>
             {userAccess.rankings_unlocked_at && (
@@ -137,22 +179,11 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="week">Week</Label>
-          <Input
-            id="week"
-            type="number"
-            min="1"
-            max="18"
-            value={currentWeek}
-            onChange={(e) => setCurrentWeek(parseInt(e.target.value) || 1)}
-          />
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="duration">Access Duration</Label>
           <Select
             value={durationDays.toString()}
             onValueChange={(value) => setDurationDays(parseInt(value))}
+            disabled={!selectedUserId}
           >
             <SelectTrigger id="duration">
               <SelectValue />
@@ -168,20 +199,40 @@ export function RankingsAccessManager({ selectedUserId, onSuccess }: RankingsAcc
           </Select>
         </div>
 
-        <Button
-          onClick={handleGrantAccess}
-          disabled={!selectedUserId || granting}
-          className="w-full"
-        >
-          {granting ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Granting Access...
-            </>
-          ) : (
-            "Grant Rankings Access"
+        <div className="flex gap-2">
+          <Button
+            onClick={handleGrantAccess}
+            disabled={!selectedUserId || granting}
+            className="flex-1"
+          >
+            {granting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Granting...
+              </>
+            ) : (
+              "Grant Access"
+            )}
+          </Button>
+          
+          {userAccess?.rankings_unlocked_at && (
+            <Button
+              onClick={handleRemoveAccess}
+              disabled={!selectedUserId || removing}
+              variant="destructive"
+              className="flex-1"
+            >
+              {removing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Removing...
+                </>
+              ) : (
+                "Remove Access"
+              )}
+            </Button>
           )}
-        </Button>
+        </div>
       </CardContent>
     </Card>
   );

@@ -38,21 +38,18 @@ serve(async (req) => {
       );
     }
 
-    const { userId, durationDays } = await req.json();
+    const { userId } = await req.json();
 
-    if (!userId || !durationDays) {
-      throw new Error("Missing required parameters");
+    if (!userId) {
+      throw new Error("Missing userId parameter");
     }
 
-    // Set the unlock timestamp to now
-    // Access will expire at: rankings_unlocked_at + durationDays
-    const unlockTimestamp = new Date();
-
-    // Update user_tokens with rankings access
+    // Remove rankings access by clearing the unlock timestamp
     const { error: updateError } = await supabaseClient
       .from("user_tokens")
       .update({
-        rankings_unlocked_at: unlockTimestamp.toISOString(),
+        rankings_unlocked_at: null,
+        rankings_unlocked_week: null,
       })
       .eq("user_id", userId);
 
@@ -65,26 +62,23 @@ serve(async (req) => {
       .eq("user_id", userId)
       .single();
 
-    const expiryDate = new Date(unlockTimestamp.getTime() + durationDays * 24 * 60 * 60 * 1000);
-
     await supabaseClient.from("token_transactions").insert({
       user_id: userId,
       transaction_type: "admin_grant",
       amount: 0,
       balance_after: userTokens?.balance || 0,
-      description: `Admin granted ${durationDays} days of rankings access`,
+      description: "Admin removed rankings access",
     });
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Rankings access granted until ${expiryDate.toISOString()}`,
-        expiresAt: expiryDate.toISOString(),
+        message: "Rankings access removed",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error in admin-grant-rankings-access:", error);
+    console.error("Error in admin-remove-rankings-access:", error);
     const errorMessage = error instanceof Error ? error.message : "An error occurred";
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),

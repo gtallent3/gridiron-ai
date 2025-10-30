@@ -74,7 +74,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
     if (!unlockedAt) return;
     
     const unlockTime = new Date(unlockedAt);
-    const expiryTime = new Date(unlockTime.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days later
+    const expiryTime = new Date(unlockTime.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days from unlock
     const now = new Date();
     
     const diff = expiryTime.getTime() - now.getTime();
@@ -90,11 +90,11 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     
     if (days > 0) {
-      setTimeRemaining(`${days}d ${hours}h remaining`);
+      setTimeRemaining(`${days}d ${hours}h left`);
     } else if (hours > 0) {
-      setTimeRemaining(`${hours}h ${minutes}m remaining`);
+      setTimeRemaining(`${hours}h ${minutes}m left`);
     } else {
-      setTimeRemaining(`${minutes}m remaining`);
+      setTimeRemaining(`${minutes}m left`);
     }
   };
   
@@ -105,7 +105,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       
       const { data, error } = await supabase
         .from('user_tokens')
-        .select('rankings_unlocked_week, rankings_unlocked_at')
+        .select('rankings_unlocked_at')
         .eq('user_id', user.id)
         .single();
       
@@ -113,7 +113,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       
       setUnlockedAt(data?.rankings_unlocked_at || null);
       
-      // Check if unlocked and within 7 days
+      // Check if unlocked and still valid (within 7 days)
       let isValid = false;
       if (data?.rankings_unlocked_at) {
         const unlockTime = new Date(data.rankings_unlocked_at);
@@ -121,7 +121,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
         isValid = new Date() < sevenDaysLater;
       }
       
-      setIsUnlocked(isActiveSubscriber || (data?.rankings_unlocked_week === currentWeek && isValid));
+      setIsUnlocked(isActiveSubscriber || isValid);
     } catch (error) {
       console.error('Error checking unlock status:', error);
     }
@@ -170,7 +170,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
         toast.success('Rankings Unlocked!', {
           description: data.unlimited 
             ? 'Rankings unlocked with your subscription.' 
-            : `Rankings unlocked for Week ${currentWeek}.`,
+            : 'Rankings unlocked for 7 days.',
         });
       }
     } catch (error) {
@@ -258,9 +258,9 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                   <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
                     <Lock className="h-8 w-8 text-primary" />
                   </div>
-                  <h3 className="text-xl font-semibold">Unlock This Week's Rankings</h3>
+                  <h3 className="text-xl font-semibold">Unlock Positional Rankings</h3>
                   <p className="text-muted-foreground">
-                    Get detailed positional strength analysis for Week {currentWeek}
+                    Get detailed positional strength analysis for 7 days
                   </p>
                   <div className="flex flex-col gap-2">
                     <Button 
@@ -370,8 +370,8 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
           <AlertDialogHeader>
             <AlertDialogTitle>Unlock Positional Rankings?</AlertDialogTitle>
             <AlertDialogDescription>
-              Spend 1 token to unlock this week's positional rankings analysis. 
-              This will remain unlocked for the entire week.
+              Spend 1 token to unlock positional rankings analysis for 7 days. 
+              This will remain unlocked until the access period expires.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
