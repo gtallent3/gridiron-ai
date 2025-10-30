@@ -65,12 +65,21 @@ export function TradeAnalyzerROS({ league, userTeam }: TradeAnalyzerROSProps) {
 
         if (teamData?.roster) {
           const roster = teamData.roster as any[];
-          const players: SelectedPlayer[] = roster.map((p: any) => ({
-            player_id: p.player_id || p.playerId || p.id,
-            player_name: p.player_name || p.fullName || p.name,
-            team: p.team || p.proTeamAbbreviation || '',
-            position: p.position || p.defaultPosition || '',
-          }));
+          const players: SelectedPlayer[] = roster.map((p: any) => {
+            // Extract player ID, removing any platform prefixes
+            let playerId = p.player_id || p.playerId || p.id || '';
+            if (typeof playerId === 'string') {
+              // Remove platform prefixes like "espn_", "sleeper_", etc.
+              playerId = playerId.replace(/^(espn_|sleeper_|yahoo_)/, '');
+            }
+            
+            return {
+              player_id: playerId,
+              player_name: p.player_name || p.fullName || p.name,
+              team: p.team || p.proTeamAbbreviation || '',
+              position: p.position || p.defaultPosition || '',
+            };
+          });
           setRosterPlayers(players);
         }
       } catch (error) {
