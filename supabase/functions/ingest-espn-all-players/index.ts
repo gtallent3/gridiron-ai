@@ -7,16 +7,23 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// ESPN slotId map
+/** ESPN slotId map (players endpoint) */
 const SLOT_NAME_TO_ID: Record<string, number> = {
   QB: 0, RB: 2, WR: 4, TE: 6, K: 17, DST: 16,
 };
-const SLOT_NAMES = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
+type SlotName = keyof typeof SLOT_NAME_TO_ID;
 
+/** Default counts per team */
+const DEFAULT_COUNTS: Record<SlotName, number> = {
+  QB: 2, RB: 5, WR: 10, TE: 4, K: 1, DST: 1,
+};
+
+/** Position ID to display label on row */
 const POSITION_MAP: Record<number, string> = {
   1: 'QB', 2: 'RB', 3: 'WR', 4: 'TE', 5: 'K', 16: 'DST',
 };
 
+/** ESPN proTeamId -> NFL abbrev */
 const TEAM_MAP: Record<number, string> = {
   1:'ATL',2:'BUF',3:'CHI',4:'CIN',5:'CLE',6:'DAL',7:'DEN',8:'DET',
   9:'GB',10:'TEN',11:'IND',12:'KC',13:'LV',14:'LAR',15:'MIA',
@@ -24,6 +31,7 @@ const TEAM_MAP: Record<number, string> = {
   23:'PIT',24:'LAC',25:'SF',26:'SEA',27:'TB',28:'WSH',
   29:'CAR',30:'JAX',33:'BAL',34:'HOU',
 };
+const PRO_TEAM_IDS = Object.keys(TEAM_MAP).map((k) => Number(k)); // [1,2,...,34]
 
 function getTeamAbbreviation(teamId: number): string {
   return TEAM_MAP[teamId] || 'FA';
@@ -45,6 +53,8 @@ function computeAppliedTotal(applied: Record<string, any> | undefined, fallback:
   return fp;
 }
 
+type CountsOverride = Partial<Record<SlotName, number>>;
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -62,23 +72,45 @@ Deno.serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body = await req.json();
-    const { leagueId, season, week: rawWeek, slot, swid: bodySwid, espn_s2: bodyEspnS2 } = body ?? {};
-    const week = Number(rawWeek);
+    const {
+      leagueId,
+      season,
+      week: rawWeek,
+      swid: bodySwid,
+      espn_s2: bodyEspnS2,
+      counts: countsOverride,    // optional: { QB?:number, RB?:number, ... }
+      teams: teamIdsOverride,    // optional: number[] of ESPN proTeamIds to restrict
+      slots: slotsOverride,      // optional: string[] subset of ["QB","RB","WR","TE","K","DST"]
+    }: {
+      leagueId: string;
+      season: number;
+      week: number | string;
+      swid?: string;
+      espn_s2?: string;
+      counts?: CountsOverride;
+      teams?: number[];
+      slots?: SlotName[];
+    } = body ?? {};
 
+    const week = Number(rawWeek);
     if (!leagueId || !season || !week) {
       return new Response(JSON.stringify({ error: 'Missing required parameters: leagueId, season, week' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    // Enforce single-slot mode to stay within memory limits
-    const slotUpper = (typeof slot === 'string' ? slot.toUpperCase() : '').trim();
-    const slotId = SLOT_NAME_TO_ID[slotUpper];
-    if (slotId == null) {
-      return new Response(JSON.stringify({
-        error: 'Missing or invalid slot. Provide one of: "QB","RB","WR","TE","K","DST".',
-      }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-    }
+    /** Counts to use */
+    const COUNTS: Record<SlotName, number> = { ...DEFAULT_COUNTS, ...(countsOverride || {}) };
+
+    /** Slots list to process */
+    const SLOTS: SlotName[] = Array.isArray(slotsOverride) && slotsOverride.length
+      ? slotsOverride.filter((s): s is SlotName => s in SLOT_NAME_TO_ID)
+      : (Object.keys(SLOT_NAME_TO_ID) as SlotName[]);
+
+    /** Teams list to process */
+    const TEAMS = Array.isArray(teamIdsOverride) && teamIdsOverride.length
+      ? teamIdsOverride.filter((t) => TEAM_MAP[t])
+      : PRO_TEAM_IDS;
 
     // Lookup connected league
     const { data: leagueData, error: leagueError } = await supabase
@@ -94,7 +126,7 @@ Deno.serve(async (req) => {
     }
     const espnLeagueId = leagueData.league_id;
 
-    // Resolve credentials
+    // Resolve credentials (prefer body, fallback to stored & check expiry)
     let swidVal: string | undefined = bodySwid;
     let espnS2Val: string | undefined = bodyEspnS2;
 
@@ -123,90 +155,127 @@ Deno.serve(async (req) => {
 
     const swidCookie = swidVal!.startsWith('{') ? swidVal! : `{${swidVal}}`;
 
-    // Pagination tuning — ultra-tiny pages to avoid memory limits
-    const PAGE_SIZE = 5;      // extremely small to reduce JSON size
-    const ROW_CHUNK = 5;      // upsert very frequently
-    const MAX_PAGES = 200;    // compensate for smaller pages
+    // ESPN requests config (small pages, GC-friendly)
+    const PAGE_SIZE = 25;  // per team/slot the set is small; 25 is enough in practice
+    const ROW_CHUNK = 25;  // upsert per team after selection
+    const MAX_PAGES = 4;   // safety bound
 
     const baseHeaders = {
-      'Cookie': `espn_s2=${espnS2Val}; SWID=${swidCookie}`, // espn_s2 first
+      'Cookie': `espn_s2=${espnS2Val}; SWID=${swidCookie}`, // espn_s2 first to avoid rare flakiness
       'Accept': 'application/json',
       'User-Agent': 'Mozilla/5.0 (compatible; GridironGM/1.0)',
       'Referer': 'https://fantasy.espn.com',
-    };
-
-    const filter = {
-      players: {
-        filterSlotIds: { value: [slotId] },
-        filterStatsForExternalIds: { value: [season] },
-        filterStatsForSourceIds: { value: [0, 1] }, // 0=actual, 1=projection
-        filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [week] },
-        sortAppliedStatTotal: { sortAsc: false, sortPriority: 1, value: 1027 },
-      },
     };
 
     const playersUrl = (offset: number) =>
       `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${season}/players` +
       `?scoringPeriodId=${week}&view=kona_player_info&limit=${PAGE_SIZE}&offset=${offset}`;
 
-    let playersSeen = 0;
-    let upserts = 0;
-    let proj = 0;
-    let actual = 0;
+    /** Build filter per team+slot */
+    const makeFilter = (slotId: number, proTeamId: number) => ({
+      players: {
+        filterSlotIds: { value: [slotId] },
+        filterProTeamIds: { value: [proTeamId] },
+        filterStatsForExternalIds: { value: [season] },
+        filterStatsForSourceIds: { value: [1] }, // projections only for selection
+        filterStatsForTopScoringPeriodIds: { value: 2, additionalValue: [week] },
+        sortAppliedStatTotal: { sortAsc: false, sortPriority: 1, value: 1027 }, // numeric 1027
+      },
+    });
 
-    for (let page = 0; page < MAX_PAGES; page++) {
-      const offset = page * PAGE_SIZE;
+    /** Fetch candidates for a given team+slot, return [{player, projFp, depth}] */
+    async function fetchTeamSlotCandidates(proTeamId: number, slotName: SlotName) {
+      const slotId = SLOT_NAME_TO_ID[slotName];
+      const candidates: Array<{
+        p: any;
+        proj: number;
+        depth: number | null;
+        proTeamId: number;
+      }> = [];
 
-      let arr: any[] | null = null;
-      try {
-        const resp = await fetch(playersUrl(offset), {
-          headers: { ...baseHeaders, 'X-Fantasy-Filter': JSON.stringify(filter) },
-        });
-        const contentType = resp.headers.get('content-type') || '';
-        if (!resp.ok || !contentType.includes('application/json')) {
-          break; // likely HTML/auth wall; stop
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const offset = page * PAGE_SIZE;
+        const filter = makeFilter(slotId, proTeamId);
+
+        let arr: any[] | null = null;
+        try {
+          const resp = await fetch(playersUrl(offset), {
+            headers: { ...baseHeaders, 'X-Fantasy-Filter': JSON.stringify(filter) },
+          });
+          const contentType = resp.headers.get('content-type') || '';
+          if (!resp.ok || !contentType.includes('application/json')) break;
+          const parsed = await resp.json();
+          arr = Array.isArray(parsed) ? parsed : null;
+        } catch {
+          arr = null;
         }
-        const parsed = await resp.json();
-        arr = Array.isArray(parsed) ? parsed : null;
-      } catch {
-        arr = null;
+        if (!arr || arr.length === 0) break;
+
+        for (const p of arr) {
+          const stats = Array.isArray(p.stats) ? p.stats : (Array.isArray(p.player?.stats) ? p.player.stats : []);
+          if (!stats?.length) continue;
+          // keep only projection entries for target week
+          const projEntry = stats.find((s: any) => s.statSourceId === 1 && s.scoringPeriodId === week);
+          if (!projEntry) continue;
+
+          const applied = projEntry.appliedStats ?? projEntry.stats ?? {};
+          const proj = computeAppliedTotal(applied, projEntry.appliedTotal) || 0;
+
+          // Depth if available (not always present)
+          const depth = (p.player?.depthChartOrder ?? p.depthChartOrder ?? null);
+          candidates.push({ p, proj, depth: typeof depth === 'number' ? depth : null, proTeamId });
+        }
+
+        // small yield helps GC
+        await sleep(0);
+
+        // Heuristic: if we already have a lot and page smaller than PAGE_SIZE, stop
+        if (arr.length < PAGE_SIZE) break;
       }
 
-      if (!arr || arr.length === 0) break;
-      playersSeen += arr.length;
+      return candidates;
+    }
 
-      let buffer: any[] = [];
+    /** Rank candidates by projection desc; tie-break by smaller depth; then name */
+    function rankAndPick(candidates: ReturnType<typeof Object> extends infer T ? any[] : any[], n: number) {
+      const picked = [...candidates].sort((a, b) => {
+        if (b.proj !== a.proj) return b.proj - a.proj;
+        const ad = a.depth ?? 99;
+        const bd = b.depth ?? 99;
+        if (ad !== bd) return ad - bd;
+        const an = (a.p.fullName ?? a.p.player?.fullName ?? '').localeCompare(
+          (b.p.fullName ?? b.p.player?.fullName ?? '')
+        );
+        return an;
+      }).slice(0, n);
+      return picked;
+    }
 
-      for (let i = 0; i < arr.length; i++) {
-        const p = arr[i];
-        const espnId = p?.id?.toString();
-        if (!espnId) { arr[i] = null; continue; }
+    let totalSelected = 0;
+    let totalUpserts = 0;
 
-        const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
-        const pos = getPosition(p.defaultPositionId ?? p.player?.defaultPositionId);
-        const team = getTeamAbbreviation(p.proTeamId ?? p.player?.proTeamId);
+    for (const teamId of TEAMS) {
+      for (const slot of SLOTS) {
+        const want = COUNTS[slot] ?? 0;
+        if (want <= 0) continue;
 
-        const pdata = p.player ?? p;
-        let waiver = 'ROSTERED';
-        if (pdata.status === 'FREEAGENT') waiver = 'FREEAGENT';
-        else if (pdata.status === 'WAIVERS') waiver = 'WAIVERS';
+        const teamAbbrev = getTeamAbbreviation(teamId);
+        // Pull candidates
+        const cands = await fetchTeamSlotCandidates(teamId, slot);
 
-        const root = Array.isArray(p.stats) ? p.stats : [];
-        const nested = Array.isArray(p.player?.stats) ? p.player.stats : [];
-        const stats = root.length ? root : nested;
-        if (!stats?.length) { arr[i] = null; continue; }
+        if (!cands.length) continue;
 
-        for (let j = 0; j < stats.length; j++) {
-          const s = stats[j];
-          if (s.scoringPeriodId !== week) continue;
-          if (s.statSourceId !== 0 && s.statSourceId !== 1) continue;
+        const chosen = rankAndPick(cands, want);
 
-          const applied = s.appliedStats ?? s.stats ?? {};
-          const fp = computeAppliedTotal(applied, s.appliedTotal);
-          if ((fp == null || fp === 0) && Object.keys(applied).length === 0) continue;
+        // Prepare ultra-lean rows — store only projection row for this selection
+        const rows = chosen.map((c, idx) => {
+          const p = c.p;
+          const espnId = p?.id?.toString();
+          const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
+          const pos = getPosition(p.defaultPositionId ?? p.player?.defaultPositionId);
+          const proTid = p.proTeamId ?? p.player?.proTeamId ?? teamId;
 
-          // Keep rows minimal to save memory
-          buffer.push({
+          return {
             league_id: leagueData.id,
             espn_league_id: espnLeagueId,
             season,
@@ -214,51 +283,38 @@ Deno.serve(async (req) => {
             player_id: `espn_${espnId}`,
             player_name: name,
             position: pos,
-            team,
-            waiver_status: waiver,
-            source: s.statSourceId === 1 ? 'espn_projection' : 'espn_actual',
-            projected_fp: fp || 0,
+            team: getTeamAbbreviation(proTid),
+            waiver_status: (p.player?.status ?? p.status) === 'FREEAGENT' ? 'FREEAGENT'
+              : (p.player?.status ?? p.status) === 'WAIVERS' ? 'WAIVERS' : 'ROSTERED',
+            source: 'espn_projection',
+            projected_fp: c.proj || 0,
             percent_owned: p.ownership?.percentOwned ?? 0,
             percent_started: p.ownership?.percentStarted ?? 0,
-            is_owned: waiver === 'ROSTERED',
-            confidence: s.statSourceId === 1 ? 0.8 : 1.0,
+            is_owned: ((p.player?.status ?? p.status) !== 'FREEAGENT' && (p.player?.status ?? p.status) !== 'WAIVERS'),
+            confidence: 0.8,
+            selection_rank: idx + 1,
+            selection_reason: `top_${want}_by_projection_in_team_${teamAbbrev}_${slot}`,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
-          });
+          };
+        });
 
-          if (s.statSourceId === 1) proj++; else actual++;
-
-          if (buffer.length >= ROW_CHUNK) {
+        if (rows.length) {
+          // Upsert in tiny chunk
+          for (let i = 0; i < rows.length; i += ROW_CHUNK) {
+            const chunk = rows.slice(i, i + ROW_CHUNK);
             const { error } = await supabase
               .from('player_pool')
-              .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
+              .upsert(chunk, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
             if (error) throw error;
-            upserts += buffer.length;
-            buffer.length = 0;
-            // tiny pause helps the GC on tight limits
-            await sleep(0);
+            totalUpserts += chunk.length;
           }
+          totalSelected += rows.length;
         }
 
-        // aggressively drop per-player references
-        if (p.stats) delete p.stats;
-        if (p.player?.stats) delete p.player.stats;
-        arr[i] = null;
+        // Yield to GC between team/slot
+        await sleep(0);
       }
-
-      if (buffer.length) {
-        const { error } = await supabase
-          .from('player_pool')
-          .upsert(buffer, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
-        if (error) throw error;
-        upserts += buffer.length;
-        buffer.length = 0;
-      }
-
-      // yield to GC between pages
-      await sleep(0);
-
-      if (arr.length < PAGE_SIZE) break;
     }
 
     const summary = {
@@ -266,11 +322,11 @@ Deno.serve(async (req) => {
       season,
       week,
       espn_league_id: espnLeagueId,
-      slot: slotUpper,
-      players_seen: playersSeen,
-      inserted_or_updated: upserts,
-      projections: proj,
-      actuals: actual,
+      teams_processed: TEAMS.length,
+      slots_processed: SLOTS,
+      selected_and_upserted: totalSelected,
+      upsert_ops: totalUpserts,
+      strategy: 'per-team top-N by projection; tie-break depth chart',
     };
     console.log('ingest summary', summary);
 
@@ -280,7 +336,7 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('Error in ingest-espn-by-slot:', error);
+    console.error('Error in ingest-espn-top-by-team:', error);
     const msg = error instanceof Error ? error.message : 'Unknown error';
     return new Response(JSON.stringify({ error: msg }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
