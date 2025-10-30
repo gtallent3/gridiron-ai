@@ -289,11 +289,11 @@ export function TradeAnalyzerROS({ league, userTeam }: TradeAnalyzerROSProps) {
       {/* Player Selection */}
       <div className="grid md:grid-cols-2 gap-6">
         {/* Side A */}
-        <Card>
+        <Card className="overflow-visible">
           <CardHeader>
             <CardTitle className="text-lg">Side A - Gives</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 min-h-[300px] overflow-visible">
             <PlayerAutocomplete
               onSelectPlayer={handleAddPlayerA}
               placeholder="Search and add player..."
@@ -327,11 +327,11 @@ export function TradeAnalyzerROS({ league, userTeam }: TradeAnalyzerROSProps) {
         </Card>
 
         {/* Side B */}
-        <Card>
+        <Card className="overflow-visible">
           <CardHeader>
             <CardTitle className="text-lg">Side B - Receives</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 min-h-[300px] overflow-visible">
             <PlayerAutocomplete
               onSelectPlayer={handleAddPlayerB}
               placeholder="Search and add player..."
