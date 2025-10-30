@@ -108,21 +108,25 @@ export const FreeStartSitDemo = () => {
               )}
 
               {analysis && (
-                <div className="relative">
-                  {/* Results Card */}
-                  <div className={`space-y-4 p-6 rounded-lg border ${
-                    !isLoggedIn ? 'blur-sm' : ''
-                  } bg-card transition-all duration-300`}>
-                    {/* Recommendation Header */}
-                    <div className="text-center space-y-2">
-                      <div className="flex items-center justify-center gap-2">
-                        <TrendingUp className="h-5 w-5 text-primary" />
-                        <h3 className="text-xl font-semibold">Recommendation</h3>
-                      </div>
-                      <p className="text-2xl font-bold text-primary">
-                        Start {analysis.recommendation}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
+                <div className="space-y-4 p-6 rounded-lg border bg-card">
+                  {/* Recommendation Header - Always Visible */}
+                  <div className="text-center space-y-2">
+                    <div className="flex items-center justify-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-primary" />
+                      <h3 className="text-xl font-semibold">Recommendation</h3>
+                    </div>
+                    <p className="text-2xl font-bold text-primary">
+                      Start {analysis.recommendation}
+                    </p>
+                  </div>
+
+                  {/* Blurred Section for Unsigned Users */}
+                  <div className="relative">
+                    <div className={`space-y-4 ${
+                      !isLoggedIn ? 'blur-sm' : ''
+                    } transition-all duration-300`}>
+                      {/* Confidence Message */}
+                      <p className="text-sm text-center text-muted-foreground">
                         {analysis.confidence >= 80 ? 
                           `Start ${analysis.recommendation} with confidence` : 
                           analysis.confidence >= 60 ?
@@ -130,94 +134,94 @@ export const FreeStartSitDemo = () => {
                           `Toss-up — ${analysis.recommendation} edges out slightly`
                         }
                       </p>
-                    </div>
 
-                    {/* Player Comparison */}
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      {/* Player 1 */}
-                      <div className={`p-4 rounded-lg border ${
-                        analysis.player1.name === analysis.recommendation 
-                          ? 'border-primary bg-primary/5' 
-                          : 'border-border'
-                      }`}>
-                        <h4 className="font-semibold mb-2">{analysis.player1.name}</h4>
-                        {analysis.player1.team && (
-                          <p className="text-sm text-muted-foreground">{analysis.player1.team} • {analysis.player1.position}</p>
-                        )}
-                        <p className="text-2xl font-bold mt-2">
-                          {analysis.player1.projection?.toFixed(1)} pts
-                        </p>
-                        {analysis.player1.injury_status && (
-                          <p className="text-xs text-destructive mt-1">
-                            {analysis.player1.injury_status}
+                      {/* Player Comparison */}
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        {/* Player 1 */}
+                        <div className={`p-4 rounded-lg border ${
+                          analysis.player1.name === analysis.recommendation 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-border'
+                        }`}>
+                          <h4 className="font-semibold mb-2">{analysis.player1.name}</h4>
+                          {analysis.player1.team && (
+                            <p className="text-sm text-muted-foreground">{analysis.player1.team} • {analysis.player1.position}</p>
+                          )}
+                          <p className="text-2xl font-bold mt-2">
+                            {analysis.player1.projection?.toFixed(1)} pts
                           </p>
-                        )}
-                        {!analysis.player1.eligible && (
-                          <p className="text-xs text-destructive mt-1">
-                            {analysis.player1.ineligibilityReason}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Player 2 */}
-                      <div className={`p-4 rounded-lg border ${
-                        analysis.player2.name === analysis.recommendation 
-                          ? 'border-primary bg-primary/5' 
-                          : 'border-border'
-                      }`}>
-                        <h4 className="font-semibold mb-2">{analysis.player2.name}</h4>
-                        {analysis.player2.team && (
-                          <p className="text-sm text-muted-foreground">{analysis.player2.team} • {analysis.player2.position}</p>
-                        )}
-                        <p className="text-2xl font-bold mt-2">
-                          {analysis.player2.projection?.toFixed(1)} pts
-                        </p>
-                        {analysis.player2.injury_status && (
-                          <p className="text-xs text-destructive mt-1">
-                            {analysis.player2.injury_status}
-                          </p>
-                        )}
-                        {!analysis.player2.eligible && (
-                          <p className="text-xs text-destructive mt-1">
-                            {analysis.player2.ineligibilityReason}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Reasoning */}
-                    <div className="p-4 rounded-lg bg-muted/50">
-                      <h4 className="font-semibold mb-2">Analysis</h4>
-                      <p className="text-sm text-muted-foreground">{analysis.reasoning}</p>
-                    </div>
-
-                    {/* Week Info */}
-                    <p className="text-xs text-center text-muted-foreground">
-                      Week {analysis.week} • Season {analysis.season}
-                    </p>
-                  </div>
-
-                  {/* Blur Overlay for Unsigned Users */}
-                  {!isLoggedIn && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-background/95 via-background/80 to-transparent rounded-lg">
-                      <div className="text-center space-y-4 p-6 animate-in fade-in zoom-in duration-500">
-                        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
-                          <Lock className="h-8 w-8 text-primary animate-pulse" />
+                          {analysis.player1.injury_status && (
+                            <p className="text-xs text-destructive mt-1">
+                              {analysis.player1.injury_status}
+                            </p>
+                          )}
+                          {!analysis.player1.eligible && (
+                            <p className="text-xs text-destructive mt-1">
+                              {analysis.player1.ineligibilityReason}
+                            </p>
+                          )}
                         </div>
-                        <h3 className="text-2xl font-bold">Want to see who to start?</h3>
-                        <p className="text-muted-foreground max-w-md">
-                          Sign up free to unlock full results and weekly AI insights
-                        </p>
-                        <Button 
-                          size="lg"
-                          onClick={() => navigate('/auth')}
-                          className="mt-4"
-                        >
-                          Unlock Results →
-                        </Button>
+
+                        {/* Player 2 */}
+                        <div className={`p-4 rounded-lg border ${
+                          analysis.player2.name === analysis.recommendation 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-border'
+                        }`}>
+                          <h4 className="font-semibold mb-2">{analysis.player2.name}</h4>
+                          {analysis.player2.team && (
+                            <p className="text-sm text-muted-foreground">{analysis.player2.team} • {analysis.player2.position}</p>
+                          )}
+                          <p className="text-2xl font-bold mt-2">
+                            {analysis.player2.projection?.toFixed(1)} pts
+                          </p>
+                          {analysis.player2.injury_status && (
+                            <p className="text-xs text-destructive mt-1">
+                              {analysis.player2.injury_status}
+                            </p>
+                          )}
+                          {!analysis.player2.eligible && (
+                            <p className="text-xs text-destructive mt-1">
+                              {analysis.player2.ineligibilityReason}
+                            </p>
+                          )}
+                        </div>
                       </div>
+
+                      {/* Reasoning */}
+                      <div className="p-4 rounded-lg bg-muted/50">
+                        <h4 className="font-semibold mb-2">Analysis</h4>
+                        <p className="text-sm text-muted-foreground">{analysis.reasoning}</p>
+                      </div>
+
+                      {/* Week Info */}
+                      <p className="text-xs text-center text-muted-foreground">
+                        Week {analysis.week} • Season {analysis.season}
+                      </p>
                     </div>
-                  )}
+
+                    {/* Blur Overlay for Unsigned Users */}
+                    {!isLoggedIn && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-background/95 via-background/80 to-transparent rounded-lg">
+                        <div className="text-center space-y-4 p-6 animate-in fade-in zoom-in duration-500">
+                          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
+                            <Lock className="h-8 w-8 text-primary animate-pulse" />
+                          </div>
+                          <h3 className="text-2xl font-bold">Want to see the details?</h3>
+                          <p className="text-muted-foreground max-w-md">
+                            Sign up free to unlock projections, reasoning, and weekly AI insights
+                          </p>
+                          <Button 
+                            size="lg"
+                            onClick={() => navigate('/auth')}
+                            className="mt-4"
+                          >
+                            Unlock Full Analysis →
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </CardContent>
