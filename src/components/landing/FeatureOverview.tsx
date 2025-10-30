@@ -34,7 +34,7 @@ export const FeatureOverview = () => {
   const navigate = useNavigate();
 
   return (
-    <section id="features" className="py-20 relative scroll-mt-20">
+    <section id="features" className="py-12 relative scroll-mt-20">
       <div className="container mx-auto px-4">
         <div className="max-w-6xl mx-auto space-y-12">
           {/* Section Header */}
@@ -42,6 +42,9 @@ export const FeatureOverview = () => {
             <h2 className="text-4xl font-bold">Everything You Need to Win</h2>
             <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
               Powerful AI tools designed to give you the edge in your fantasy league
+            </p>
+            <p className="text-muted-foreground text-lg">
+              (Scroll for demos)
             </p>
           </div>
 
