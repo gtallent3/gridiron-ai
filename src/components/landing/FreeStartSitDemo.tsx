@@ -41,22 +41,32 @@ export const FreeStartSitDemo = () => {
     }
 
     const timer = setTimeout(async () => {
-      const { data } = await supabase
-        .from('player_valuations')
-        .select('player_name, team, position')
-        .ilike('player_name', `%${player1}%`)
-        .order('player_name')
-        .limit(10);
+      try {
+        const { data, error } = await supabase
+          .from('player_valuations')
+          .select('player_name, team, position')
+          .ilike('player_name', `%${player1}%`)
+          .eq('week', 8) // Current week
+          .eq('season', 2025)
+          .order('player_name')
+          .limit(20);
 
-      if (data) {
-        // Remove duplicates
-        const unique = data.reduce((acc: typeof data, current) => {
-          const exists = acc.find(p => p.player_name === current.player_name);
-          if (!exists) acc.push(current);
-          return acc;
-        }, []);
-        setPlayer1Suggestions(unique);
-        setShowPlayer1Dropdown(true);
+        if (error) {
+          console.error('Error fetching players:', error);
+          return;
+        }
+
+        if (data) {
+          // Remove duplicates based on player_name
+          const uniquePlayers = Array.from(
+            new Map(data.map(p => [p.player_name, p])).values()
+          ).slice(0, 10);
+          
+          setPlayer1Suggestions(uniquePlayers);
+          setShowPlayer1Dropdown(uniquePlayers.length > 0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch players:', err);
       }
     }, 300);
 
@@ -72,22 +82,32 @@ export const FreeStartSitDemo = () => {
     }
 
     const timer = setTimeout(async () => {
-      const { data } = await supabase
-        .from('player_valuations')
-        .select('player_name, team, position')
-        .ilike('player_name', `%${player2}%`)
-        .order('player_name')
-        .limit(10);
+      try {
+        const { data, error } = await supabase
+          .from('player_valuations')
+          .select('player_name, team, position')
+          .ilike('player_name', `%${player2}%`)
+          .eq('week', 8) // Current week
+          .eq('season', 2025)
+          .order('player_name')
+          .limit(20);
 
-      if (data) {
-        // Remove duplicates
-        const unique = data.reduce((acc: typeof data, current) => {
-          const exists = acc.find(p => p.player_name === current.player_name);
-          if (!exists) acc.push(current);
-          return acc;
-        }, []);
-        setPlayer2Suggestions(unique);
-        setShowPlayer2Dropdown(true);
+        if (error) {
+          console.error('Error fetching players:', error);
+          return;
+        }
+
+        if (data) {
+          // Remove duplicates based on player_name
+          const uniquePlayers = Array.from(
+            new Map(data.map(p => [p.player_name, p])).values()
+          ).slice(0, 10);
+          
+          setPlayer2Suggestions(uniquePlayers);
+          setShowPlayer2Dropdown(uniquePlayers.length > 0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch players:', err);
       }
     }, 300);
 
