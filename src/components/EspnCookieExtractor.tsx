@@ -212,56 +212,32 @@ espnCreds;`.trim();
                 </AlertDescription>
               </Alert>
 
-              <div className="space-y-4">
-                <div className="space-y-3 p-4 border rounded-lg bg-primary/5">
-                  <Label className="text-base font-semibold">⚡ Quick Setup (3 steps)</Label>
-                  
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">1</span>
-                      Copy the bookmarklet code
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        onClick={copyScript}
-                        className="gap-2"
-                      >
-                        <Copy className="h-4 w-4" />
-                        Copy Bookmarklet Code
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">2</span>
-                      Create a new bookmark
-                    </div>
-                    <ul className="text-xs text-muted-foreground space-y-1 ml-7">
-                      <li>• Chrome/Edge: Press Ctrl+D (or Cmd+D on Mac)</li>
-                      <li>• Or right-click your bookmarks bar → "Add page"</li>
-                      <li>• Name it "Get ESPN Cookies"</li>
-                    </ul>
-                  </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs">3</span>
-                      Paste code as URL
-                    </div>
-                    <p className="text-xs text-muted-foreground ml-7">
-                      Edit the bookmark, delete the URL, and paste the code you copied in step 1
-                    </p>
-                  </div>
-
-                  <Alert className="mt-3">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription className="text-xs">
-                      <strong>Don't see bookmarks bar?</strong> Press Ctrl+Shift+B (or Cmd+Shift+B on Mac) to show it
-                    </AlertDescription>
-                  </Alert>
+              <div className="space-y-2 p-3 border rounded-lg bg-primary/5">
+                <Label className="text-base font-semibold flex items-center gap-2">
+                  ⚡ Recommended: Drag bookmarklet to toolbar
+                </Label>
+                <div className="flex items-center gap-2">
+                  <a
+                    href={bookmarkletCode}
+                    className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm font-medium cursor-move inline-block"
+                    draggable="true"
+                  >
+                    📋 Get ESPN Cookies
+                  </a>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={copyScript}
+                    title="Copy bookmarklet code"
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  <strong>Desktop:</strong> Drag the button above to your bookmarks bar<br />
+                  <strong>Can't drag?</strong> Click the copy icon, then create a bookmark and paste the code as the URL
+                </p>
+              </div>
 
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
