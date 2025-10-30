@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Users, Trophy, DollarSign, BarChart3, Settings, Download, Coins, Search } from "lucide-react";
-import { Header } from "@/components/Header";
+
 import { useTokens } from "@/hooks/useTokens";
 import { useNavigate } from "react-router-dom";
 import { RankingsAccessManager } from "@/components/admin/RankingsAccessManager";
@@ -535,10 +535,7 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header user={user} />
-      
-      <main className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
+    <main className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
         <div className="spacing-mobile">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
@@ -981,6 +978,5 @@ export default function Admin() {
           </Tabs>
         </div>
       </main>
-    </div>
   );
 }

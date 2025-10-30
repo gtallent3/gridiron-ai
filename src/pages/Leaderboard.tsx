@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Header } from "@/components/Header";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, Trophy, Medal, TrendingUp } from "lucide-react";
@@ -151,10 +151,7 @@ export default function Leaderboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header user={user} />
-      
-      <main className="container mx-auto px-4 pt-24 pb-12">
+    <main className="container mx-auto px-4 pt-24 pb-12">
         <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
           <div className="text-center space-y-4">
@@ -235,7 +232,6 @@ export default function Leaderboard() {
             </CardContent>
           </Card>
         </div>
-      </main>
-    </div>
+    </main>
   );
 }

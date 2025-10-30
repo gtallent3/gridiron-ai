@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Layout } from "./components/Layout";
 import Index from "./pages/Index";
 import ConnectLeague from "./pages/ConnectLeague";
 import Auth from "./pages/Auth";
@@ -27,24 +28,26 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/connect-league" element={<ConnectLeague />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/league/:leagueId" element={<LeagueDashboard />} />
-          <Route path="/settings" element={<Settings />} />
-          <Route path="/shop" element={<Shop />} />
-          <Route path="/props" element={<Props />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/my-bets" element={<MyBets />} />
-          <Route path="/leaderboard" element={<Leaderboard />} />
-          <Route path="/contact" element={<ContactUs />} />
-          <Route path="/risk-admin" element={<RiskAdmin />} />
-          <Route path="/settings/billing" element={<Billing />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/connect-league" element={<ConnectLeague />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/league/:leagueId" element={<LeagueDashboard />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/shop" element={<Shop />} />
+            <Route path="/props" element={<Props />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/my-bets" element={<MyBets />} />
+            <Route path="/leaderboard" element={<Leaderboard />} />
+            <Route path="/contact" element={<ContactUs />} />
+            <Route path="/risk-admin" element={<RiskAdmin />} />
+            <Route path="/settings/billing" element={<Billing />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Layout>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

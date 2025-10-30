@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { Header } from "@/components/Header";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -166,10 +166,7 @@ export default function MyBets() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Header user={user} />
-      
-      <main className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
+    <main className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
         <div className="max-w-6xl mx-auto spacing-mobile">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold">My Bets</h1>
@@ -248,7 +245,6 @@ export default function MyBets() {
             </TabsContent>
           </Tabs>
         </div>
-      </main>
-    </div>
+    </main>
   );
 }
