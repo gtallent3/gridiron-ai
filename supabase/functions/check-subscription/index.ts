@@ -69,13 +69,13 @@ serve(async (req) => {
       });
     }
 
-    const productId = activeSub.items.data[0].price.product as string;
-    const subscriptionEnd = activeSub.current_period_end 
-      ? new Date(activeSub.current_period_end * 1000).toISOString() 
+    const productId = activeSub.items?.data?.[0]?.price?.product as string | undefined;
+    const subscriptionEnd = (typeof activeSub.current_period_end === 'number' && !isNaN(activeSub.current_period_end))
+      ? new Date(activeSub.current_period_end * 1000).toISOString()
       : null;
-    const cancelAtPeriodEnd = activeSub.cancel_at_period_end;
-    const trialEnd = activeSub.trial_end && typeof activeSub.trial_end === 'number'
-      ? new Date(activeSub.trial_end * 1000).toISOString() 
+    const cancelAtPeriodEnd = !!activeSub.cancel_at_period_end;
+    const trialEnd = (typeof activeSub.trial_end === 'number' && !isNaN(activeSub.trial_end))
+      ? new Date(activeSub.trial_end * 1000).toISOString()
       : null;
     
     logStep("Active subscription found", {
@@ -84,12 +84,13 @@ serve(async (req) => {
       status: activeSub.status,
       cancelAtPeriodEnd,
       subscriptionEnd,
+      trialEnd,
     });
 
     return new Response(
       JSON.stringify({
         subscribed: true,
-        product_id: productId,
+        product_id: productId ?? null,
         subscription_end: subscriptionEnd,
         status: activeSub.status,
         cancel_at_period_end: cancelAtPeriodEnd,
