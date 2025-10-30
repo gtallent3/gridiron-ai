@@ -11,6 +11,7 @@ import { Loader2, Users, Trophy, DollarSign, BarChart3, Settings, Download, Coin
 import { Header } from "@/components/Header";
 import { useTokens } from "@/hooks/useTokens";
 import { useNavigate } from "react-router-dom";
+import { RankingsAccessManager } from "@/components/admin/RankingsAccessManager";
 
 type UserWithTokens = {
   id: string;
@@ -708,6 +709,17 @@ export default function Admin() {
                   </div>
                 </CardContent>
               </Card>
+
+              <RankingsAccessManager 
+                selectedUserId={selectedUserId}
+                onSuccess={() => {
+                  fetchUsers();
+                  toast({
+                    title: "Success",
+                    description: "Rankings access updated successfully",
+                  });
+                }}
+              />
 
               <Card>
                 <CardHeader>
