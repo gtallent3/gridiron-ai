@@ -220,14 +220,8 @@ espnCreds;`.trim();
                   <div className="flex items-center gap-2">
                     <a
                       href={bookmarkletCode}
-                      className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm font-medium"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toast({
-                          title: "Drag this to your bookmarks bar!",
-                          description: "Then click it while on ESPN's site to auto-fill credentials",
-                        });
-                      }}
+                      className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm font-medium cursor-move inline-block"
+                      draggable="true"
                     >
                       📋 Get ESPN Cookies
                     </a>
@@ -235,12 +229,14 @@ espnCreds;`.trim();
                       size="sm"
                       variant="outline"
                       onClick={copyScript}
+                      title="Copy bookmarklet code"
                     >
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Drag the button above to your bookmarks bar, then click it on ESPN's site to auto-fill
+                    <strong>Desktop:</strong> Drag the button above to your bookmarks bar<br />
+                    <strong>Can't drag?</strong> Click the copy icon, then create a bookmark and paste the code as the URL
                   </p>
                 </div>
 
