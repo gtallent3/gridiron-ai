@@ -55,7 +55,8 @@ serve(async (req) => {
     const { data: playerData, error: playerError } = await supabase
       .from('player_valuations')
       .select('*')
-      .in('player_id', allPlayerIds);
+      .in('player_id', allPlayerIds)
+      .order('last_updated_at', { ascending: false });
 
     if (playerError) {
       console.error('Error fetching player data:', playerError);
@@ -65,7 +66,16 @@ serve(async (req) => {
       );
     }
 
-    const playerMap = new Map(playerData.map(p => [p.player_id, p]));
+    console.log('Fetched player data:', playerData?.length || 0, 'players');
+    console.log('Sample player:', playerData?.[0]);
+
+    // Group by player_id and take most recent
+    const playerMap = new Map<string, any>();
+    for (const player of playerData || []) {
+      if (!playerMap.has(player.player_id)) {
+        playerMap.set(player.player_id, player);
+      }
+    }
 
     // Fetch team positional strengths for depth adjustment
     const { data: strengths, error: strengthsError } = await supabase
@@ -108,8 +118,25 @@ serve(async (req) => {
     const calculateWeightedValue = (player: any): number => {
       if (!player) return 0;
       
-      // Base ROS value (0-100 scale)
-      const rosPoints = player.ros_projection || 0;
+      // Use multiple fields to determine ROS value with fallbacks
+      let rosPoints = player.ros_projection || 0;
+      
+      // Fallback 1: Use player_value if ros_projection is 0
+      if (rosPoints === 0) {
+        rosPoints = player.player_value || 0;
+      }
+      
+      // Fallback 2: Calculate from PPG and remaining weeks (estimate 10 weeks remaining)
+      if (rosPoints === 0 && player.ppg_projection) {
+        rosPoints = player.ppg_projection * 10;
+      }
+      
+      // Fallback 3: Use next_3_weeks projection scaled up
+      if (rosPoints === 0 && player.next_3_weeks_projection) {
+        rosPoints = (player.next_3_weeks_projection / 3) * 10;
+      }
+      
+      console.log(`Player ${player.player_name} - ROS: ${rosPoints}, player_value: ${player.player_value}, ppg: ${player.ppg_projection}`);
       
       // Apply injury risk adjustment
       const injuryPenalty = (player.injury_risk || 0) * rosPoints * 0.10;
@@ -368,7 +395,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error evaluating trade:', error);
     return new Response(
-      JSON.stringify({ error: error.message || 'Unable to evaluate trade' }),
+      JSON.stringify({ error: (error as Error).message || 'Unable to evaluate trade' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
