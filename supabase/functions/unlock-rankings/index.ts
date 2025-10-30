@@ -31,7 +31,7 @@ serve(async (req) => {
     // Check user's token balance and subscription status
     const { data: userTokens, error: tokensError } = await supabaseClient
       .from("user_tokens")
-      .select("balance, has_unlimited_subscription, subscription_expires_at, rankings_unlocked_week")
+      .select("balance, has_unlimited_subscription, subscription_expires_at, rankings_unlocked_week, lifetime_spent")
       .eq("user_id", user.id)
       .single();
 
@@ -87,11 +87,12 @@ serve(async (req) => {
 
     // Deduct 1 token and unlock
     const newBalance = userTokens.balance - 1;
+    const currentLifetimeSpent = userTokens.lifetime_spent || 0;
     const { error: updateError } = await supabaseClient
       .from("user_tokens")
       .update({
         balance: newBalance,
-        lifetime_spent: (userTokens as any).lifetime_spent + 1,
+        lifetime_spent: currentLifetimeSpent + 1,
         rankings_unlocked_week: currentWeek,
       })
       .eq("user_id", user.id);
