@@ -43,10 +43,10 @@ export const FreeStartSitDemo = () => {
     const timer = setTimeout(async () => {
       try {
         const { data, error } = await supabase
-          .from('player_valuations')
+          .from('projected_player_stats')
           .select('player_name, team, position')
           .ilike('player_name', `%${player1}%`)
-          .eq('week', 8) // Current week
+          .eq('week', 9)
           .eq('season', 2025)
           .order('player_name')
           .limit(20);
@@ -84,10 +84,10 @@ export const FreeStartSitDemo = () => {
     const timer = setTimeout(async () => {
       try {
         const { data, error } = await supabase
-          .from('player_valuations')
+          .from('projected_player_stats')
           .select('player_name, team, position')
           .ilike('player_name', `%${player2}%`)
-          .eq('week', 8) // Current week
+          .eq('week', 9)
           .eq('season', 2025)
           .order('player_name')
           .limit(20);
