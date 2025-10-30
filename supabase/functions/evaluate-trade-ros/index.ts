@@ -50,13 +50,13 @@ serve(async (req) => {
 
     console.log('Evaluating ROS-weighted trade:', { teamAGives, teamBGives });
 
-    // Fetch player valuations with ROS data
+    // Fetch projected player stats
     const allPlayerIds = [...teamAGives, ...teamBGives];
     const { data: playerData, error: playerError } = await supabase
-      .from('player_valuations')
+      .from('projected_player_stats')
       .select('*')
       .in('player_id', allPlayerIds)
-      .order('last_updated_at', { ascending: false });
+      .order('last_updated', { ascending: false });
 
     if (playerError) {
       console.error('Error fetching player data:', playerError);
@@ -114,38 +114,26 @@ serve(async (req) => {
       leagueAvgMap.set(pos, sum / count);
     }
 
-    // Helper: Calculate weighted ROS value
+    // Helper: Calculate weighted ROS value from projected stats
     const calculateWeightedValue = (player: any): number => {
       if (!player) return 0;
       
-      // Use multiple fields to determine ROS value with fallbacks
-      let rosPoints = player.ros_projection || 0;
+      // Use projected_fp directly (this is the projected fantasy points)
+      let rosPoints = player.projected_fp || 0;
       
-      // Fallback 1: Use player_value if ros_projection is 0
-      if (rosPoints === 0) {
-        rosPoints = player.player_value || 0;
-      }
+      // Estimate remaining season (assume ~10 weeks remaining)
+      const weeksRemaining = 10;
+      rosPoints = rosPoints * weeksRemaining;
       
-      // Fallback 2: Calculate from PPG and remaining weeks (estimate 10 weeks remaining)
-      if (rosPoints === 0 && player.ppg_projection) {
-        rosPoints = player.ppg_projection * 10;
-      }
+      console.log(`Player ${player.player_name} - Projected FP: ${player.projected_fp}, ROS Est: ${rosPoints}`);
       
-      // Fallback 3: Use next_3_weeks projection scaled up
-      if (rosPoints === 0 && player.next_3_weeks_projection) {
-        rosPoints = (player.next_3_weeks_projection / 3) * 10;
-      }
-      
-      console.log(`Player ${player.player_name} - ROS: ${rosPoints}, player_value: ${player.player_value}, ppg: ${player.ppg_projection}`);
-      
-      // Apply injury risk adjustment
-      const injuryPenalty = (player.injury_risk || 0) * rosPoints * 0.10;
-      
-      // Apply bye week penalty
-      const byePenalty = player.is_bye_week ? rosPoints * 0.05 : 0;
+      // Check for injury/out status from status_flags
+      const statusFlags = player.status_flags || {};
+      const isInjured = statusFlags.is_out || statusFlags.is_doubtful || false;
+      const injuryPenalty = isInjured ? rosPoints * 0.15 : 0;
       
       // Calculate base value
-      let baseValue = rosPoints - injuryPenalty - byePenalty;
+      let baseValue = rosPoints - injuryPenalty;
       
       // Apply positional weighting
       const posWeight = POSITION_WEIGHTS[player.position] || 1.0;
@@ -166,16 +154,19 @@ serve(async (req) => {
       const teamPss = posStrength.pss;
       const diff = teamPss - leagueAvg;
       
+      const projectedFp = player.projected_fp || 0;
+      const rosEst = projectedFp * 10;
+      
       // Weaker than league average → boost incoming players
       if (diff < 0) {
         const severity = Math.abs(diff) / leagueAvg;
-        return player.ros_projection * Math.min(severity * 0.10, 0.10); // Max 10% boost
+        return rosEst * Math.min(severity * 0.10, 0.10); // Max 10% boost
       }
       
       // Stronger than league average → reduce incoming players
       if (diff > 0) {
         const severity = diff / leagueAvg;
-        return -player.ros_projection * Math.min(severity * 0.05, 0.05); // Max 5% reduction
+        return -rosEst * Math.min(severity * 0.05, 0.05); // Max 5% reduction
       }
       
       return 0;
@@ -204,7 +195,7 @@ serve(async (req) => {
         teamAGivesDetails.push({
           player_name: player.player_name,
           position: player.position,
-          ros_points: player.ros_projection,
+          ros_points: (player.projected_fp || 0) * 10,
           multiplier: POSITION_WEIGHTS[player.position] || 1.0,
           weighted_value: weightedValue,
           depth_adjustment: depthAdj,
@@ -223,7 +214,7 @@ serve(async (req) => {
         teamAReceivesDetails.push({
           player_name: player.player_name,
           position: player.position,
-          ros_points: player.ros_projection,
+          ros_points: (player.projected_fp || 0) * 10,
           multiplier: POSITION_WEIGHTS[player.position] || 1.0,
           weighted_value: weightedValue,
           depth_adjustment: depthAdj,
@@ -248,7 +239,7 @@ serve(async (req) => {
         teamBGivesDetails.push({
           player_name: player.player_name,
           position: player.position,
-          ros_points: player.ros_projection,
+          ros_points: (player.projected_fp || 0) * 10,
           multiplier: POSITION_WEIGHTS[player.position] || 1.0,
           weighted_value: weightedValue,
           depth_adjustment: depthAdj,
@@ -267,7 +258,7 @@ serve(async (req) => {
         teamBReceivesDetails.push({
           player_name: player.player_name,
           position: player.position,
-          ros_points: player.ros_projection,
+          ros_points: (player.projected_fp || 0) * 10,
           multiplier: POSITION_WEIGHTS[player.position] || 1.0,
           weighted_value: weightedValue,
           depth_adjustment: depthAdj,
@@ -282,11 +273,11 @@ serve(async (req) => {
     for (const pos of Object.keys(POSITION_WEIGHTS)) {
       const posPlayers = allPlayers
         .filter(p => p.position === pos)
-        .sort((a, b) => (b.ros_projection || 0) - (a.ros_projection || 0));
+        .sort((a, b) => ((b.projected_fp || 0) * 10) - ((a.projected_fp || 0) * 10));
       
       const top10Index = Math.ceil(posPlayers.length * 0.10);
       if (posPlayers[top10Index]) {
-        positionTop10.set(pos, posPlayers[top10Index].ros_projection || 0);
+        positionTop10.set(pos, (posPlayers[top10Index].projected_fp || 0) * 10);
       }
     }
 
@@ -311,7 +302,8 @@ serve(async (req) => {
 
     if (bestPlayer) {
       const threshold = positionTop10.get(bestPlayer.position) || Infinity;
-      if (bestPlayer.ros_projection >= threshold) {
+      const bestPlayerRos = (bestPlayer.projected_fp || 0) * 10;
+      if (bestPlayerRos >= threshold) {
         eliteBonus = bestValue * 0.05;
         
         if (teamBGives.includes(bestPlayer.player_id)) {
