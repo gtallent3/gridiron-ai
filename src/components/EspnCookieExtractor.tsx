@@ -212,9 +212,9 @@ espnCreds;`.trim();
                 </AlertDescription>
               </Alert>
 
-              <div className="space-y-2 p-3 border rounded-lg bg-primary/5">
+              <div className="space-y-3 p-3 border rounded-lg bg-primary/5">
                 <Label className="text-base font-semibold flex items-center gap-2">
-                  ⚡ Recommended: Drag bookmarklet to toolbar
+                  ⚡ Method 1: Drag to bookmarks bar
                 </Label>
                 <div className="flex items-center gap-2">
                   <a
@@ -224,19 +224,42 @@ espnCreds;`.trim();
                   >
                     📋 Get ESPN Cookies
                   </a>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={copyScript}
-                    title="Copy bookmarklet code"
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  <strong>Desktop:</strong> Drag the button above to your bookmarks bar<br />
-                  <strong>Can't drag?</strong> Click the copy icon, then create a bookmark and paste the code as the URL
+                  Drag the button above to your bookmarks bar
                 </p>
+              </div>
+
+              <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
+                <Label className="text-base font-semibold">
+                  📝 Method 2: Copy exact URL
+                </Label>
+                <div className="space-y-2">
+                  <Label htmlFor="bookmarklet-url" className="text-xs text-muted-foreground">
+                    Create a bookmark, then paste this as the URL:
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="bookmarklet-url"
+                      value={bookmarkletCode}
+                      readOnly
+                      className="font-mono text-xs"
+                    />
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={copyScript}
+                      title="Copy bookmarklet URL"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    1. Press Ctrl+D (Cmd+D on Mac) to bookmark this page<br />
+                    2. Edit the bookmark, delete the URL field<br />
+                    3. Paste the code from above (must start with <code className="bg-muted px-1">javascript:</code>)
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-4">
