@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -7,11 +8,14 @@ import { Lock, Sparkles, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useStartSitAnalysis } from "@/hooks/useStartSitAnalysis";
-import { PlayerAutocomplete } from "@/components/ui/player-autocomplete";
 
 export const FreeStartSitDemo = () => {
   const [player1, setPlayer1] = useState("");
   const [player2, setPlayer2] = useState("");
+  const [player1Suggestions, setPlayer1Suggestions] = useState<Array<{ player_name: string; team: string; position: string }>>([]);
+  const [player2Suggestions, setPlayer2Suggestions] = useState<Array<{ player_name: string; team: string; position: string }>>([]);
+  const [showPlayer1Dropdown, setShowPlayer1Dropdown] = useState(false);
+  const [showPlayer2Dropdown, setShowPlayer2Dropdown] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const navigate = useNavigate();
   const { analysis, loading, error, analyze } = useStartSitAnalysis();
@@ -28,10 +32,82 @@ export const FreeStartSitDemo = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Fetch player suggestions for player 1
+  useEffect(() => {
+    if (player1.length < 2) {
+      setPlayer1Suggestions([]);
+      setShowPlayer1Dropdown(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from('player_valuations')
+        .select('player_name, team, position')
+        .ilike('player_name', `%${player1}%`)
+        .order('player_name')
+        .limit(10);
+
+      if (data) {
+        // Remove duplicates
+        const unique = data.reduce((acc: typeof data, current) => {
+          const exists = acc.find(p => p.player_name === current.player_name);
+          if (!exists) acc.push(current);
+          return acc;
+        }, []);
+        setPlayer1Suggestions(unique);
+        setShowPlayer1Dropdown(true);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [player1]);
+
+  // Fetch player suggestions for player 2
+  useEffect(() => {
+    if (player2.length < 2) {
+      setPlayer2Suggestions([]);
+      setShowPlayer2Dropdown(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from('player_valuations')
+        .select('player_name, team, position')
+        .ilike('player_name', `%${player2}%`)
+        .order('player_name')
+        .limit(10);
+
+      if (data) {
+        // Remove duplicates
+        const unique = data.reduce((acc: typeof data, current) => {
+          const exists = acc.find(p => p.player_name === current.player_name);
+          if (!exists) acc.push(current);
+          return acc;
+        }, []);
+        setPlayer2Suggestions(unique);
+        setShowPlayer2Dropdown(true);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [player2]);
+
   const handleAnalyze = async () => {
     if (player1 && player2) {
       await analyze(player1, player2);
     }
+  };
+
+  const selectPlayer1 = (playerName: string) => {
+    setPlayer1(playerName);
+    setShowPlayer1Dropdown(false);
+  };
+
+  const selectPlayer2 = (playerName: string) => {
+    setPlayer2(playerName);
+    setShowPlayer2Dropdown(false);
   };
 
   const scrollToSection = (id: string) => {
@@ -64,21 +140,61 @@ export const FreeStartSitDemo = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <Label htmlFor="player1">Player 1</Label>
-                  <PlayerAutocomplete
+                  <Input
+                    id="player1"
+                    placeholder="Start typing player name..."
                     value={player1}
-                    onSelectPlayer={(player) => setPlayer1(player.player_name)}
-                    placeholder="Search for a player..."
+                    onChange={(e) => setPlayer1(e.target.value)}
+                    onFocus={() => player1.length >= 2 && setShowPlayer1Dropdown(true)}
+                    onBlur={() => setTimeout(() => setShowPlayer1Dropdown(false), 200)}
                   />
+                  {showPlayer1Dropdown && player1Suggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+                      {player1Suggestions.map((player, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => selectPlayer1(player.player_name)}
+                          className="w-full px-4 py-3 text-left hover:bg-accent transition-colors border-b last:border-b-0"
+                        >
+                          <div className="font-semibold">{player.player_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {player.team} • {player.position}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <Label htmlFor="player2">Player 2</Label>
-                  <PlayerAutocomplete
+                  <Input
+                    id="player2"
+                    placeholder="Start typing player name..."
                     value={player2}
-                    onSelectPlayer={(player) => setPlayer2(player.player_name)}
-                    placeholder="Search for a player..."
+                    onChange={(e) => setPlayer2(e.target.value)}
+                    onFocus={() => player2.length >= 2 && setShowPlayer2Dropdown(true)}
+                    onBlur={() => setTimeout(() => setShowPlayer2Dropdown(false), 200)}
                   />
+                  {showPlayer2Dropdown && player2Suggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+                      {player2Suggestions.map((player, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => selectPlayer2(player.player_name)}
+                          className="w-full px-4 py-3 text-left hover:bg-accent transition-colors border-b last:border-b-0"
+                        >
+                          <div className="font-semibold">{player.player_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {player.team} • {player.position}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
