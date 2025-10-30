@@ -50,6 +50,13 @@ serve(async (req) => {
 
     console.log('Evaluating ROS-weighted trade:', { teamAGives, teamBGives });
 
+    // Fetch all remaining weekly projections for all players
+    // Note: projected_player_stats stores IDs with platform prefix (e.g., "espn_123")
+    const allPlayerIds = [...teamAGives, ...teamBGives];
+    const prefixedPlayerIds = allPlayerIds.map(id => 
+      id.startsWith('espn_') ? id : `espn_${id}`
+    );
+
     // Get current week from league
     const { data: leagueData } = await supabase
       .from('connected_leagues')
@@ -61,14 +68,16 @@ serve(async (req) => {
     const remainingWeeks = Array.from({ length: 18 - currentWeek }, (_, i) => currentWeek + i + 1);
 
     console.log('Current week:', currentWeek, 'Remaining weeks:', remainingWeeks);
+    console.log('Looking for players (prefixed):', prefixedPlayerIds);
 
-    // Fetch all remaining weekly projections for all players
-    const allPlayerIds = [...teamAGives, ...teamBGives];
     const { data: playerData, error: playerError } = await supabase
       .from('projected_player_stats')
       .select('*')
-      .in('player_id', allPlayerIds)
-      .in('week', remainingWeeks);
+      .in('player_id', prefixedPlayerIds)
+      .in('week', remainingWeeks)
+      .eq('season', 2025);
+
+    console.log('Query result - error:', playerError, 'data count:', playerData?.length || 0);
 
     if (playerError) {
       console.error('Error fetching player data:', playerError);
@@ -79,11 +88,17 @@ serve(async (req) => {
     }
 
     console.log('Fetched projections:', playerData?.length || 0, 'records');
+    if (playerData && playerData.length > 0) {
+      console.log('Sample projection:', playerData[0]);
+    } else {
+      console.log('No projections found for players:', allPlayerIds, 'weeks:', remainingWeeks);
+    }
 
     // Sum up ROS projections by player_id
     const playerMap = new Map<string, any>();
     for (const projection of playerData || []) {
-      const playerId = projection.player_id;
+      // Remove prefix for consistent lookups
+      const playerId = projection.player_id.replace(/^espn_/, '');
       
       if (!playerMap.has(playerId)) {
         playerMap.set(playerId, {
