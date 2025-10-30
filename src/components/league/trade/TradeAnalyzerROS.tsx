@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlayerAutocomplete } from '@/components/ui/player-autocomplete';
-import { Loader2, Sparkles, X, ArrowLeftRight } from 'lucide-react';
+import { Loader2, Sparkles, X, ArrowLeftRight, Plus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useTokens } from '@/hooks/useTokens';
 import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type League = {
   id: string;
@@ -41,6 +42,46 @@ export function TradeAnalyzerROS({ league, userTeam }: TradeAnalyzerROSProps) {
   const [sideBPlayers, setSideBPlayers] = useState<SelectedPlayer[]>([]);
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [tradeResult, setTradeResult] = useState<any>(null);
+  const [rosterPlayers, setRosterPlayers] = useState<SelectedPlayer[]>([]);
+  const [loadingRoster, setLoadingRoster] = useState(true);
+
+  // Fetch user's roster
+  useEffect(() => {
+    async function fetchRoster() {
+      if (!userTeam) {
+        setLoadingRoster(false);
+        return;
+      }
+
+      try {
+        const { data: teamData, error } = await supabase
+          .from('user_teams')
+          .select('roster')
+          .eq('league_id', league.id)
+          .eq('team_id', userTeam.team_id)
+          .single();
+
+        if (error) throw error;
+
+        if (teamData?.roster) {
+          const roster = teamData.roster as any[];
+          const players: SelectedPlayer[] = roster.map((p: any) => ({
+            player_id: p.player_id || p.playerId || p.id,
+            player_name: p.player_name || p.fullName || p.name,
+            team: p.team || p.proTeamAbbreviation || '',
+            position: p.position || p.defaultPosition || '',
+          }));
+          setRosterPlayers(players);
+        }
+      } catch (error) {
+        console.error('Error fetching roster:', error);
+      } finally {
+        setLoadingRoster(false);
+      }
+    }
+
+    fetchRoster();
+  }, [league.id, userTeam]);
 
   const handleAddPlayerA = (player: SelectedPlayer) => {
     if (!sideAPlayers.find(p => p.player_id === player.player_id)) {
@@ -288,40 +329,75 @@ export function TradeAnalyzerROS({ league, userTeam }: TradeAnalyzerROSProps) {
 
       {/* Player Selection */}
       <div className="grid md:grid-cols-2 gap-6">
-        {/* Side A */}
+        {/* Side A - Your Players */}
         <Card className="overflow-visible">
           <CardHeader>
-            <CardTitle className="text-lg">Side A - Gives</CardTitle>
+            <CardTitle className="text-lg">Side A - You Give</CardTitle>
+            <p className="text-sm text-muted-foreground">Select from your roster</p>
           </CardHeader>
-          <CardContent className="space-y-4 min-h-[300px] overflow-visible">
-            <PlayerAutocomplete
-              onSelectPlayer={handleAddPlayerA}
-              placeholder="Search and add player..."
-            />
-            
-            {sideAPlayers.length > 0 && (
-              <div className="space-y-2">
-                {sideAPlayers.map((player) => (
-                  <div
-                    key={player.player_id}
-                    className="flex items-center justify-between p-3 bg-accent/10 rounded-lg"
-                  >
-                    <div>
-                      <div className="font-medium">{player.player_name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {player.team} • {player.position}
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => handleRemovePlayerA(player.player_id)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
+          <CardContent className="space-y-4 overflow-visible">
+            {loadingRoster ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin" />
               </div>
+            ) : (
+              <>
+                {/* Selected Players */}
+                {sideAPlayers.length > 0 && (
+                  <div className="space-y-2 pb-4 border-b">
+                    <div className="text-sm font-semibold">Selected:</div>
+                    {sideAPlayers.map((player) => (
+                      <div
+                        key={player.player_id}
+                        className="flex items-center justify-between p-3 bg-primary/10 rounded-lg"
+                      >
+                        <div>
+                          <div className="font-medium">{player.player_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {player.team} • {player.position}
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleRemovePlayerA(player.player_id)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Available Roster */}
+                <ScrollArea className="h-[400px]">
+                  <div className="space-y-2 pr-4">
+                    <div className="text-sm font-semibold mb-2">Your Roster:</div>
+                    {rosterPlayers
+                      .filter(p => !sideAPlayers.find(sp => sp.player_id === p.player_id))
+                      .map((player) => (
+                        <button
+                          key={player.player_id}
+                          onClick={() => handleAddPlayerA(player)}
+                          className="w-full flex items-center justify-between p-3 bg-accent/10 hover:bg-accent/20 rounded-lg transition-colors text-left"
+                        >
+                          <div>
+                            <div className="font-medium">{player.player_name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {player.team} • {player.position}
+                            </div>
+                          </div>
+                          <Plus className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                      ))}
+                    {rosterPlayers.filter(p => !sideAPlayers.find(sp => sp.player_id === p.player_id)).length === 0 && (
+                      <div className="text-sm text-muted-foreground text-center py-4">
+                        {rosterPlayers.length === 0 ? 'No roster found' : 'All players selected'}
+                      </div>
+                    )}
+                  </div>
+                </ScrollArea>
+              </>
             )}
           </CardContent>
         </Card>

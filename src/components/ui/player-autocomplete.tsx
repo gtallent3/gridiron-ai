@@ -50,10 +50,20 @@ export function PlayerAutocomplete({
           .select('player_id, player_name, team, position')
           .or(`player_name.ilike.%${query}%`)
           .order('player_name')
-          .limit(10);
+          .limit(50);
 
         if (error) throw error;
-        setResults(data || []);
+        
+        // Remove duplicates by player_id
+        const uniquePlayers = data?.reduce((acc: Player[], current) => {
+          const exists = acc.find(p => p.player_id === current.player_id);
+          if (!exists) {
+            acc.push(current);
+          }
+          return acc;
+        }, []).slice(0, 10) || [];
+        
+        setResults(uniquePlayers);
         setIsOpen(true);
         setSelectedIndex(-1);
       } catch (error) {
