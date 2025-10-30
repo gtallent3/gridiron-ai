@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Brain, TrendingUp, AlertCircle, Calendar, XCircle, CheckCircle } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
@@ -8,13 +8,100 @@ import { Badge } from "./ui/badge";
 import { useStartSitAnalysis } from "@/hooks/useStartSitAnalysis";
 import { getCurrentNFLWeek, formatLastUpdated } from "@/lib/nflWeekUtils";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 export const StartSitAnalyzer = () => {
   const [player1, setPlayer1] = useState("");
   const [player2, setPlayer2] = useState("");
+  const [player1Suggestions, setPlayer1Suggestions] = useState<Array<{ player_name: string; team: string; position: string }>>([]);
+  const [player2Suggestions, setPlayer2Suggestions] = useState<Array<{ player_name: string; team: string; position: string }>>([]);
+  const [showPlayer1Dropdown, setShowPlayer1Dropdown] = useState(false);
+  const [showPlayer2Dropdown, setShowPlayer2Dropdown] = useState(false);
   const { analysis, loading, error, analyze } = useStartSitAnalysis();
   const { toast } = useToast();
   const nflWeek = getCurrentNFLWeek();
+
+  // Fetch player suggestions for player 1
+  useEffect(() => {
+    if (player1.length < 2) {
+      setPlayer1Suggestions([]);
+      setShowPlayer1Dropdown(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('projected_player_stats')
+          .select('player_name, team, position')
+          .ilike('player_name', `%${player1}%`)
+          .eq('week', nflWeek.week)
+          .eq('season', nflWeek.season)
+          .order('player_name')
+          .limit(20);
+
+        if (error) {
+          console.error('Error fetching players:', error);
+          return;
+        }
+
+        if (data) {
+          // Remove duplicates based on player_name
+          const uniquePlayers = Array.from(
+            new Map(data.map(p => [p.player_name, p])).values()
+          ).slice(0, 10);
+          
+          setPlayer1Suggestions(uniquePlayers);
+          setShowPlayer1Dropdown(uniquePlayers.length > 0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch players:', err);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [player1, nflWeek.week, nflWeek.season]);
+
+  // Fetch player suggestions for player 2
+  useEffect(() => {
+    if (player2.length < 2) {
+      setPlayer2Suggestions([]);
+      setShowPlayer2Dropdown(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('projected_player_stats')
+          .select('player_name, team, position')
+          .ilike('player_name', `%${player2}%`)
+          .eq('week', nflWeek.week)
+          .eq('season', nflWeek.season)
+          .order('player_name')
+          .limit(20);
+
+        if (error) {
+          console.error('Error fetching players:', error);
+          return;
+        }
+
+        if (data) {
+          // Remove duplicates based on player_name
+          const uniquePlayers = Array.from(
+            new Map(data.map(p => [p.player_name, p])).values()
+          ).slice(0, 10);
+          
+          setPlayer2Suggestions(uniquePlayers);
+          setShowPlayer2Dropdown(uniquePlayers.length > 0);
+        }
+      } catch (err) {
+        console.error('Failed to fetch players:', err);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [player2, nflWeek.week, nflWeek.season]);
 
   const handleAnalyze = async () => {
     if (!player1.trim() || !player2.trim()) {
@@ -27,6 +114,16 @@ export const StartSitAnalyzer = () => {
     }
 
     await analyze(player1, player2);
+  };
+
+  const selectPlayer1 = (playerName: string) => {
+    setPlayer1(playerName);
+    setShowPlayer1Dropdown(false);
+  };
+
+  const selectPlayer2 = (playerName: string) => {
+    setPlayer2(playerName);
+    setShowPlayer2Dropdown(false);
   };
 
   return (
@@ -59,25 +156,63 @@ export const StartSitAnalyzer = () => {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <Label htmlFor="player1">Player 1</Label>
                   <Input
                     id="player1"
-                    placeholder="e.g., Justin Jefferson"
+                    placeholder="Start typing player name..."
                     value={player1}
                     onChange={(e) => setPlayer1(e.target.value)}
+                    onFocus={() => player1.length >= 2 && setShowPlayer1Dropdown(true)}
+                    onBlur={() => setTimeout(() => setShowPlayer1Dropdown(false), 200)}
                     className="bg-background border-border"
                   />
+                  {showPlayer1Dropdown && player1Suggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+                      {player1Suggestions.map((player, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => selectPlayer1(player.player_name)}
+                          className="w-full px-4 py-3 text-left hover:bg-accent transition-colors border-b last:border-b-0"
+                        >
+                          <div className="font-semibold">{player.player_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {player.team} • {player.position}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 relative">
                   <Label htmlFor="player2">Player 2</Label>
                   <Input
                     id="player2"
-                    placeholder="e.g., Tyreek Hill"
+                    placeholder="Start typing player name..."
                     value={player2}
                     onChange={(e) => setPlayer2(e.target.value)}
+                    onFocus={() => player2.length >= 2 && setShowPlayer2Dropdown(true)}
+                    onBlur={() => setTimeout(() => setShowPlayer2Dropdown(false), 200)}
                     className="bg-background border-border"
                   />
+                  {showPlayer2Dropdown && player2Suggestions.length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg max-h-[300px] overflow-y-auto">
+                      {player2Suggestions.map((player, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => selectPlayer2(player.player_name)}
+                          className="w-full px-4 py-3 text-left hover:bg-accent transition-colors border-b last:border-b-0"
+                        >
+                          <div className="font-semibold">{player.player_name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {player.team} • {player.position}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 
