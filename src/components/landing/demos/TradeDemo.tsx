@@ -24,18 +24,18 @@ export const TradeDemo = ({ isHovered }: TradeDemoProps) => {
 
   return (
     <div className="h-[200px] bg-muted/30 rounded-lg p-4 pointer-events-none overflow-hidden relative">
-      <div className="space-y-3">
+      <div className="space-y-2">
         {/* Side A */}
         <div
           className={`p-3 rounded-lg border transition-all duration-500 ${
             showResult
-              ? "border-primary bg-primary/10"
+              ? "border-primary bg-primary/10 scale-[1.02]"
               : "border-border bg-card/50"
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-muted-foreground">
-              Side A
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              You Get
             </span>
             {showResult && (
               <Badge className="text-[10px] animate-fade-in bg-primary">
@@ -43,38 +43,46 @@ export const TradeDemo = ({ isHovered }: TradeDemoProps) => {
               </Badge>
             )}
           </div>
-          <div className="text-xs">Tyreek Hill</div>
-          <div className="text-[10px] text-muted-foreground">WR - MIA</div>
+          <div className="text-sm font-semibold">Josh Jacobs</div>
+          <div className="text-[10px] text-muted-foreground">RB - GB</div>
         </div>
 
         {/* VS Divider */}
-        <div className="text-center">
-          <span className="text-xs text-muted-foreground font-semibold">VS</span>
+        <div className="flex items-center justify-center py-1">
+          <div className="h-px flex-1 bg-border" />
+          <span className="px-3 text-[10px] text-muted-foreground font-semibold">FOR</span>
+          <div className="h-px flex-1 bg-border" />
         </div>
 
         {/* Side B */}
         <div
-          className={`p-3 rounded-lg border transition-all duration-500 ${
+          className={`p-3 rounded-lg border transition-all duration-500 space-y-2 ${
             showResult
               ? "border-border/30 bg-muted/20 opacity-60"
               : "border-border bg-card/50"
           }`}
         >
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-muted-foreground">
-              Side B
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+              You Give
             </span>
           </div>
-          <div className="text-xs">DJ Moore</div>
-          <div className="text-[10px] text-muted-foreground">WR - CHI</div>
+          <div>
+            <div className="text-xs font-semibold">RJ Harvey</div>
+            <div className="text-[10px] text-muted-foreground">RB - BUF</div>
+          </div>
+          <div className="pt-1 border-t border-border/30">
+            <div className="text-xs font-semibold">Michael Pittman Jr.</div>
+            <div className="text-[10px] text-muted-foreground">WR - IND</div>
+          </div>
         </div>
       </div>
 
       {showResult && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="bg-primary/90 text-primary-foreground px-4 py-2 rounded-lg text-xs font-bold animate-scale-in flex items-center gap-2">
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-background/10">
+          <div className="bg-primary/95 text-primary-foreground px-4 py-2 rounded-lg text-sm font-bold animate-scale-in flex items-center gap-2 shadow-lg">
             <TrendingUp className="h-4 w-4" />
-            Side A Wins
+            Accept Trade
           </div>
         </div>
       )}
