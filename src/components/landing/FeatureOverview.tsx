@@ -88,16 +88,18 @@ export const FeatureOverview = () => {
 
                     {/* CTA Section */}
                     <div className="space-y-2 pt-2">
-                      <Button 
-                        asChild 
-                        className="w-full group/btn"
-                        size="sm"
-                      >
-                        <a href={feature.link}>
-                          {feature.cta}
-                          <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
-                        </a>
-                      </Button>
+                      {feature.cta !== "Try It" && (
+                        <Button 
+                          asChild 
+                          className="w-full group/btn"
+                          size="sm"
+                        >
+                          <a href={feature.link}>
+                            {feature.cta}
+                            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover/btn:translate-x-1" />
+                          </a>
+                        </Button>
+                      )}
                       <p className="text-[10px] text-center text-muted-foreground">
                         Sign up now to receive 3 free tokens
                       </p>
