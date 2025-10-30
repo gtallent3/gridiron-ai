@@ -39,7 +39,7 @@ export const Footer = () => {
                 </li>
                 <li>
                   <button 
-                    onClick={() => navigate('/auth')}
+                    onClick={() => navigate('/shop')}
                     className="text-muted-foreground hover:text-primary transition-colors"
                   >
                     Pricing
