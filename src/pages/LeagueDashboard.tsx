@@ -11,6 +11,7 @@ import { WaiverWire } from "@/components/league/WaiverWire";
 import { OtherTeams } from "@/components/league/OtherTeams";
 import { LeagueHeader } from "@/components/league/LeagueHeader";
 import { TradeAnalyzer } from "@/components/league/trade/TradeAnalyzer";
+import { TradeAnalyzerROS } from "@/components/league/trade/TradeAnalyzerROS";
 import { TradeFinder } from "@/components/league/trade/TradeFinder";
 import { PositionImprover } from "@/components/league/trade/PositionImprover";
 import { LeagueAIAssistant } from "@/components/league/LeagueAIAssistant";
@@ -263,13 +264,33 @@ export default function LeagueDashboard() {
             <div className="space-y-4">
               <ComputeValuesCard leagueId={league.id} />
               
-              <Tabs defaultValue="analyzer" className="spacing-mobile">
-                <TabsList className="grid w-full grid-cols-1 sm:grid-cols-4 max-w-3xl mx-auto h-auto">
-                  <TabsTrigger value="analyzer" className="text-sm py-2 sm:py-3">Grade Trade</TabsTrigger>
-                  <TabsTrigger value="finder" className="text-sm py-2 sm:py-3">Find Trades</TabsTrigger>
-                  <TabsTrigger value="improve" className="text-sm py-2 sm:py-3">Improve Position</TabsTrigger>
-                  <TabsTrigger value="rankings" className="text-sm py-2 sm:py-3">Rankings</TabsTrigger>
+              <Tabs defaultValue="analyzer-ros" className="spacing-mobile">
+                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 max-w-4xl mx-auto h-auto">
+                  <TabsTrigger value="analyzer-ros" className="text-xs sm:text-sm py-2 sm:py-3">
+                    <span className="hidden sm:inline">ROS Analyzer</span>
+                    <span className="sm:hidden">ROS</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="analyzer" className="text-xs sm:text-sm py-2 sm:py-3">
+                    <span className="hidden sm:inline">Classic</span>
+                    <span className="sm:hidden">Classic</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="finder" className="text-xs sm:text-sm py-2 sm:py-3">
+                    <span className="hidden sm:inline">Find Trades</span>
+                    <span className="sm:hidden">Find</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="improve" className="text-xs sm:text-sm py-2 sm:py-3">
+                    <span className="hidden sm:inline">Improve</span>
+                    <span className="sm:hidden">Improve</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="rankings" className="text-xs sm:text-sm py-2 sm:py-3">
+                    <span className="hidden sm:inline">Rankings</span>
+                    <span className="sm:hidden">Ranks</span>
+                  </TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="analyzer-ros">
+                  <TradeAnalyzerROS league={league} userTeam={userTeam} />
+                </TabsContent>
 
                 <TabsContent value="analyzer">
                   <TradeAnalyzer league={league} userTeam={userTeam} />
