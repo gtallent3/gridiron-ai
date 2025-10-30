@@ -40,8 +40,16 @@ serve(async (req) => {
 
     const { userId, durationDays } = await req.json();
 
-    if (!userId || !durationDays) {
-      throw new Error("Missing required parameters");
+    if (!userId) {
+      throw new Error("Missing userId parameter");
+    }
+    
+    if (durationDays === undefined || durationDays === null) {
+      throw new Error("Missing durationDays parameter");
+    }
+
+    if (typeof durationDays !== 'number' || durationDays <= 0) {
+      throw new Error("durationDays must be a positive number");
     }
 
     // Set the unlock timestamp to now
