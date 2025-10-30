@@ -5,8 +5,8 @@ export const AIChatDemo = () => {
   const [messageIndex, setMessageIndex] = useState(0);
   
   const messages = [
-    { text: "Who should I start?", isUser: true },
-    { text: "Start Jaylen Waddle for Week 8.", isUser: false },
+    { text: "Should I start Cooper Kupp or Jaylen Waddle?", isUser: true },
+    { text: "Start Jaylen Waddle. He has a higher target share and faces a weaker secondary this week.", isUser: false },
   ];
 
   useEffect(() => {
