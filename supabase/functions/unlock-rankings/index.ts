@@ -31,7 +31,7 @@ serve(async (req) => {
     // Check user's token balance and subscription status
     const { data: userTokens, error: tokensError } = await supabaseClient
       .from("user_tokens")
-      .select("balance, has_unlimited_subscription, subscription_expires_at, rankings_unlocked_week, lifetime_spent")
+      .select("balance, has_unlimited_subscription, subscription_expires_at, rankings_unlocked_week, rankings_unlocked_at, lifetime_spent")
       .eq("user_id", user.id)
       .single();
 
@@ -47,7 +47,10 @@ serve(async (req) => {
     if (isActiveSubscriber) {
       const { error: updateError } = await supabaseClient
         .from("user_tokens")
-        .update({ rankings_unlocked_week: currentWeek })
+        .update({ 
+          rankings_unlocked_week: currentWeek,
+          rankings_unlocked_at: new Date().toISOString(),
+        })
         .eq("user_id", user.id);
 
       if (updateError) throw updateError;
@@ -64,13 +67,21 @@ serve(async (req) => {
 
     // Check if already unlocked for this week
     if (userTokens.rankings_unlocked_week === currentWeek) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          message: "Rankings already unlocked for this week",
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // Check if 7 days have passed since unlock
+      if (userTokens.rankings_unlocked_at) {
+        const unlockedAt = new Date(userTokens.rankings_unlocked_at);
+        const sevenDaysLater = new Date(unlockedAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+        
+        if (new Date() < sevenDaysLater) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "Rankings already unlocked for this week",
+            }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
     }
 
     // Non-subscriber: check token balance
@@ -88,12 +99,15 @@ serve(async (req) => {
     // Deduct 1 token and unlock
     const newBalance = userTokens.balance - 1;
     const currentLifetimeSpent = userTokens.lifetime_spent || 0;
+    const unlockTimestamp = new Date().toISOString();
+    
     const { error: updateError } = await supabaseClient
       .from("user_tokens")
       .update({
         balance: newBalance,
         lifetime_spent: currentLifetimeSpent + 1,
         rankings_unlocked_week: currentWeek,
+        rankings_unlocked_at: unlockTimestamp,
       })
       .eq("user_id", user.id);
 

@@ -41,7 +41,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [showUnlockDialog, setShowUnlockDialog] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
-  const [unlockedWeek, setUnlockedWeek] = useState<number | null>(null);
+  const [unlockedAt, setUnlockedAt] = useState<string | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   
   const { subscription, loading: subLoading } = useSubscription();
@@ -63,39 +63,37 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   }, [currentWeek, isActiveSubscriber]);
   
   useEffect(() => {
-    if (hasTokenAccess) {
+    if (hasTokenAccess && unlockedAt) {
       calculateTimeRemaining();
       const interval = setInterval(calculateTimeRemaining, 60000); // Update every minute
       return () => clearInterval(interval);
     }
-  }, [hasTokenAccess]);
+  }, [hasTokenAccess, unlockedAt]);
 
   const calculateTimeRemaining = () => {
-    const now = new Date();
-    const dayOfWeek = now.getDay(); // 0=Sunday, 6=Saturday
-    const hourOfDay = now.getHours();
+    if (!unlockedAt) return;
     
-    // Calculate next Tuesday 3 AM (when week resets)
-    let daysUntilTuesday = (2 - dayOfWeek + 7) % 7;
-    if (daysUntilTuesday === 0 && (dayOfWeek !== 2 || hourOfDay >= 3)) {
-      daysUntilTuesday = 7; // Next Tuesday
+    const unlockTime = new Date(unlockedAt);
+    const expiryTime = new Date(unlockTime.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days later
+    const now = new Date();
+    
+    const diff = expiryTime.getTime() - now.getTime();
+    
+    if (diff <= 0) {
+      setTimeRemaining('Expired');
+      setIsUnlocked(false);
+      return;
     }
     
-    const nextReset = new Date(now);
-    nextReset.setDate(now.getDate() + daysUntilTuesday);
-    nextReset.setHours(3, 0, 0, 0);
-    
-    const diff = nextReset.getTime() - now.getTime();
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     
     if (days > 0) {
       setTimeRemaining(`${days}d ${hours}h remaining`);
     } else if (hours > 0) {
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       setTimeRemaining(`${hours}h ${minutes}m remaining`);
     } else {
-      const minutes = Math.floor(diff / (1000 * 60));
       setTimeRemaining(`${minutes}m remaining`);
     }
   };
@@ -107,14 +105,23 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       
       const { data, error } = await supabase
         .from('user_tokens')
-        .select('rankings_unlocked_week')
+        .select('rankings_unlocked_week, rankings_unlocked_at')
         .eq('user_id', user.id)
         .single();
       
       if (error) throw error;
       
-      setUnlockedWeek(data?.rankings_unlocked_week || null);
-      setIsUnlocked(isActiveSubscriber || data?.rankings_unlocked_week === currentWeek);
+      setUnlockedAt(data?.rankings_unlocked_at || null);
+      
+      // Check if unlocked and within 7 days
+      let isValid = false;
+      if (data?.rankings_unlocked_at) {
+        const unlockTime = new Date(data.rankings_unlocked_at);
+        const sevenDaysLater = new Date(unlockTime.getTime() + 7 * 24 * 60 * 60 * 1000);
+        isValid = new Date() < sevenDaysLater;
+      }
+      
+      setIsUnlocked(isActiveSubscriber || (data?.rankings_unlocked_week === currentWeek && isValid));
     } catch (error) {
       console.error('Error checking unlock status:', error);
     }
@@ -158,7 +165,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       
       if (data.success) {
         setIsUnlocked(true);
-        setUnlockedWeek(currentWeek);
+        setUnlockedAt(new Date().toISOString());
         await refreshBalance();
         toast.success('Rankings Unlocked!', {
           description: data.unlimited 
