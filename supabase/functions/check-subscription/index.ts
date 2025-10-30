@@ -70,14 +70,20 @@ serve(async (req) => {
     }
 
     const productId = activeSub.items.data[0].price.product as string;
-    const subscriptionEnd = new Date(activeSub.current_period_end * 1000).toISOString();
+    const subscriptionEnd = activeSub.current_period_end 
+      ? new Date(activeSub.current_period_end * 1000).toISOString() 
+      : null;
     const cancelAtPeriodEnd = activeSub.cancel_at_period_end;
+    const trialEnd = activeSub.trial_end && typeof activeSub.trial_end === 'number'
+      ? new Date(activeSub.trial_end * 1000).toISOString() 
+      : null;
     
     logStep("Active subscription found", {
       subscriptionId: activeSub.id,
       productId,
       status: activeSub.status,
       cancelAtPeriodEnd,
+      subscriptionEnd,
     });
 
     return new Response(
@@ -87,7 +93,7 @@ serve(async (req) => {
         subscription_end: subscriptionEnd,
         status: activeSub.status,
         cancel_at_period_end: cancelAtPeriodEnd,
-        trial_end: activeSub.trial_end ? new Date(activeSub.trial_end * 1000).toISOString() : null,
+        trial_end: trialEnd,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
