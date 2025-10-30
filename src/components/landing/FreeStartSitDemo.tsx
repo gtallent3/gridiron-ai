@@ -116,7 +116,7 @@ export const FreeStartSitDemo = () => {
                       <h3 className="text-xl font-semibold">Recommendation</h3>
                     </div>
                     <p className="text-2xl font-bold text-primary">
-                      Start {analysis.recommendation}
+                      {analysis.recommendation}
                     </p>
                   </div>
 
