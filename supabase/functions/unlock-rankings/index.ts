@@ -38,13 +38,13 @@ serve(async (req) => {
     if (tokensError) throw tokensError;
 
     // Check if user is an active subscriber
-    const isSubscriber =
+    const isActiveSubscriber =
       userTokens.has_unlimited_subscription &&
       userTokens.subscription_expires_at &&
       new Date(userTokens.subscription_expires_at) > new Date();
 
     // If subscriber, unlock for free
-    if (isSubscriber) {
+    if (isActiveSubscriber) {
       const { error: updateError } = await supabaseClient
         .from("user_tokens")
         .update({ rankings_unlocked_week: currentWeek })

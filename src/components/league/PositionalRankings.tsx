@@ -49,9 +49,9 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   const currentWeekInfo = getCurrentNFLWeek();
   const currentWeek = currentWeekInfo.week;
   
-  // Check if user has access
-  const isSubscriber = subscription.subscribed || hasUnlimited;
-  const hasTokenAccess = isUnlocked && !isSubscriber;
+  // Check if user has access - only count as subscriber if actively subscribed
+  const isActiveSubscriber = (subscription.subscribed && subscription.status === 'active') || hasUnlimited;
+  const hasTokenAccess = isUnlocked && !isActiveSubscriber;
 
   useEffect(() => {
     fetchPositionalStrengths();
@@ -60,7 +60,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   
   useEffect(() => {
     checkUnlockStatus();
-  }, [currentWeek, isSubscriber]);
+  }, [currentWeek, isActiveSubscriber]);
   
   useEffect(() => {
     if (hasTokenAccess) {
@@ -114,7 +114,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       if (error) throw error;
       
       setUnlockedWeek(data?.rankings_unlocked_week || null);
-      setIsUnlocked(isSubscriber || data?.rankings_unlocked_week === currentWeek);
+      setIsUnlocked(isActiveSubscriber || data?.rankings_unlocked_week === currentWeek);
     } catch (error) {
       console.error('Error checking unlock status:', error);
     }
@@ -229,7 +229,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                 Team strengths by position (hover for details)
               </CardDescription>
             </div>
-            {isSubscriber && (
+            {isActiveSubscriber && (
               <Badge variant="secondary" className="gap-1">
                 <CheckCircle className="h-3 w-3" />
                 Subscriber Access
