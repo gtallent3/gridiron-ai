@@ -5,7 +5,6 @@ import { HeroSection } from "@/components/landing/HeroSection";
 import { FeatureOverview } from "@/components/landing/FeatureOverview";
 import { FreeStartSitDemo } from "@/components/landing/FreeStartSitDemo";
 import { FeatureComparison } from "@/components/landing/FeatureComparison";
-import { Testimonials } from "@/components/landing/Testimonials";
 import { FinalCTA } from "@/components/landing/FinalCTA";
 import { Footer } from "@/components/landing/Footer";
 import { ConnectedLeagues } from "@/components/ConnectedLeagues";
@@ -55,7 +54,6 @@ const Index = () => {
           <FeatureOverview />
           <FreeStartSitDemo />
           <FeatureComparison />
-          <Testimonials />
           <FinalCTA />
         </>
       )}
