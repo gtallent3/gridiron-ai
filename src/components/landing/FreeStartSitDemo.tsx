@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Lock, Sparkles, TrendingUp, AlertCircle } from "lucide-react";
+import { Lock, Sparkles, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useStartSitAnalysis } from "@/hooks/useStartSitAnalysis";
-import { Loader2 } from "lucide-react";
+import { PlayerAutocomplete } from "@/components/ui/player-autocomplete";
 
 export const FreeStartSitDemo = () => {
   const [player1, setPlayer1] = useState("");
@@ -67,20 +66,18 @@ export const FreeStartSitDemo = () => {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="player1">Player 1</Label>
-                  <Input
-                    id="player1"
-                    placeholder="e.g., Patrick Mahomes"
+                  <PlayerAutocomplete
                     value={player1}
-                    onChange={(e) => setPlayer1(e.target.value)}
+                    onSelectPlayer={(player) => setPlayer1(player.player_name)}
+                    placeholder="Search for a player..."
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="player2">Player 2</Label>
-                  <Input
-                    id="player2"
-                    placeholder="e.g., Josh Allen"
+                  <PlayerAutocomplete
                     value={player2}
-                    onChange={(e) => setPlayer2(e.target.value)}
+                    onSelectPlayer={(player) => setPlayer2(player.player_name)}
+                    placeholder="Search for a player..."
                   />
                 </div>
               </div>
