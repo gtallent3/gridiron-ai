@@ -31,6 +31,24 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
     checkMobile();
   }, []);
 
+  // Listen for postMessage from bookmarklet
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const msg = e.data;
+      if (msg && msg.__GRIDIRONGM === 'ESPN_COOKIES') {
+        setSwid(msg.data.SWID || '');
+        setEspn_s2(msg.data.espn_s2 || '');
+        setStep('validate');
+        toast({
+          title: "Cookies captured!",
+          description: "Auto-filled your ESPN credentials. Add your League ID to continue.",
+        });
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [toast]);
+
   const extractionScript = `
 // Paste this in ESPN's browser console
 var cookies = document.cookie.split(';');
@@ -42,7 +60,7 @@ cookies.forEach(c => {
 console.log('Copy these values:', espnCreds);
 espnCreds;`.trim();
 
-  const bookmarkletCode = `javascript:(function(){var c=document.cookie.split(';'),e={};c.forEach(x=>{if(x.includes('SWID='))e.swid=x.split('=')[1].trim();if(x.includes('espn_s2='))e.espn_s2=x.split('=')[1].trim();});if(e.swid&&e.espn_s2){prompt('Copy SWID:',e.swid);prompt('Copy espn_s2:',e.espn_s2);}else{alert('Please log into ESPN first!');}})();`;
+  const bookmarkletCode = `javascript:(async()=>{try{const need=['SWID','espn_s2'];const jar=Object.fromEntries(document.cookie.split('; ').map(s=>s.split('=')));const out={};need.forEach(k=>{if(jar[k])out[k]=decodeURIComponent(jar[k]);});if(Object.keys(out).length<2){alert('Could not find both SWID and espn_s2. Make sure you are logged into ESPN.');return;}alert('Found cookies! Returning to GridironGM...');window.opener?.postMessage({__GRIDIRONGM:'ESPN_COOKIES',data:out},'*');}catch(e){alert('Failed to capture cookies: '+e);}})();`;
 
   const openEspnLogin = () => {
     window.open('https://www.espn.com/login', '_blank', 'width=800,height=600');
@@ -190,36 +208,74 @@ espnCreds;`.trim();
               <Alert>
                 <Monitor className="h-4 w-4" />
                 <AlertDescription>
-                  After logging in, open browser DevTools (F12) and go to the Console tab
+                  Use the bookmarklet for one-click auto-fill, or use DevTools for manual extraction
                 </AlertDescription>
               </Alert>
 
-              <div className="space-y-3">
-                <Label>Step 1: Copy this script</Label>
-                <div className="relative">
-                  <pre className="bg-muted p-3 rounded text-xs overflow-x-auto">
-                    {extractionScript}
-                  </pre>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute top-2 right-2"
-                    onClick={copyScript}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
+              <div className="space-y-4">
+                <div className="space-y-2 p-3 border rounded-lg bg-primary/5">
+                  <Label className="text-base font-semibold flex items-center gap-2">
+                    ⚡ Recommended: Drag bookmarklet to toolbar
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={bookmarkletCode}
+                      className="px-3 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 text-sm font-medium"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        toast({
+                          title: "Drag this to your bookmarks bar!",
+                          description: "Then click it while on ESPN's site to auto-fill credentials",
+                        });
+                      }}
+                    >
+                      📋 Get ESPN Cookies
+                    </a>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={copyScript}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Drag the button above to your bookmarks bar, then click it on ESPN's site to auto-fill
+                  </p>
                 </div>
 
-                <Label>Step 2: Paste in ESPN console & press Enter</Label>
-                <p className="text-sm text-muted-foreground">
-                  You'll see an object with 'swid' and 'espn_s2' values
-                </p>
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-background px-2 text-muted-foreground">Or use console</span>
+                  </div>
+                </div>
 
-                <Label>Step 3: Copy the values below</Label>
+                <div className="space-y-2">
+                  <Label>Console method (F12 → Console tab)</Label>
+                  <div className="relative">
+                    <pre className="bg-muted p-3 rounded text-xs overflow-x-auto">
+                      {extractionScript}
+                    </pre>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="absolute top-2 right-2"
+                      onClick={() => {
+                        navigator.clipboard.writeText(extractionScript);
+                        toast({ title: "Script copied!", description: "Paste in ESPN console (F12)" });
+                      }}
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
               </div>
 
-              <Button onClick={() => setStep('validate')} className="w-full">
-                I've got the cookies
+              <Button onClick={() => setStep('validate')} variant="outline" className="w-full">
+                Continue to manual entry
               </Button>
             </div>
           )}
@@ -229,7 +285,7 @@ espnCreds;`.trim();
               <Alert>
                 <Smartphone className="h-4 w-4" />
                 <AlertDescription>
-                  Mobile browsers don't have DevTools. We'll use a bookmarklet instead!
+                  Mobile browsers don't have DevTools. We'll use a bookmarklet with auto-fill!
                 </AlertDescription>
               </Alert>
 
@@ -256,23 +312,23 @@ espnCreds;`.trim();
                   <ol className="text-sm space-y-2 list-decimal list-inside text-muted-foreground">
                     <li>Bookmark any page (tap share → Add to Bookmarks)</li>
                     <li>Edit the bookmark and replace the URL with the code you copied</li>
-                    <li>Name it "ESPN Cookie Extractor"</li>
+                    <li>Name it "Get ESPN Cookies"</li>
                   </ol>
                 </div>
 
                 <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
                   <Label className="text-base font-semibold">Step 3: Use the bookmarklet</Label>
                   <ol className="text-sm space-y-2 list-decimal list-inside text-muted-foreground">
-                    <li>Go to ESPN's website and log in</li>
-                    <li>Tap the bookmarks icon and select "ESPN Cookie Extractor"</li>
-                    <li>Two popup boxes will appear with your SWID and espn_s2 values</li>
-                    <li>Copy both values</li>
+                    <li>Go to fantasy.espn.com and log in</li>
+                    <li>Tap the bookmarks icon and select "Get ESPN Cookies"</li>
+                    <li>You'll see an alert confirming cookies were found</li>
+                    <li>Your SWID and espn_s2 will auto-fill here!</li>
                   </ol>
                 </div>
               </div>
 
-              <Button onClick={() => setStep('validate')} className="w-full">
-                I've got the cookies
+              <Button onClick={() => setStep('validate')} variant="outline" className="w-full">
+                Skip to manual entry
               </Button>
             </div>
           )}
