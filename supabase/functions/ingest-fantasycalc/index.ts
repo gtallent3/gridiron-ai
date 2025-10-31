@@ -114,24 +114,77 @@ async function scrapeFantasyCalc(): Promise<PlayerRow[]> {
   
   const html = await response.text();
   
-  // Try to extract JSON data from script tags (fast path)
-  const jsonMatch = html.match(/<script[^>]*>(.*?window\.__INITIAL_STATE__\s*=\s*({.*?})\s*;.*?)<\/script>/s);
-  if (jsonMatch) {
-    console.log("Found initial state JSON, attempting to parse...");
+  console.log(`HTML length: ${html.length} characters`);
+  
+  // Try multiple patterns to extract JSON data
+  let jsonData = null;
+  
+  // Pattern 1: window.__INITIAL_STATE__
+  let match = html.match(/window\.__INITIAL_STATE__\s*=\s*({.*?});/s);
+  if (match) {
+    console.log("Found __INITIAL_STATE__ pattern");
     try {
-      const jsonData = JSON.parse(jsonMatch[2]);
-      if (jsonData.rankings || jsonData.players) {
-        console.log("Successfully extracted JSON data");
-        return await parseJsonData(jsonData);
-      }
+      jsonData = JSON.parse(match[1]);
     } catch (e) {
-      console.warn("Failed to parse JSON data, falling back to DOM parsing");
+      console.warn("Failed to parse __INITIAL_STATE__:", e);
     }
   }
   
-  // Fallback: Parse HTML table
-  console.log("Using DOM parsing fallback...");
-  return parseHtmlTable(html);
+  // Pattern 2: __NEXT_DATA__ (Next.js apps)
+  if (!jsonData) {
+    match = html.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/s);
+    if (match) {
+      console.log("Found __NEXT_DATA__ pattern");
+      try {
+        jsonData = JSON.parse(match[1]);
+        // Navigate to props.pageProps or similar
+        if (jsonData.props?.pageProps) {
+          jsonData = jsonData.props.pageProps;
+        }
+      } catch (e) {
+        console.warn("Failed to parse __NEXT_DATA__:", e);
+      }
+    }
+  }
+  
+  // Pattern 3: Any large JSON object in script tags
+  if (!jsonData) {
+    const scriptMatches = html.matchAll(/<script[^>]*>(.*?)<\/script>/gs);
+    for (const scriptMatch of scriptMatches) {
+      const scriptContent = scriptMatch[1];
+      // Look for large JSON-like content
+      const jsonArrayMatch = scriptContent.match(/[\[{].*?rankings.*?[\]}]/s);
+      if (jsonArrayMatch) {
+        console.log("Found potential rankings JSON in script");
+        try {
+          jsonData = JSON.parse(jsonArrayMatch[0]);
+          break;
+        } catch (e) {
+          // Try wrapping it
+          try {
+            const wrapped = scriptContent.match(/=\s*({.*rankings.*})/s);
+            if (wrapped) {
+              jsonData = JSON.parse(wrapped[1]);
+              break;
+            }
+          } catch (e2) {
+            continue;
+          }
+        }
+      }
+    }
+  }
+  
+  if (jsonData && (jsonData.rankings || jsonData.players || Array.isArray(jsonData))) {
+    console.log("Successfully extracted JSON data, parsing...");
+    return await parseJsonData(jsonData);
+  }
+  
+  console.warn("Could not extract JSON data, HTML parsing not implemented");
+  console.log("Page title:", html.match(/<title>(.*?)<\/title>/)?.[1] || "Not found");
+  
+  // Return empty array since HTML parsing isn't implemented
+  return [];
 }
 
 async function parseJsonData(data: any): Promise<PlayerRow[]> {
@@ -139,23 +192,46 @@ async function parseJsonData(data: any): Promise<PlayerRow[]> {
   const fetchedAt = new Date().toISOString();
   const players: PlayerRow[] = [];
   
-  const rankings = data.rankings || data.players || [];
+  // Handle different data structures
+  let rankings = [];
+  
+  if (Array.isArray(data)) {
+    rankings = data;
+  } else if (data.rankings) {
+    rankings = Array.isArray(data.rankings) ? data.rankings : [];
+  } else if (data.players) {
+    rankings = Array.isArray(data.players) ? data.players : [];
+  } else if (data.data?.rankings) {
+    rankings = Array.isArray(data.data.rankings) ? data.data.rankings : [];
+  }
+  
+  console.log(`Found ${rankings.length} potential player records`);
   
   for (let i = 0; i < rankings.length; i++) {
     const player = rankings[i];
     
     try {
+      // Extract player name and position - handle different formats
+      let playerName = player.name || player.player_name || player.playerName || '';
+      let position = player.position || player.pos || '';
+      let team = player.team || player.nflTeam || null;
+      
+      // Skip if no name or position
+      if (!playerName || !position) {
+        continue;
+      }
+      
       const row: PlayerRow = {
         snapshot_date: snapshotDate,
         source: SOURCE,
-        player_name: player.name || player.player_name,
-        position: player.position,
-        team: player.team || null,
-        rank: player.rank || (i + 1),
+        player_name: playerName,
+        position: position,
+        team: team,
+        rank: player.rank || player.overallRank || (i + 1),
         tier: player.tier || null,
-        value_score: parseFloat(player.value || player.trade_value || player.ecr || 0),
-        bye_week: player.bye_week || player.bye || null,
-        player_id_hint: player.id || player.slug || null,
+        value_score: parseFloat(player.value || player.trade_value || player.tradeValue || player.ecr || 0),
+        bye_week: player.bye_week || player.bye || player.byeWeek || null,
+        player_id_hint: player.id || player.playerId || player.slug || null,
         raw_hash: "",
         fetched_at: fetchedAt
       };
@@ -169,6 +245,7 @@ async function parseJsonData(data: any): Promise<PlayerRow[]> {
     }
   }
   
+  console.log(`Successfully parsed ${players.length} players`);
   return players;
 }
 
