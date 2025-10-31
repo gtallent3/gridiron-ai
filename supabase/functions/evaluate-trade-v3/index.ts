@@ -144,7 +144,7 @@ interface Player {
   player_id: string;
   player_name: string;
   position: string;
-  ros_projection: number;
+  ppg_projection: number;
   value_score: number;
 }
 
@@ -162,11 +162,16 @@ function evaluateTradeByStartingLineup(
     return roster.map(p => {
       const playerId = String(p.player_id || p.playerId || p.id || '');
       const value = valueMap.get(playerId);
+      
+      // Calculate PPG from ROS projection (assuming ~10 weeks remaining on average)
+      const rosProj = value?.projected_fp_ros || 0;
+      const ppg = p.ppg_projection || (rosProj > 0 ? rosProj / 10 : 0);
+      
       return {
         player_id: playerId,
         player_name: p.player_name || p.playerName || p.name || 'Unknown',
         position: String(p.position || '').toUpperCase(),
-        ros_projection: value?.projected_fp_ros || 0,
+        ppg_projection: ppg,
         value_score: value?.value_score || 0,
       };
     }).filter(p => p.player_id);
@@ -198,33 +203,33 @@ function evaluateTradeByStartingLineup(
   const teamAStartingAfter = calculateStartingLineup(teamAAfter);
   const teamBStartingAfter = calculateStartingLineup(teamBAfter);
 
-  // Calculate ROS impact (only starting lineup)
-  const teamARosChange = teamAStartingAfter.totalRos - teamAStartingBefore.totalRos;
-  const teamBRosChange = teamBStartingAfter.totalRos - teamBStartingBefore.totalRos;
+  // Calculate PPG impact (only starting lineup)
+  const teamAPpgChange = teamAStartingAfter.totalPpg - teamAStartingBefore.totalPpg;
+  const teamBPpgChange = teamBStartingAfter.totalPpg - teamBStartingBefore.totalPpg;
 
   // Determine if trade is acceptable (both teams should improve or be close)
-  const isAcceptable = teamBRosChange >= -5; // Team B shouldn't lose more than 5 points
-  const isFairTrade = Math.abs(teamARosChange - teamBRosChange) < 15;
+  const isAcceptable = teamBPpgChange >= -0.5; // Team B shouldn't lose more than 0.5 PPG
+  const isFairTrade = Math.abs(teamAPpgChange - teamBPpgChange) < 1.5;
 
-  // Grade based on YOUR (Team A) starting lineup improvement
+  // Grade based on YOUR (Team A) starting lineup improvement (PPG)
   let grade = 'F';
-  if (teamARosChange >= 20) grade = 'A+';
-  else if (teamARosChange >= 15) grade = 'A';
-  else if (teamARosChange >= 10) grade = 'A-';
-  else if (teamARosChange >= 7) grade = 'B+';
-  else if (teamARosChange >= 5) grade = 'B';
-  else if (teamARosChange >= 3) grade = 'B-';
-  else if (teamARosChange >= 1) grade = 'C+';
-  else if (teamARosChange > 0) grade = 'C';
-  else if (teamARosChange >= -3) grade = 'D';
+  if (teamAPpgChange >= 2.0) grade = 'A+';
+  else if (teamAPpgChange >= 1.5) grade = 'A';
+  else if (teamAPpgChange >= 1.0) grade = 'A-';
+  else if (teamAPpgChange >= 0.7) grade = 'B+';
+  else if (teamAPpgChange >= 0.5) grade = 'B';
+  else if (teamAPpgChange >= 0.3) grade = 'B-';
+  else if (teamAPpgChange >= 0.15) grade = 'C+';
+  else if (teamAPpgChange > 0) grade = 'C';
+  else if (teamAPpgChange >= -0.3) grade = 'D';
   else grade = 'F';
 
   // Build explanation
   const tradedPlayersOut = teamAGives.map(id => teamAPlayers.find(p => p.player_id === id)?.player_name).filter(Boolean);
   const tradedPlayersIn = teamBGives.map(id => teamBPlayers.find(p => p.player_id === id)?.player_name).filter(Boolean);
 
-  let explanation = `Your starting lineup ${teamARosChange > 0 ? 'gains' : 'loses'} ${Math.abs(teamARosChange).toFixed(1)} ROS points. `;
-  explanation += `Their starting lineup ${teamBRosChange > 0 ? 'gains' : 'loses'} ${Math.abs(teamBRosChange).toFixed(1)} ROS points. `;
+  let explanation = `Your starting lineup ${teamAPpgChange > 0 ? 'gains' : 'loses'} ${Math.abs(teamAPpgChange).toFixed(2)} PPG. `;
+  explanation += `Their starting lineup ${teamBPpgChange > 0 ? 'gains' : 'loses'} ${Math.abs(teamBPpgChange).toFixed(2)} PPG. `;
 
   if (!isAcceptable) {
     explanation += `⚠️ The other team loses too much value - they likely won't accept this trade. `;
@@ -248,19 +253,19 @@ function evaluateTradeByStartingLineup(
 
   const result = {
     trade_grade: grade,
-    advantage_team: teamARosChange > teamBRosChange ? teamAId : teamBId,
-    value_difference: Math.abs(teamARosChange - teamBRosChange),
-    percent_difference: ((Math.abs(teamARosChange - teamBRosChange) / (teamAStartingBefore.totalRos + teamBStartingBefore.totalRos)) * 100),
+    advantage_team: teamAPpgChange > teamBPpgChange ? teamAId : teamBId,
+    value_difference: Math.abs(teamAPpgChange - teamBPpgChange),
+    percent_difference: ((Math.abs(teamAPpgChange - teamBPpgChange) / (teamAStartingBefore.totalPpg + teamBStartingBefore.totalPpg)) * 100),
     explanation,
     is_acceptable: isAcceptable,
     is_fair: isFairTrade,
     audit: {
-      teamA_starting_ros_before: teamAStartingBefore.totalRos,
-      teamA_starting_ros_after: teamAStartingAfter.totalRos,
-      teamA_ros_change: teamARosChange,
-      teamB_starting_ros_before: teamBStartingBefore.totalRos,
-      teamB_starting_ros_after: teamBStartingAfter.totalRos,
-      teamB_ros_change: teamBRosChange,
+      teamA_starting_ppg_before: teamAStartingBefore.totalPpg,
+      teamA_starting_ppg_after: teamAStartingAfter.totalPpg,
+      teamA_ppg_change: teamAPpgChange,
+      teamB_starting_ppg_before: teamBStartingBefore.totalPpg,
+      teamB_starting_ppg_after: teamBStartingAfter.totalPpg,
+      teamB_ppg_change: teamBPpgChange,
     },
     starting_lineup_breakdown: {
       teamA_before: teamAStartingBefore.breakdown,
@@ -268,10 +273,10 @@ function evaluateTradeByStartingLineup(
       teamB_before: teamBStartingBefore.breakdown,
       teamB_after: teamBStartingAfter.breakdown,
     },
-    ros_points_delta: teamARosChange,
-    next_3_weeks_delta: teamARosChange * 0.3,
+    ros_points_delta: teamAPpgChange * 10, // Convert to ~season estimate
+    next_3_weeks_delta: teamAPpgChange * 3,
     confidence: isAcceptable ? 85 : 65,
-    verdict: teamARosChange > 0 && isAcceptable ? 'accept' : 'reject',
+    verdict: teamAPpgChange > 0 && isAcceptable ? 'accept' : 'reject',
     summary: explanation,
   };
 
@@ -296,9 +301,9 @@ function calculateStartingLineup(players: Player[]) {
     }
   }
 
-  // Sort each position by ROS projection (highest first)
+  // Sort each position by PPG projection (highest first)
   for (const pos in byPosition) {
-    byPosition[pos].sort((a, b) => b.ros_projection - a.ros_projection);
+    byPosition[pos].sort((a, b) => b.ppg_projection - a.ppg_projection);
   }
 
   // Select starters
@@ -309,7 +314,7 @@ function calculateStartingLineup(players: Player[]) {
   for (const pos of ['QB', 'TE', 'K', 'DST']) {
     if (byPosition[pos][0]) {
       starters.push(byPosition[pos][0]);
-      breakdown[pos] = byPosition[pos][0].ros_projection;
+      breakdown[pos] = byPosition[pos][0].ppg_projection;
     } else {
       breakdown[pos] = 0;
     }
@@ -321,7 +326,7 @@ function calculateStartingLineup(players: Player[]) {
       starters.push(byPosition.RB[i]);
     }
   }
-  breakdown.RB = byPosition.RB.slice(0, 2).reduce((sum, p) => sum + p.ros_projection, 0);
+  breakdown.RB = byPosition.RB.slice(0, 2).reduce((sum, p) => sum + p.ppg_projection, 0);
 
   // WR - take top 2
   for (let i = 0; i < 2; i++) {
@@ -329,27 +334,27 @@ function calculateStartingLineup(players: Player[]) {
       starters.push(byPosition.WR[i]);
     }
   }
-  breakdown.WR = byPosition.WR.slice(0, 2).reduce((sum, p) => sum + p.ros_projection, 0);
+  breakdown.WR = byPosition.WR.slice(0, 2).reduce((sum, p) => sum + p.ppg_projection, 0);
 
   // FLEX - best remaining RB/WR/TE
   const flexCandidates = [
     ...(byPosition.RB[2] ? [byPosition.RB[2]] : []),
     ...(byPosition.WR[2] ? [byPosition.WR[2]] : []),
     ...(byPosition.TE[1] ? [byPosition.TE[1]] : []),
-  ].sort((a, b) => b.ros_projection - a.ros_projection);
+  ].sort((a, b) => b.ppg_projection - a.ppg_projection);
 
   if (flexCandidates[0]) {
     starters.push(flexCandidates[0]);
-    breakdown.FLEX = flexCandidates[0].ros_projection;
+    breakdown.FLEX = flexCandidates[0].ppg_projection;
   } else {
     breakdown.FLEX = 0;
   }
 
-  const totalRos = starters.reduce((sum, p) => sum + p.ros_projection, 0);
+  const totalPpg = starters.reduce((sum, p) => sum + p.ppg_projection, 0);
 
   return {
     starters,
-    totalRos,
+    totalPpg,
     breakdown,
   };
 }
@@ -380,17 +385,17 @@ function analyzePositionChanges(
   const posChanges: Record<string, number> = {};
   for (const pos in afterLineup.breakdown) {
     const change = afterLineup.breakdown[pos] - beforeLineup.breakdown[pos];
-    if (Math.abs(change) > 5) {
+    if (Math.abs(change) > 0.5) {
       posChanges[pos] = change;
     }
   }
 
   for (const pos in posChanges) {
     const change = posChanges[pos];
-    if (change > 5) {
-      notes.push(`✓ Your ${pos} position improves by ${change.toFixed(1)} points.`);
-    } else if (change < -5) {
-      notes.push(`⚠️ Your ${pos} position weakens by ${Math.abs(change).toFixed(1)} points.`);
+    if (change > 0.5) {
+      notes.push(`✓ Your ${pos} position improves by ${change.toFixed(2)} PPG.`);
+    } else if (change < -0.5) {
+      notes.push(`⚠️ Your ${pos} position weakens by ${Math.abs(change).toFixed(2)} PPG.`);
     }
   }
 

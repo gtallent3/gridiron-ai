@@ -8,14 +8,14 @@ const corsHeaders = {
 
 // Position weights based on scarcity and roster construction
 const POSITION_WEIGHTS: Record<string, number> = {
-  RB: 1.15,  // Higher value - harder to find quality RBs
+  RB: 1.30,  // Highest value - scarcest position, need 2+ starters
   WR: 1.00,  // Baseline
-  QB: 0.70,  // Lower value - only need 1 starter, streaming is viable
-  TE: 1.05,  // Premium positions are valuable
+  QB: 0.55,  // Much lower value - only 1 starter, easily streamable
+  TE: 1.10,  // Premium for top TEs
   FLEX: 1.00,
-  K: 0.50,   // Minimal value
-  DST: 0.50, // Minimal value
-  'D/ST': 0.50,
+  K: 0.45,   // Minimal value
+  DST: 0.45, // Minimal value
+  'D/ST': 0.45,
 };
 
 serve(async (req) => {
