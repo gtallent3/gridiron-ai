@@ -6,6 +6,17 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Standard starting lineup slots by position
+const STARTING_SLOTS: Record<string, number> = {
+  QB: 1,
+  RB: 2,
+  WR: 2,
+  TE: 1,
+  FLEX: 1, // RB/WR/TE
+  K: 1,
+  DST: 1,
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -56,292 +67,44 @@ serve(async (req) => {
       valueMap.set(pv.player_id, pv);
     }
 
-    // Fetch positional strengths
-    const { data: strengths, error: strengthsError } = await supabase
-      .from('team_positional_strengths')
+    // Fetch team rosters
+    const { data: teams, error: teamsError } = await supabase
+      .from('user_teams')
       .select('*')
       .eq('league_id', leagueId)
       .in('team_id', [teamAId, teamBId]);
 
-    if (strengthsError) {
-      console.error('Error fetching team strengths:', strengthsError);
+    if (teamsError || !teams || teams.length !== 2) {
       return new Response(
-        JSON.stringify({ error: 'Unable to fetch team data' }),
+        JSON.stringify({ error: 'Unable to fetch team rosters' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const teamAStrengths = new Map<string, any>();
-    const teamBStrengths = new Map<string, any>();
+    const teamA = teams.find(t => t.team_id === teamAId);
+    const teamB = teams.find(t => t.team_id === teamBId);
 
-    for (const s of strengths || []) {
-      const map = s.team_id === teamAId ? teamAStrengths : teamBStrengths;
-      map.set(s.position, s);
+    if (!teamA || !teamB) {
+      return new Response(
+        JSON.stringify({ error: 'Team data not found' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Calculate values for each side
-    const allPlayers = [...teamAGives, ...teamBGives];
-    const tradePlayerValues: any[] = [];
+    // Parse rosters
+    const teamARoster = Array.isArray(teamA.roster) ? teamA.roster : [];
+    const teamBRoster = Array.isArray(teamB.roster) ? teamB.roster : [];
 
-    for (const playerId of allPlayers) {
-      const value = valueMap.get(playerId);
-      if (value) {
-        tradePlayerValues.push(value);
-      }
-    }
-
-    // Find best player in trade
-    const bestPlayer = tradePlayerValues.reduce((best, p) => 
-      p.value_score > (best?.value_score || 0) ? p : best, null
+    // Evaluate trade based on starting lineup impact
+    const evaluation = evaluateTradeByStartingLineup(
+      teamARoster,
+      teamBRoster,
+      teamAGives,
+      teamBGives,
+      valueMap,
+      teamAId,
+      teamBId
     );
-
-    const bestPlayerBonus = bestPlayer ? bestPlayer.value_score * 0.03 : 0; // 3% bonus
-    const bestPlayerReceivedBy = teamBGives.includes(bestPlayer?.player_id) ? teamAId : teamBId;
-
-    // Calculate sums
-    let sumAOut = 0, sumAIn = 0, sumBOut = 0, sumBIn = 0;
-
-    for (const playerId of teamAGives) {
-      const value = valueMap.get(playerId);
-      if (value) sumAOut += value.value_score;
-    }
-
-    for (const playerId of teamBGives) {
-      const value = valueMap.get(playerId);
-      if (value) {
-        sumAIn += value.value_score;
-        sumBOut += value.value_score;
-      }
-    }
-
-    for (const playerId of teamAGives) {
-      const value = valueMap.get(playerId);
-      if (value) sumBIn += value.value_score;
-    }
-
-    // Apply best player bonus
-    if (bestPlayerReceivedBy === teamAId) {
-      sumAIn += bestPlayerBonus;
-    } else {
-      sumBIn += bestPlayerBonus;
-    }
-
-    // Enhanced Positional fit adjustments based on z_score and rank
-    const positionalFitNotes: string[] = [];
-    const rankChanges: any[] = [];
-    let teamAFitBonus = 0;
-    let teamBFitBonus = 0;
-
-    // Helper to calculate positional fit bonus based on weakness severity AND rank improvement
-    const getPositionalFitBonus = (posStrength: any, playerValue: number, isReceiving: boolean): number => {
-      if (!posStrength) return 0;
-      
-      const zScore = posStrength.z_score;
-      const rank = posStrength.rank;
-      
-      // Base bonus by position weakness
-      let baseBonus = 0;
-      if (zScore < -1.5) baseBonus = playerValue * 0.08; // Very weak: 8%
-      else if (zScore < -1.0) baseBonus = playerValue * 0.05; // Weak: 5%
-      else if (zScore < -0.5) baseBonus = playerValue * 0.03; // Below average: 3%
-      else if (zScore < 0) baseBonus = playerValue * 0.015; // Slightly below: 1.5%
-      
-      // Additional bonus for improving bottom 4 positions
-      if (isReceiving && rank >= 7) {
-        baseBonus += playerValue * 0.10; // +10% for fixing bottom 4
-      }
-      
-      // Penalty for trading from top 3 positions
-      if (!isReceiving && rank <= 3) {
-        baseBonus -= playerValue * 0.10; // -10% for weakening top 3
-      }
-      
-      return baseBonus;
-    };
-
-    // Helper to calculate z-score movement bonus
-    const getZScoreMovementBonus = (currentZ: number, playerValue: number, isAdding: boolean): number => {
-      // Each 0.5 increase in z-score at position of need = +5% bonus
-      const zMovement = isAdding ? (playerValue * 0.05) : 0;
-      if (currentZ < 0 && isAdding) {
-        return zMovement * Math.abs(currentZ) * 2; // Scale by how far below average
-      }
-      return 0;
-    };
-
-    // Check if Team A improves weak positions by receiving players
-    for (const playerId of teamBGives) {
-      const value = valueMap.get(playerId);
-      if (value) {
-        const posStrength = teamAStrengths.get(value.position);
-        if (posStrength) {
-          const bonus = getPositionalFitBonus(posStrength, value.value_score, true);
-          const zBonus = getZScoreMovementBonus(posStrength.z_score, value.value_score, true);
-          teamAFitBonus += bonus + zBonus;
-          
-          if (bonus > 0 || zBonus > 0) {
-            const zScore = posStrength.z_score.toFixed(2);
-            rankChanges.push({
-              team: 'A',
-              position: value.position,
-              beforeRank: posStrength.rank,
-              beforeZ: posStrength.z_score,
-              player: value.player_name,
-              action: 'receiving',
-            });
-            positionalFitNotes.push(
-              `Team A improves ${value.position} (rank ${posStrength.rank}, z-score ${zScore}) by adding ${value.player_name}`
-            );
-          }
-        }
-      }
-    }
-
-    // Check if Team A is trading away from positions
-    for (const playerId of teamAGives) {
-      const value = valueMap.get(playerId);
-      if (value) {
-        const posStrength = teamAStrengths.get(value.position);
-        if (posStrength) {
-          const penalty = getPositionalFitBonus(posStrength, value.value_score, false);
-          teamAFitBonus += penalty;
-          
-          if (posStrength.rank <= 3) {
-            rankChanges.push({
-              team: 'A',
-              position: value.position,
-              beforeRank: posStrength.rank,
-              beforeZ: posStrength.z_score,
-              player: value.player_name,
-              action: 'giving',
-            });
-            positionalFitNotes.push(
-              `Team A trades from ${value.position} strength (rank ${posStrength.rank})`
-            );
-          }
-        }
-      }
-    }
-
-    // Check if Team B improves weak positions by receiving players
-    for (const playerId of teamAGives) {
-      const value = valueMap.get(playerId);
-      if (value) {
-        const posStrength = teamBStrengths.get(value.position);
-        if (posStrength) {
-          const bonus = getPositionalFitBonus(posStrength, value.value_score, true);
-          const zBonus = getZScoreMovementBonus(posStrength.z_score, value.value_score, true);
-          teamBFitBonus += bonus + zBonus;
-          
-          if (bonus > 0 || zBonus > 0) {
-            const zScore = posStrength.z_score.toFixed(2);
-            rankChanges.push({
-              team: 'B',
-              position: value.position,
-              beforeRank: posStrength.rank,
-              beforeZ: posStrength.z_score,
-              player: value.player_name,
-              action: 'receiving',
-            });
-            positionalFitNotes.push(
-              `Team B improves ${value.position} (rank ${posStrength.rank}, z-score ${zScore}) by adding ${value.player_name}`
-            );
-          }
-        }
-      }
-    }
-
-    // Check if Team B is trading away from positions
-    for (const playerId of teamBGives) {
-      const value = valueMap.get(playerId);
-      if (value) {
-        const posStrength = teamBStrengths.get(value.position);
-        if (posStrength) {
-          const penalty = getPositionalFitBonus(posStrength, value.value_score, false);
-          teamBFitBonus += penalty;
-          
-          if (posStrength.rank <= 3) {
-            rankChanges.push({
-              team: 'B',
-              position: value.position,
-              beforeRank: posStrength.rank,
-              beforeZ: posStrength.z_score,
-              player: value.player_name,
-              action: 'giving',
-            });
-            positionalFitNotes.push(
-              `Team B trades from ${value.position} strength (rank ${posStrength.rank})`
-            );
-          }
-        }
-      }
-    }
-
-    sumAIn += teamAFitBonus;
-    sumBIn += teamBFitBonus;
-
-    console.log('Positional fit adjustments:', { teamAFitBonus, teamBFitBonus, notes: positionalFitNotes });
-
-    // Calculate net deltas
-    const teamANet = sumAIn - sumAOut;
-    const teamBNet = sumBIn - sumBOut;
-
-    // Determine advantage and YOUR grade (Team A perspective)
-    const totalValue = sumAOut + sumBOut;
-    const advantageTeam = teamANet > teamBNet ? teamAId : teamBId;
-    const valueDifference = Math.abs(teamANet - teamBNet);
-    const percentDiff = totalValue > 0 ? (valueDifference / totalValue) * 100 : 0;
-
-    // Grade strictly by Team A net gain (what you receive minus what you give)
-    let grade = 'D';
-    if (teamANet >= 25) grade = 'A+';
-    else if (teamANet >= 20) grade = 'A';
-    else if (teamANet >= 15) grade = 'A-';
-    else if (teamANet >= 10) grade = 'B+';
-    else if (teamANet >= 7) grade = 'B';
-    else if (teamANet >= 5) grade = 'B-';
-    else if (teamANet >= 3) grade = 'C+';
-    else if (teamANet >= 1) grade = 'C';
-    else if (teamANet > 0) grade = 'C-';
-    else grade = 'F';
-
-    // Build explanation
-    const explanation = buildExplanation({
-      teamANet,
-      teamBNet,
-      advantageTeam,
-      bestPlayer,
-      positionalFitNotes,
-      percentDiff,
-      rankChanges,
-    });
-
-    const result = {
-      trade_grade: grade,
-      advantage_team: advantageTeam,
-      value_difference: valueDifference,
-      percent_difference: percentDiff,
-      best_player_received_by: bestPlayerReceivedBy,
-      best_player_bonus: bestPlayerBonus,
-      positional_fit_notes: positionalFitNotes,
-      rank_changes: rankChanges,
-      positional_fit_bonus_a: teamAFitBonus,
-      positional_fit_bonus_b: teamBFitBonus,
-      explanation,
-      audit: {
-        teamA_out: sumAOut,
-        teamA_in: sumAIn,
-        teamA_net: teamANet,
-        teamB_out: sumBOut,
-        teamB_in: sumBIn,
-        teamB_net: teamBNet,
-      },
-      ros_points_delta: teamANet,
-      next_3_weeks_delta: teamANet * 0.3, // Approximate
-      confidence: 85,
-      verdict: teamANet > 0 ? 'accept' : 'reject',
-      summary: explanation,
-    };
 
     // Save evaluation
     const { error: saveError } = await supabase
@@ -353,19 +116,18 @@ serve(async (req) => {
         their_team_id: teamBId,
         my_players: teamAGives,
         their_players: teamBGives,
-        verdict: result.verdict,
-        grade: result.trade_grade,
-        confidence: result.confidence,
-        ros_points_delta: result.ros_points_delta,
-        next_3_weeks_delta: result.next_3_weeks_delta,
-        best_player_bonus_applied: bestPlayerBonus > 0,
-        summary: result.summary,
+        verdict: evaluation.verdict,
+        grade: evaluation.trade_grade,
+        confidence: evaluation.confidence,
+        ros_points_delta: evaluation.ros_points_delta,
+        next_3_weeks_delta: evaluation.next_3_weeks_delta,
+        summary: evaluation.explanation,
       });
 
     if (saveError) console.error('Error saving evaluation:', saveError);
 
     return new Response(
-      JSON.stringify(result),
+      JSON.stringify(evaluation),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
@@ -378,38 +140,259 @@ serve(async (req) => {
   }
 });
 
-function buildExplanation(params: any): string {
-  const { teamANet, teamBNet, advantageTeam, bestPlayer, positionalFitNotes, percentDiff, rankChanges } = params;
-  
-  let explanation = '';
-  
-  if (teamANet > teamBNet) {
-    explanation += `Team A gains approximately ${teamANet.toFixed(1)} ROS value points in this trade (${percentDiff.toFixed(1)}% advantage). `;
+interface Player {
+  player_id: string;
+  player_name: string;
+  position: string;
+  ros_projection: number;
+  value_score: number;
+}
+
+function evaluateTradeByStartingLineup(
+  teamARoster: any[],
+  teamBRoster: any[],
+  teamAGives: string[],
+  teamBGives: string[],
+  valueMap: Map<string, any>,
+  teamAId: string,
+  teamBId: string
+) {
+  // Convert rosters to player arrays with values
+  const getPlayerData = (roster: any[]): Player[] => {
+    return roster.map(p => {
+      const playerId = String(p.player_id || p.playerId || p.id || '');
+      const value = valueMap.get(playerId);
+      return {
+        player_id: playerId,
+        player_name: p.player_name || p.playerName || p.name || 'Unknown',
+        position: String(p.position || '').toUpperCase(),
+        ros_projection: value?.projected_fp_ros || 0,
+        value_score: value?.value_score || 0,
+      };
+    }).filter(p => p.player_id);
+  };
+
+  const teamAPlayers = getPlayerData(teamARoster);
+  const teamBPlayers = getPlayerData(teamBRoster);
+
+  // Calculate starting lineup before trade
+  const teamAStartingBefore = calculateStartingLineup(teamAPlayers);
+  const teamBStartingBefore = calculateStartingLineup(teamBPlayers);
+
+  // Apply trade
+  const teamAAfter = teamAPlayers.filter(p => !teamAGives.includes(p.player_id));
+  const teamBAfter = teamBPlayers.filter(p => !teamBGives.includes(p.player_id));
+
+  // Add received players
+  for (const playerId of teamBGives) {
+    const player = teamBPlayers.find(p => p.player_id === playerId);
+    if (player) teamAAfter.push(player);
+  }
+
+  for (const playerId of teamAGives) {
+    const player = teamAPlayers.find(p => p.player_id === playerId);
+    if (player) teamBAfter.push(player);
+  }
+
+  // Calculate starting lineup after trade
+  const teamAStartingAfter = calculateStartingLineup(teamAAfter);
+  const teamBStartingAfter = calculateStartingLineup(teamBAfter);
+
+  // Calculate ROS impact (only starting lineup)
+  const teamARosChange = teamAStartingAfter.totalRos - teamAStartingBefore.totalRos;
+  const teamBRosChange = teamBStartingAfter.totalRos - teamBStartingBefore.totalRos;
+
+  // Determine if trade is acceptable (both teams should improve or be close)
+  const isAcceptable = teamBRosChange >= -5; // Team B shouldn't lose more than 5 points
+  const isFairTrade = Math.abs(teamARosChange - teamBRosChange) < 15;
+
+  // Grade based on YOUR (Team A) starting lineup improvement
+  let grade = 'F';
+  if (teamARosChange >= 20) grade = 'A+';
+  else if (teamARosChange >= 15) grade = 'A';
+  else if (teamARosChange >= 10) grade = 'A-';
+  else if (teamARosChange >= 7) grade = 'B+';
+  else if (teamARosChange >= 5) grade = 'B';
+  else if (teamARosChange >= 3) grade = 'B-';
+  else if (teamARosChange >= 1) grade = 'C+';
+  else if (teamARosChange > 0) grade = 'C';
+  else if (teamARosChange >= -3) grade = 'D';
+  else grade = 'F';
+
+  // Build explanation
+  const tradedPlayersOut = teamAGives.map(id => teamAPlayers.find(p => p.player_id === id)?.player_name).filter(Boolean);
+  const tradedPlayersIn = teamBGives.map(id => teamBPlayers.find(p => p.player_id === id)?.player_name).filter(Boolean);
+
+  let explanation = `Your starting lineup ${teamARosChange > 0 ? 'gains' : 'loses'} ${Math.abs(teamARosChange).toFixed(1)} ROS points. `;
+  explanation += `Their starting lineup ${teamBRosChange > 0 ? 'gains' : 'loses'} ${Math.abs(teamBRosChange).toFixed(1)} ROS points. `;
+
+  if (!isAcceptable) {
+    explanation += `⚠️ The other team loses too much value - they likely won't accept this trade. `;
+  } else if (isFairTrade) {
+    explanation += `✓ This is a fair trade that benefits both teams. `;
+  }
+
+  // Highlight position changes
+  const positionChanges = analyzePositionChanges(
+    teamAStartingBefore,
+    teamAStartingAfter,
+    teamAGives,
+    teamBGives,
+    teamAPlayers,
+    teamBPlayers
+  );
+
+  if (positionChanges.length > 0) {
+    explanation += positionChanges.slice(0, 2).join(' ');
+  }
+
+  const result = {
+    trade_grade: grade,
+    advantage_team: teamARosChange > teamBRosChange ? teamAId : teamBId,
+    value_difference: Math.abs(teamARosChange - teamBRosChange),
+    percent_difference: ((Math.abs(teamARosChange - teamBRosChange) / (teamAStartingBefore.totalRos + teamBStartingBefore.totalRos)) * 100),
+    explanation,
+    is_acceptable: isAcceptable,
+    is_fair: isFairTrade,
+    audit: {
+      teamA_starting_ros_before: teamAStartingBefore.totalRos,
+      teamA_starting_ros_after: teamAStartingAfter.totalRos,
+      teamA_ros_change: teamARosChange,
+      teamB_starting_ros_before: teamBStartingBefore.totalRos,
+      teamB_starting_ros_after: teamBStartingAfter.totalRos,
+      teamB_ros_change: teamBRosChange,
+    },
+    starting_lineup_breakdown: {
+      teamA_before: teamAStartingBefore.breakdown,
+      teamA_after: teamAStartingAfter.breakdown,
+      teamB_before: teamBStartingBefore.breakdown,
+      teamB_after: teamBStartingAfter.breakdown,
+    },
+    ros_points_delta: teamARosChange,
+    next_3_weeks_delta: teamARosChange * 0.3,
+    confidence: isAcceptable ? 85 : 65,
+    verdict: teamARosChange > 0 && isAcceptable ? 'accept' : 'reject',
+    summary: explanation,
+  };
+
+  return result;
+}
+
+function calculateStartingLineup(players: Player[]) {
+  // Group players by position
+  const byPosition: Record<string, Player[]> = {
+    QB: [],
+    RB: [],
+    WR: [],
+    TE: [],
+    K: [],
+    DST: [],
+  };
+
+  for (const p of players) {
+    const pos = p.position.toUpperCase();
+    if (byPosition[pos]) {
+      byPosition[pos].push(p);
+    }
+  }
+
+  // Sort each position by ROS projection (highest first)
+  for (const pos in byPosition) {
+    byPosition[pos].sort((a, b) => b.ros_projection - a.ros_projection);
+  }
+
+  // Select starters
+  const starters: Player[] = [];
+  const breakdown: Record<string, number> = {};
+
+  // QB, TE, K, DST - take top 1
+  for (const pos of ['QB', 'TE', 'K', 'DST']) {
+    if (byPosition[pos][0]) {
+      starters.push(byPosition[pos][0]);
+      breakdown[pos] = byPosition[pos][0].ros_projection;
+    } else {
+      breakdown[pos] = 0;
+    }
+  }
+
+  // RB - take top 2
+  for (let i = 0; i < 2; i++) {
+    if (byPosition.RB[i]) {
+      starters.push(byPosition.RB[i]);
+    }
+  }
+  breakdown.RB = byPosition.RB.slice(0, 2).reduce((sum, p) => sum + p.ros_projection, 0);
+
+  // WR - take top 2
+  for (let i = 0; i < 2; i++) {
+    if (byPosition.WR[i]) {
+      starters.push(byPosition.WR[i]);
+    }
+  }
+  breakdown.WR = byPosition.WR.slice(0, 2).reduce((sum, p) => sum + p.ros_projection, 0);
+
+  // FLEX - best remaining RB/WR/TE
+  const flexCandidates = [
+    ...(byPosition.RB[2] ? [byPosition.RB[2]] : []),
+    ...(byPosition.WR[2] ? [byPosition.WR[2]] : []),
+    ...(byPosition.TE[1] ? [byPosition.TE[1]] : []),
+  ].sort((a, b) => b.ros_projection - a.ros_projection);
+
+  if (flexCandidates[0]) {
+    starters.push(flexCandidates[0]);
+    breakdown.FLEX = flexCandidates[0].ros_projection;
   } else {
-    explanation += `Team B gains approximately ${teamBNet.toFixed(1)} ROS value points in this trade (${percentDiff.toFixed(1)}% advantage). `;
+    breakdown.FLEX = 0;
   }
 
-  if (bestPlayer) {
-    explanation += `The best player in the trade is ${bestPlayer.player_name} (${bestPlayer.value_score.toFixed(1)} value), going to ${advantageTeam}. `;
+  const totalRos = starters.reduce((sum, p) => sum + p.ros_projection, 0);
+
+  return {
+    starters,
+    totalRos,
+    breakdown,
+  };
+}
+
+function analyzePositionChanges(
+  beforeLineup: any,
+  afterLineup: any,
+  teamAGives: string[],
+  teamBGives: string[],
+  teamAPlayers: Player[],
+  teamBPlayers: Player[]
+): string[] {
+  const notes: string[] = [];
+
+  // Check if trading away a starter
+  const givingAwayStarters = teamAGives.filter(id => 
+    beforeLineup.starters.some((s: Player) => s.player_id === id)
+  );
+
+  if (givingAwayStarters.length > 0) {
+    const player = teamAPlayers.find(p => p.player_id === givingAwayStarters[0]);
+    if (player) {
+      notes.push(`⚠️ You're trading away ${player.player_name}, a current starter.`);
+    }
   }
 
-  // Add rank improvement context
-  const teamARankChanges = rankChanges?.filter((r: any) => r.team === 'A' && r.action === 'receiving') || [];
-  const teamBRankChanges = rankChanges?.filter((r: any) => r.team === 'B' && r.action === 'receiving') || [];
-  
-  if (teamARankChanges.length > 0) {
-    const topChange = teamARankChanges[0];
-    explanation += `Team A addresses a positional need at ${topChange.position} (currently rank ${topChange.beforeRank}). `;
-  }
-  
-  if (teamBRankChanges.length > 0) {
-    const topChange = teamBRankChanges[0];
-    explanation += `Team B addresses a positional need at ${topChange.position} (currently rank ${topChange.beforeRank}). `;
+  // Check if receiving upgrades at weak positions
+  const posChanges: Record<string, number> = {};
+  for (const pos in afterLineup.breakdown) {
+    const change = afterLineup.breakdown[pos] - beforeLineup.breakdown[pos];
+    if (Math.abs(change) > 5) {
+      posChanges[pos] = change;
+    }
   }
 
-  if (positionalFitNotes.length > 0) {
-    explanation += positionalFitNotes.slice(0, 2).join('. ') + '. '; // Limit to top 2 notes
+  for (const pos in posChanges) {
+    const change = posChanges[pos];
+    if (change > 5) {
+      notes.push(`✓ Your ${pos} position improves by ${change.toFixed(1)} points.`);
+    } else if (change < -5) {
+      notes.push(`⚠️ Your ${pos} position weakens by ${Math.abs(change).toFixed(1)} points.`);
+    }
   }
 
-  return explanation.trim();
+  return notes;
 }

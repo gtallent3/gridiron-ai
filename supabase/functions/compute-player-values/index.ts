@@ -6,16 +6,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Position weights based on scarcity
+// Position weights based on scarcity and roster construction
 const POSITION_WEIGHTS: Record<string, number> = {
-  RB: 1.10,
-  WR: 1.00,
-  QB: 0.95,
-  TE: 0.98,
+  RB: 1.15,  // Higher value - harder to find quality RBs
+  WR: 1.00,  // Baseline
+  QB: 0.70,  // Lower value - only need 1 starter, streaming is viable
+  TE: 1.05,  // Premium positions are valuable
   FLEX: 1.00,
-  K: 0.60,
-  DST: 0.60,
-  'D/ST': 0.60,
+  K: 0.50,   // Minimal value
+  DST: 0.50, // Minimal value
+  'D/ST': 0.50,
 };
 
 serve(async (req) => {
