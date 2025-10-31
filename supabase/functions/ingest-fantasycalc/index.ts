@@ -122,7 +122,7 @@ async function scrapeFantasyCalc(): Promise<PlayerRow[]> {
       const jsonData = JSON.parse(jsonMatch[2]);
       if (jsonData.rankings || jsonData.players) {
         console.log("Successfully extracted JSON data");
-        return parseJsonData(jsonData);
+        return await parseJsonData(jsonData);
       }
     } catch (e) {
       console.warn("Failed to parse JSON data, falling back to DOM parsing");
@@ -134,7 +134,7 @@ async function scrapeFantasyCalc(): Promise<PlayerRow[]> {
   return parseHtmlTable(html);
 }
 
-function parseJsonData(data: any): PlayerRow[] {
+async function parseJsonData(data: any): Promise<PlayerRow[]> {
   const snapshotDate = new Date().toISOString().split('T')[0];
   const fetchedAt = new Date().toISOString();
   const players: PlayerRow[] = [];
