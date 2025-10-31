@@ -77,8 +77,13 @@ export default function LeagueDashboard() {
         
         if (rosterArray.length === 0) return rosterArray;
         
-        // Fetch accurate data from ESPN for current week
+        // Fetch accurate data from ESPN for current week (only for ESPN leagues)
         const currentWeek = leagueData.current_week || 7;
+        
+        if (leagueData.platform !== 'espn') {
+          // Skip ESPN-specific enrichment for non-ESPN leagues (e.g., Sleeper)
+          return rosterArray;
+        }
         
         try {
           const { data: weekScores, error } = await supabase.functions.invoke('get-espn-week-scores', {
