@@ -96,6 +96,10 @@ export default function Admin() {
     weeklyRevenue: 0,
   });
 
+  // Scraper State
+  const [scraperRunning, setScraperRunning] = useState(false);
+  const [scraperResult, setScraperResult] = useState<any>(null);
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -522,6 +526,35 @@ export default function Admin() {
     a.click();
   };
 
+  // SCRAPER
+  const handleRunScraper = async () => {
+    setScraperRunning(true);
+    setScraperResult(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('ingest-fantasycalc', {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      setScraperResult(data);
+      toast({
+        title: "Scraper Complete",
+        description: `Found ${data.rows_found} players, inserted ${data.rows_inserted}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Scraper Error",
+        description: error.message || "Failed to run scraper",
+        variant: "destructive",
+      });
+      setScraperResult({ error: error.message });
+    } finally {
+      setScraperRunning(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -601,10 +634,11 @@ export default function Admin() {
 
           {/* Main Admin Tabs */}
           <Tabs defaultValue="users" className="spacing-mobile">
-            <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 h-auto">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
               <TabsTrigger value="users" className="text-sm py-2 sm:py-3">User Management</TabsTrigger>
               <TabsTrigger value="props" className="text-sm py-2 sm:py-3">Props Management</TabsTrigger>
               <TabsTrigger value="transactions" className="text-sm py-2 sm:py-3">Transactions</TabsTrigger>
+              <TabsTrigger value="scraper" className="text-sm py-2 sm:py-3">Data Scraper</TabsTrigger>
             </TabsList>
 
             {/* User Management Tab */}
@@ -913,6 +947,58 @@ export default function Admin() {
                         )}
                       </div>
                     ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Data Scraper Tab */}
+            <TabsContent value="scraper" className="spacing-mobile">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg sm:text-xl">FantasyCalc Scraper</CardTitle>
+                  <CardDescription className="text-sm">Test the trade values data scraper</CardDescription>
+                </CardHeader>
+                <CardContent className="spacing-mobile">
+                  <div className="space-y-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm mb-2">
+                        This scraper fetches player rankings from FantasyCalc and stores them in the <code className="text-xs bg-background px-1 py-0.5 rounded">trade_values</code> table.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Scheduled to run daily at 7:10 AM ET. Use the button below to test it manually.
+                      </p>
+                    </div>
+
+                    <Button 
+                      onClick={handleRunScraper} 
+                      disabled={scraperRunning}
+                      className="w-full sm:w-auto"
+                    >
+                      {scraperRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {scraperRunning ? "Running Scraper..." : "Run Scraper Now"}
+                    </Button>
+
+                    {scraperResult && (
+                      <div className="p-4 border rounded-lg">
+                        <div className="font-semibold mb-2">Last Run Results:</div>
+                        <div className="space-y-1 text-sm">
+                          {scraperResult.error ? (
+                            <div className="text-destructive">Error: {scraperResult.error}</div>
+                          ) : (
+                            <>
+                              <div>Players Found: <span className="font-medium">{scraperResult.rows_found}</span></div>
+                              <div>Inserted: <span className="font-medium text-green-600">{scraperResult.rows_inserted}</span></div>
+                              <div>Skipped: <span className="font-medium text-yellow-600">{scraperResult.rows_skipped || 0}</span></div>
+                              <div>Errors: <span className="font-medium text-red-600">{scraperResult.errors || 0}</span></div>
+                              <div className="text-xs text-muted-foreground mt-2">
+                                Snapshot Date: {scraperResult.snapshot_date}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
