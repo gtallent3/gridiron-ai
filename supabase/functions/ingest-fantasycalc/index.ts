@@ -185,11 +185,43 @@ serve(async (req) => {
   }
 
   try {
-    // Verify task key for security
+    // Verify authorization: either task key (for cron) or admin user (for manual trigger)
     const taskKey = req.headers.get('x-task-key');
     const expectedKey = Deno.env.get('TASK_KEY');
+    const authHeader = req.headers.get('authorization');
     
-    if (taskKey !== expectedKey) {
+    let isAuthorized = false;
+    
+    // Check if task key is valid (for cron jobs)
+    if (taskKey === expectedKey) {
+      isAuthorized = true;
+    }
+    
+    // Check if authenticated admin user (for manual triggers)
+    if (!isAuthorized && authHeader) {
+      const supabaseClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+        { global: { headers: { Authorization: authHeader } } }
+      );
+      
+      const { data: { user } } = await supabaseClient.auth.getUser();
+      
+      if (user) {
+        const { data: roleData } = await supabaseClient
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', user.id)
+          .eq('role', 'admin')
+          .single();
+        
+        if (roleData) {
+          isAuthorized = true;
+        }
+      }
+    }
+    
+    if (!isAuthorized) {
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
