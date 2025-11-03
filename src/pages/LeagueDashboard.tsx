@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft, Trophy } from "lucide-react";
+import { Loader2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RosterView } from "@/components/league/RosterView";
@@ -184,12 +184,12 @@ export default function LeagueDashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <div className="relative">
-            <Trophy className="h-12 w-12 text-primary animate-bounce" />
-            <div className="absolute inset-0 animate-ping opacity-20">
-              <Trophy className="h-12 w-12 text-primary" />
+      <div className="min-h-screen bg-background flex items-center justify-center overflow-hidden">
+        <div className="flex flex-col items-center gap-8 w-full">
+          <div className="relative w-full h-24 flex items-center">
+            <div className="absolute left-0 right-0 bottom-8 h-1 bg-green-700/30 rounded-full" />
+            <div className="animate-run-across">
+              <div className="text-6xl transform scale-x-[-1]">🏈</div>
             </div>
           </div>
           <p className="text-sm text-muted-foreground animate-pulse">Loading your league...</p>

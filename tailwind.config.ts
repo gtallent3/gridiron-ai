@@ -80,10 +80,19 @@ export default {
             height: "0",
           },
         },
+        "run-across": {
+          "0%": {
+            transform: "translateX(-100px)",
+          },
+          "100%": {
+            transform: "translateX(calc(100vw + 100px))",
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "run-across": "run-across 2s ease-in-out infinite",
       },
     },
   },
