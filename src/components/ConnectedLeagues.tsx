@@ -193,7 +193,7 @@ export const ConnectedLeagues = () => {
         {leagues.map((league) => (
           <div
             key={league.id}
-            className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-lg border border-border/50 hover:border-primary/50 transition-colors cursor-pointer"
+            className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-lg border-2 border-green-500 hover:border-green-400 transition-colors cursor-pointer"
             onClick={() => navigate(`/league/${league.id}`)}
           >
             <div className="space-y-1 flex-1 min-w-0">
