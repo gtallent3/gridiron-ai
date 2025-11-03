@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ExternalLink, Copy, Check, AlertCircle, Cookie, Smartphone, Monitor } from "lucide-react";
+import { ExternalLink, Copy, Check, AlertCircle, Cookie, Smartphone, Monitor, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { BookmarkletDragDemo } from "@/components/BookmarkletDragDemo";
@@ -24,6 +24,7 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
   const [isValidating, setIsValidating] = useState(false);
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [showCredentials, setShowCredentials] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -54,9 +55,9 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
     return () => window.removeEventListener('message', onMsg);
   }, [toast]);
 
-  // Auto-paste from clipboard when validate step opens and fields are empty
+  // Auto-paste from clipboard when validate step opens
   useEffect(() => {
-    if (step === 'validate' && !swid && !espn_s2) {
+    if (step === 'validate' && !swid && !espn_s2 && !leagueId) {
       handleClipboardPaste();
     }
   }, [step]);
@@ -370,10 +371,19 @@ espnCreds;`.trim();
                 <div className="flex gap-2">
                   <Input
                     id="swid"
+                    type={showCredentials ? "text" : "password"}
                     placeholder="{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}"
                     value={swid}
                     onChange={(e) => setSwid(e.target.value.trim())}
                   />
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => setShowCredentials(!showCredentials)}
+                    title={showCredentials ? "Hide credentials" : "Show credentials"}
+                  >
+                    {showCredentials ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
                   <Button
                     size="icon"
                     variant="outline"
@@ -389,6 +399,7 @@ espnCreds;`.trim();
                 <div className="flex gap-2">
                   <Input
                     id="espn_s2"
+                    type={showCredentials ? "text" : "password"}
                     placeholder="Long alphanumeric string..."
                     value={espn_s2}
                     onChange={(e) => setEspn_s2(e.target.value.trim())}
