@@ -271,71 +271,8 @@ espnCreds;`.trim();
                 </p>
               </div>
 
-              <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
-                <Label className="text-base font-semibold">
-                  📝 Alternative: Copy exact URL
-                </Label>
-                <div className="space-y-2">
-                  <Label htmlFor="bookmarklet-url" className="text-xs text-muted-foreground">
-                    Create a bookmark, then paste this as the URL:
-                  </Label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="bookmarklet-url"
-                      value={bookmarkletCode}
-                      readOnly
-                      className="font-mono text-xs"
-                    />
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={copyScript}
-                      title="Copy bookmarklet URL"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    1. Press Ctrl+D (Cmd+D on Mac) to bookmark this page<br />
-                    2. Edit the bookmark, delete the URL field<br />
-                    3. Paste the code from above (must start with <code className="bg-muted px-1">javascript:</code>)
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-background px-2 text-muted-foreground">Or use console</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Console method (F12 → Console tab)</Label>
-                  <div className="relative">
-                    <pre className="bg-muted p-3 rounded text-xs overflow-x-auto">
-                      {extractionScript}
-                    </pre>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="absolute top-2 right-2"
-                      onClick={() => {
-                        navigator.clipboard.writeText(extractionScript);
-                        toast({ title: "Script copied!", description: "Paste in ESPN console (F12)" });
-                      }}
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
               <Button onClick={() => setStep('validate')} variant="outline" className="w-full">
-                Continue to manual entry
+                Having trouble? Continue to manual entry
               </Button>
             </div>
           )}
