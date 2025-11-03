@@ -16,32 +16,74 @@ import { Button } from "./ui/button";
 // Example data for the snapshot
 const exampleStrengths = [
   {
-    team: "Championship Contenders",
-    QB: { rank: 2, zScore: 1.2, pss: 85.3 },
-    RB: { rank: 1, zScore: 1.8, pss: 92.1 },
-    WR: { rank: 3, zScore: 0.7, pss: 78.9 },
-    TE: { rank: 4, zScore: -0.2, pss: 68.4 },
+    team: "Team 1",
+    QB: { rank: 7, zScore: -0.6, pss: 63.2 },
+    RB: { rank: 3, zScore: 0.9, pss: 82.4 },
+    WR: { rank: 5, zScore: -0.1, pss: 71.8 },
+    TE: { rank: 9, zScore: -1.3, pss: 52.6 },
   },
   {
-    team: "Playoff Push",
-    QB: { rank: 5, zScore: -0.4, pss: 65.2 },
-    RB: { rank: 3, zScore: 0.9, pss: 82.7 },
-    WR: { rank: 1, zScore: 2.1, pss: 95.8 },
-    TE: { rank: 2, zScore: 1.1, pss: 81.5 },
+    team: "Team 2",
+    QB: { rank: 2, zScore: 1.4, pss: 87.5 },
+    RB: { rank: 8, zScore: -0.9, pss: 59.1 },
+    WR: { rank: 1, zScore: 1.9, pss: 94.3 },
+    TE: { rank: 4, zScore: 0.3, pss: 76.2 },
   },
   {
-    team: "Rebuilding Squad",
-    QB: { rank: 1, zScore: 1.5, pss: 88.6 },
-    RB: { rank: 6, zScore: -1.2, pss: 58.3 },
-    WR: { rank: 5, zScore: -0.3, pss: 70.1 },
-    TE: { rank: 3, zScore: 0.6, pss: 75.9 },
+    team: "Team 3",
+    QB: { rank: 4, zScore: 0.5, pss: 77.8 },
+    RB: { rank: 1, zScore: 1.8, pss: 91.7 },
+    WR: { rank: 9, zScore: -1.2, pss: 56.4 },
+    TE: { rank: 6, zScore: -0.4, pss: 68.9 },
   },
   {
-    team: "My Team",
-    QB: { rank: 3, zScore: 0.8, pss: 79.4 },
-    RB: { rank: 2, zScore: 1.3, pss: 86.2 },
-    WR: { rank: 2, zScore: 1.4, pss: 87.5 },
-    TE: { rank: 1, zScore: 1.7, pss: 89.3 },
+    team: "Team 4",
+    QB: { rank: 9, zScore: -1.1, pss: 55.3 },
+    RB: { rank: 5, zScore: 0.2, pss: 74.6 },
+    WR: { rank: 3, zScore: 0.8, pss: 81.2 },
+    TE: { rank: 1, zScore: 1.7, pss: 89.8 },
+  },
+  {
+    team: "Team 5",
+    QB: { rank: 1, zScore: 1.6, pss: 88.9 },
+    RB: { rank: 10, zScore: -1.5, pss: 51.2 },
+    WR: { rank: 6, zScore: -0.3, pss: 69.7 },
+    TE: { rank: 3, zScore: 0.7, pss: 79.4 },
+  },
+  {
+    team: "Team 6",
+    QB: { rank: 5, zScore: 0.1, pss: 73.4 },
+    RB: { rank: 2, zScore: 1.3, pss: 86.8 },
+    WR: { rank: 7, zScore: -0.6, pss: 65.1 },
+    TE: { rank: 8, zScore: -0.9, pss: 58.7 },
+  },
+  {
+    team: "Team 7",
+    QB: { rank: 10, zScore: -1.4, pss: 52.9 },
+    RB: { rank: 4, zScore: 0.6, pss: 78.3 },
+    WR: { rank: 2, zScore: 1.2, pss: 85.6 },
+    TE: { rank: 5, zScore: 0.1, pss: 72.8 },
+  },
+  {
+    team: "Team 8",
+    QB: { rank: 3, zScore: 0.9, pss: 81.7 },
+    RB: { rank: 7, zScore: -0.5, pss: 66.4 },
+    WR: { rank: 10, zScore: -1.5, pss: 53.2 },
+    TE: { rank: 2, zScore: 1.1, pss: 83.5 },
+  },
+  {
+    team: "Team 9",
+    QB: { rank: 6, zScore: -0.2, pss: 70.5 },
+    RB: { rank: 9, zScore: -1.1, pss: 56.7 },
+    WR: { rank: 4, zScore: 0.4, pss: 75.9 },
+    TE: { rank: 7, zScore: -0.6, pss: 64.3 },
+  },
+  {
+    team: "Team 10",
+    QB: { rank: 8, zScore: -0.8, pss: 60.1 },
+    RB: { rank: 6, zScore: -0.1, pss: 71.5 },
+    WR: { rank: 8, zScore: -0.8, pss: 61.4 },
+    TE: { rank: 10, zScore: -1.6, pss: 49.8 },
   },
 ];
 
@@ -110,14 +152,9 @@ export const PositionalRankingsSnapshot = () => {
                   </TableHeader>
                   <TableBody>
                     {exampleStrengths.map((team) => (
-                      <TableRow key={team.team} className={team.team === "My Team" ? "bg-primary/5" : ""}>
+                      <TableRow key={team.team}>
                         <TableCell className="font-medium">
                           {team.team}
-                          {team.team === "My Team" && (
-                            <Badge variant="outline" className="ml-2 text-xs">
-                              You
-                            </Badge>
-                          )}
                         </TableCell>
                         {positions.map(pos => {
                           const strength = team[pos as keyof typeof team] as { rank: number; zScore: number; pss: number };
