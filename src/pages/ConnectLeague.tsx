@@ -186,6 +186,14 @@ export default function ConnectLeague() {
                 <CardDescription>Secure one-time setup</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="bg-primary/10 border border-primary/30 rounded-lg p-3 text-sm">
+                  <div className="flex items-start gap-2">
+                    <span className="text-primary">💡</span>
+                    <div className="text-muted-foreground">
+                      <strong className="text-foreground">Recommended:</strong> Use a desktop or laptop for easier ESPN setup. Mobile works but requires extra steps.
+                    </div>
+                  </div>
+                </div>
                 <div className="text-center py-4">
                   <EspnCookieExtractor onSuccess={handleEspnCookieSuccess} />
                   <p className="text-sm text-muted-foreground mt-3">
