@@ -54,6 +54,13 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
     return () => window.removeEventListener('message', onMsg);
   }, [toast]);
 
+  // Auto-paste from clipboard when validate step opens and fields are empty
+  useEffect(() => {
+    if (step === 'validate' && !swid && !espn_s2) {
+      handleClipboardPaste();
+    }
+  }, [step]);
+
   // Handle manual paste from clipboard fallback
   const handleClipboardPaste = async () => {
     try {
