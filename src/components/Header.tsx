@@ -26,7 +26,7 @@ export const Header = ({ user }: HeaderProps) => {
       <div className="container mx-auto px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <img src={logo} alt="Gridiron GM Logo" className="h-8 w-8 sm:h-10 sm:w-10" />
+            <img src={logo} alt="Gridiron GM Logo" className="h-8 w-8 sm:h-10 sm:w-10 opacity-80 mix-blend-lighten" />
             <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Gridiron GM</h1>
           </div>
           
