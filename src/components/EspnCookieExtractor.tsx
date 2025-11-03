@@ -8,6 +8,7 @@ import { ExternalLink, Copy, Check, AlertCircle, Cookie, Smartphone, Monitor } f
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { BookmarkletDragDemo } from "@/components/BookmarkletDragDemo";
+import { BookmarkletClickDemo } from "@/components/BookmarkletClickDemo";
 
 interface EspnCookieExtractorProps {
   onSuccess: (credentials: { swid: string; espn_s2: string; leagueId: string }) => void;
@@ -260,9 +261,19 @@ espnCreds;`.trim();
                 </p>
               </div>
 
+              <div className="space-y-3 p-3 border rounded-lg bg-muted/50">
+                <Label className="text-base font-semibold">
+                  🖱️ Step 2: Use the bookmarklet
+                </Label>
+                <BookmarkletClickDemo />
+                <p className="text-xs text-muted-foreground">
+                  Navigate to your ESPN league page, then click the bookmarklet in your bookmarks bar. It will auto-detect your League ID and send the data back here.
+                </p>
+              </div>
+
               <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
                 <Label className="text-base font-semibold">
-                  📝 Method 2: Copy exact URL
+                  📝 Alternative: Copy exact URL
                 </Label>
                 <div className="space-y-2">
                   <Label htmlFor="bookmarklet-url" className="text-xs text-muted-foreground">
