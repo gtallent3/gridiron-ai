@@ -21,6 +21,8 @@ const exampleStrengths = [
     RB: { rank: 3, zScore: 0.9, pss: 82.4 },
     WR: { rank: 5, zScore: -0.1, pss: 71.8 },
     TE: { rank: 9, zScore: -1.3, pss: 52.6 },
+    K: { rank: 4, zScore: 0.3, pss: 75.8 },
+    DST: { rank: 6, zScore: -0.2, pss: 70.4 },
   },
   {
     team: "Team 2",
@@ -28,6 +30,8 @@ const exampleStrengths = [
     RB: { rank: 8, zScore: -0.9, pss: 59.1 },
     WR: { rank: 1, zScore: 1.9, pss: 94.3 },
     TE: { rank: 4, zScore: 0.3, pss: 76.2 },
+    K: { rank: 9, zScore: -1.1, pss: 56.3 },
+    DST: { rank: 2, zScore: 1.2, pss: 85.7 },
   },
   {
     team: "Team 3",
@@ -35,6 +39,8 @@ const exampleStrengths = [
     RB: { rank: 1, zScore: 1.8, pss: 91.7 },
     WR: { rank: 9, zScore: -1.2, pss: 56.4 },
     TE: { rank: 6, zScore: -0.4, pss: 68.9 },
+    K: { rank: 1, zScore: 1.7, pss: 90.2 },
+    DST: { rank: 8, zScore: -0.8, pss: 61.5 },
   },
   {
     team: "Team 4",
@@ -42,6 +48,8 @@ const exampleStrengths = [
     RB: { rank: 5, zScore: 0.2, pss: 74.6 },
     WR: { rank: 3, zScore: 0.8, pss: 81.2 },
     TE: { rank: 1, zScore: 1.7, pss: 89.8 },
+    K: { rank: 6, zScore: -0.3, pss: 69.1 },
+    DST: { rank: 4, zScore: 0.4, pss: 76.9 },
   },
   {
     team: "Team 5",
@@ -49,6 +57,8 @@ const exampleStrengths = [
     RB: { rank: 10, zScore: -1.5, pss: 51.2 },
     WR: { rank: 6, zScore: -0.3, pss: 69.7 },
     TE: { rank: 3, zScore: 0.7, pss: 79.4 },
+    K: { rank: 8, zScore: -0.9, pss: 58.7 },
+    DST: { rank: 1, zScore: 1.8, pss: 92.3 },
   },
   {
     team: "Team 6",
@@ -56,6 +66,8 @@ const exampleStrengths = [
     RB: { rank: 2, zScore: 1.3, pss: 86.8 },
     WR: { rank: 7, zScore: -0.6, pss: 65.1 },
     TE: { rank: 8, zScore: -0.9, pss: 58.7 },
+    K: { rank: 3, zScore: 0.6, pss: 78.4 },
+    DST: { rank: 9, zScore: -1.2, pss: 55.8 },
   },
   {
     team: "Team 7",
@@ -63,6 +75,8 @@ const exampleStrengths = [
     RB: { rank: 4, zScore: 0.6, pss: 78.3 },
     WR: { rank: 2, zScore: 1.2, pss: 85.6 },
     TE: { rank: 5, zScore: 0.1, pss: 72.8 },
+    K: { rank: 10, zScore: -1.4, pss: 51.6 },
+    DST: { rank: 3, zScore: 0.8, pss: 80.2 },
   },
   {
     team: "Team 8",
@@ -70,6 +84,8 @@ const exampleStrengths = [
     RB: { rank: 7, zScore: -0.5, pss: 66.4 },
     WR: { rank: 10, zScore: -1.5, pss: 53.2 },
     TE: { rank: 2, zScore: 1.1, pss: 83.5 },
+    K: { rank: 5, zScore: 0.1, pss: 72.9 },
+    DST: { rank: 7, zScore: -0.5, pss: 66.7 },
   },
   {
     team: "Team 9",
@@ -77,6 +93,8 @@ const exampleStrengths = [
     RB: { rank: 9, zScore: -1.1, pss: 56.7 },
     WR: { rank: 4, zScore: 0.4, pss: 75.9 },
     TE: { rank: 7, zScore: -0.6, pss: 64.3 },
+    K: { rank: 2, zScore: 1.3, pss: 86.5 },
+    DST: { rank: 10, zScore: -1.5, pss: 52.1 },
   },
   {
     team: "Team 10",
@@ -84,10 +102,12 @@ const exampleStrengths = [
     RB: { rank: 6, zScore: -0.1, pss: 71.5 },
     WR: { rank: 8, zScore: -0.8, pss: 61.4 },
     TE: { rank: 10, zScore: -1.6, pss: 49.8 },
+    K: { rank: 7, zScore: -0.6, pss: 64.2 },
+    DST: { rank: 5, zScore: 0.2, pss: 74.3 },
   },
 ];
 
-const positions = ["QB", "RB", "WR", "TE"];
+const positions = ["QB", "RB", "WR", "TE", "K", "DST"];
 
 export const PositionalRankingsSnapshot = () => {
   const navigate = useNavigate();
