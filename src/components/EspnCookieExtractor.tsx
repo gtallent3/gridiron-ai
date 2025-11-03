@@ -7,7 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ExternalLink, Copy, Check, AlertCircle, Cookie, Smartphone, Monitor } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import bookmarkletTutorial from "@/assets/bookmarklet-drag-tutorial.jpg";
+import { BookmarkletDragDemo } from "@/components/BookmarkletDragDemo";
 
 interface EspnCookieExtractorProps {
   onSuccess: (credentials: { swid: string; espn_s2: string; leagueId: string }) => void;
@@ -244,13 +244,7 @@ espnCreds;`.trim();
                   ⚡ Method 1: Drag to bookmarks bar
                 </Label>
                 
-                <div className="rounded-lg overflow-hidden border-2 border-primary/20">
-                  <img 
-                    src={bookmarkletTutorial} 
-                    alt="Tutorial showing how to drag the bookmarklet button to your browser's bookmarks bar"
-                    className="w-full"
-                  />
-                </div>
+                <BookmarkletDragDemo />
                 
                 <div className="flex items-center gap-2">
                   <a
