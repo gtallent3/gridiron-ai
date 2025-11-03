@@ -84,7 +84,7 @@ serve(async (req) => {
     }
 
     // Non-subscriber: check token balance
-    if (userTokens.balance < 1) {
+    if (userTokens.balance < 5) {
       return new Response(
         JSON.stringify({
           success: false,
@@ -95,8 +95,8 @@ serve(async (req) => {
       );
     }
 
-    // Deduct 1 token and unlock for 7 days
-    const newBalance = userTokens.balance - 1;
+    // Deduct 5 tokens and unlock for 7 days
+    const newBalance = userTokens.balance - 5;
     const currentLifetimeSpent = userTokens.lifetime_spent || 0;
     const unlockTimestamp = new Date();
     const expiryTimestamp = new Date(unlockTimestamp.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -105,7 +105,7 @@ serve(async (req) => {
       .from("user_tokens")
       .update({
         balance: newBalance,
-        lifetime_spent: currentLifetimeSpent + 1,
+        lifetime_spent: currentLifetimeSpent + 5,
         rankings_unlocked_at: unlockTimestamp.toISOString(),
         rankings_expires_at: expiryTimestamp.toISOString(),
       })
@@ -117,7 +117,7 @@ serve(async (req) => {
     await supabaseClient.from("token_transactions").insert({
       user_id: user.id,
       transaction_type: "ranking_unlock",
-      amount: -1,
+      amount: -5,
       balance_after: newBalance,
       description: "Unlocked positional rankings for 7 days",
     });

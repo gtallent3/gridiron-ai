@@ -159,7 +159,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       
       if (data.insufficient) {
         toast.error('Insufficient Tokens', {
-          description: 'You need 1 token to unlock rankings. Visit the shop to get more tokens.',
+          description: 'You need 5 tokens to unlock rankings. Visit the shop to get more tokens.',
         });
         return;
       }
@@ -273,7 +273,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                       disabled={isUnlocking}
                       size="lg"
                     >
-                      {isUnlocking ? 'Unlocking...' : 'Reveal Rankings (1 Token)'}
+                      {isUnlocking ? 'Unlocking...' : 'Reveal Rankings (5 Tokens)'}
                     </Button>
                     <Button 
                       variant="outline" 
@@ -375,14 +375,14 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
           <AlertDialogHeader>
             <AlertDialogTitle>Unlock Positional Rankings?</AlertDialogTitle>
             <AlertDialogDescription>
-              Spend 1 token to unlock positional rankings analysis for 7 days. 
+              Spend 5 tokens to unlock positional rankings analysis for 7 days. 
               This will remain unlocked until the access period expires.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleUnlock}>
-              Confirm (1 Token)
+              Confirm (5 Tokens)
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
