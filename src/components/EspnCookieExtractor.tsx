@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { BookmarkletDragDemo } from "@/components/BookmarkletDragDemo";
 import { BookmarkletClickDemo } from "@/components/BookmarkletClickDemo";
+import { BookmarkletCopyDemo, BookmarkletSaveDemo, BookmarkletMobileClickDemo } from "@/components/BookmarkletMobileDemos";
 
 interface EspnCookieExtractorProps {
   onSuccess: (credentials: { swid: string; espn_s2: string; leagueId: string }) => void;
@@ -286,9 +287,12 @@ espnCreds;`.trim();
                 </AlertDescription>
               </Alert>
 
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-base font-semibold">Step 1: Copy the bookmarklet code</Label>
+              <div className="space-y-3">
+                <div className="space-y-2 p-3 border rounded-lg bg-primary/5">
+                  <Label className="text-base font-semibold">
+                    📋 Step 1: Copy the bookmarklet code
+                  </Label>
+                  <BookmarkletCopyDemo />
                   <div className="relative">
                     <pre className="bg-muted p-3 rounded text-xs overflow-x-auto break-all">
                       {bookmarkletCode}
@@ -305,8 +309,11 @@ espnCreds;`.trim();
                 </div>
 
                 <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
-                  <Label className="text-base font-semibold">Step 2: Create a bookmark</Label>
-                  <ol className="text-sm space-y-2 list-decimal list-inside text-muted-foreground">
+                  <Label className="text-base font-semibold">
+                    🔖 Step 2: Create a bookmark
+                  </Label>
+                  <BookmarkletSaveDemo />
+                  <ol className="text-xs space-y-1 list-decimal list-inside text-muted-foreground">
                     <li>Bookmark any page (tap share → Add to Bookmarks)</li>
                     <li>Edit the bookmark and replace the URL with the code you copied</li>
                     <li>Name it "Get ESPN Cookies"</li>
@@ -314,19 +321,21 @@ espnCreds;`.trim();
                 </div>
 
                 <div className="space-y-2 p-3 border rounded-lg bg-muted/50">
-                  <Label className="text-base font-semibold">Step 3: Use the bookmarklet</Label>
-                  <ol className="text-sm space-y-2 list-decimal list-inside text-muted-foreground">
+                  <Label className="text-base font-semibold">
+                    📱 Step 3: Use on ESPN
+                  </Label>
+                  <BookmarkletMobileClickDemo />
+                  <ol className="text-xs space-y-1 list-decimal list-inside text-muted-foreground">
                     <li>Go to fantasy.espn.com and log in</li>
                     <li>Navigate to your league page (URL should contain leagueId)</li>
                     <li>Tap the bookmarks icon and select "Get ESPN Cookies"</li>
-                    <li>You'll see an alert confirming cookies and league ID were found</li>
-                    <li>Your SWID, espn_s2, and League ID will auto-fill here!</li>
+                    <li>Your credentials will auto-fill here!</li>
                   </ol>
                 </div>
               </div>
 
               <Button onClick={() => setStep('validate')} variant="outline" className="w-full">
-                Skip to manual entry
+                Having trouble? Continue to manual entry
               </Button>
             </div>
           )}
