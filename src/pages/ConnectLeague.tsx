@@ -194,6 +194,18 @@ export default function ConnectLeague() {
                     </div>
                   </div>
                 </div>
+                
+                <div className="rounded-lg overflow-hidden border border-border">
+                  <video 
+                    className="w-full"
+                    controls
+                    preload="metadata"
+                  >
+                    <source src="/Set_Up_ESPN.mp4" type="video/mp4" />
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+
                 <div className="text-center py-4">
                   <EspnCookieExtractor onSuccess={handleEspnCookieSuccess} />
                   <p className="text-sm text-muted-foreground mt-3">
