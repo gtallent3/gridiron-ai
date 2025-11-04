@@ -151,7 +151,7 @@ export default function ConnectLeague() {
           console.log('Available leagues:', leagueNames);
 
           if (leagueKeys.length === 0) {
-            throw new Error('No leagues found for this NFL season. Please make sure you have an active league.');
+            throw new Error('No leagues found on this Yahoo account. Please make sure you:\n1. Are logged into the correct Yahoo account\n2. Have joined a league with this account\n3. Have an active NFL fantasy league for this season');
           }
 
           // If multiple leagues, sync all of them
