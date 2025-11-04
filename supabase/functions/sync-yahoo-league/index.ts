@@ -408,13 +408,27 @@ serve(async (req) => {
           const roster: any[] = [];
           for (const [playerKey, playerValue] of Object.entries(rosterPlayers)) {
             if (playerKey === 'count') continue;
-            const playerData = (playerValue as any)?.player?.[0];
-            if (!playerData) continue;
+            
+            // Yahoo returns player as [[{obj1}, {obj2}, ...]] - double nested
+            const playerWrapper = (playerValue as any)?.player;
+            if (!Array.isArray(playerWrapper) || playerWrapper.length === 0) continue;
+            
+            const playerArr = playerWrapper[0]; // Get inner array
+            if (!Array.isArray(playerArr)) continue;
+            
+            // Flatten the array of single-property objects
+            const playerData: Record<string, any> = {};
+            for (const item of playerArr) {
+              if (item && typeof item === 'object' && !Array.isArray(item)) {
+                const [k, v] = Object.entries(item)[0] || [];
+                if (k) playerData[k] = v;
+              }
+            }
 
             roster.push({
               player_id: playerData.player_id || '',
-              player_name: playerData.name?.full || '',
-              position: playerData.primary_position || playerData.display_position || '',
+              player_name: playerData.name?.full || playerData.name || '',
+              position: playerData.primary_position || playerData.display_position || playerData.selected_position?.position || '',
               team: playerData.editorial_team_abbr || '',
             });
           }
