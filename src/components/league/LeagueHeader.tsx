@@ -27,9 +27,10 @@ type Team = {
 type LeagueHeaderProps = {
   league: League;
   userTeam: Team;
+  onSyncComplete?: () => void;
 };
 
-export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
+export function LeagueHeader({ league, userTeam, onSyncComplete }: LeagueHeaderProps) {
   const [winProbability, setWinProbability] = useState(50);
 
   useEffect(() => {
@@ -118,7 +119,7 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
                   {league.platform}
                 </Badge>
               </div>
-              <ManualSyncButton leagueId={league.id} />
+              <ManualSyncButton leagueId={league.id} onSyncComplete={onSyncComplete} />
             </div>
             {userTeam && (
               <p className="text-base sm:text-lg lg:text-xl text-muted-foreground">

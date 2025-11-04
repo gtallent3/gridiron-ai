@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -11,6 +11,21 @@ interface ManualSyncButtonProps {
 
 export function ManualSyncButton({ leagueId, onSyncComplete }: ManualSyncButtonProps) {
   const [isSyncing, setIsSyncing] = useState(false);
+  const [platform, setPlatform] = useState<string>('');
+
+  useEffect(() => {
+    const fetchLeaguePlatform = async () => {
+      const { data } = await supabase
+        .from('connected_leagues')
+        .select('platform')
+        .eq('id', leagueId)
+        .single();
+      
+      if (data) setPlatform(data.platform);
+    };
+
+    fetchLeaguePlatform();
+  }, [leagueId]);
 
   const handleSync = async () => {
     setIsSyncing(true);
@@ -18,30 +33,42 @@ export function ManualSyncButton({ leagueId, onSyncComplete }: ManualSyncButtonP
     try {
       toast.info("Syncing league data...", { duration: 2000 });
 
-      // Sync transactions
-      const { data: transactionsData, error: transactionsError } = await supabase.functions.invoke(
-        'ingest-league-transactions',
-        { body: { leagueId } }
-      );
+      if (platform === 'yahoo') {
+        // Yahoo-specific sync
+        const { data, error } = await supabase.functions.invoke(
+          'resync-yahoo-league',
+          { body: { leagueId } }
+        );
 
-      if (transactionsError) {
-        throw new Error(`Transactions sync failed: ${transactionsError.message}`);
+        if (error) {
+          throw new Error(`Yahoo sync failed: ${error.message}`);
+        }
+
+        toast.success(`✓ Synced ${data?.teamsSynced || 0} teams with updated rosters`);
+      } else {
+        // ESPN/Sleeper sync (transactions + rosters)
+        const { data: transactionsData, error: transactionsError } = await supabase.functions.invoke(
+          'ingest-league-transactions',
+          { body: { leagueId } }
+        );
+
+        if (transactionsError) {
+          throw new Error(`Transactions sync failed: ${transactionsError.message}`);
+        }
+
+        const { data: rostersData, error: rostersError } = await supabase.functions.invoke(
+          'ingest-roster-snapshots',
+          { body: { leagueId } }
+        );
+
+        if (rostersError) {
+          console.warn("Rosters sync warning:", rostersError);
+        }
+
+        toast.success(
+          `✓ Synced ${transactionsData?.transactionsProcessed || 0} transactions and ${rostersData?.rosterEntriesProcessed || 0} roster entries`
+        );
       }
-
-      // Sync rosters
-      const { data: rostersData, error: rostersError } = await supabase.functions.invoke(
-        'ingest-roster-snapshots',
-        { body: { leagueId } }
-      );
-
-      if (rostersError) {
-        console.warn("Rosters sync warning:", rostersError);
-        // Don't throw - roster sync is less critical
-      }
-
-      toast.success(
-        `✓ Synced ${transactionsData?.transactionsProcessed || 0} transactions and ${rostersData?.rosterEntriesProcessed || 0} roster entries`
-      );
 
       onSyncComplete?.();
     } catch (error) {

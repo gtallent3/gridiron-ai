@@ -228,6 +228,7 @@ export default function LeagueDashboard() {
         <LeagueHeader 
           league={league} 
           userTeam={userTeam}
+          onSyncComplete={fetchLeagueData}
         />
 
         <Tabs defaultValue="roster" className="mt-4 sm:mt-8">
