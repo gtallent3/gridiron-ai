@@ -260,27 +260,24 @@ export default function ConnectLeague() {
     console.log('Redirect URI:', redirect);
     console.log('Is in iframe:', window.self !== window.top);
 
-    // If running inside Lovable preview iframe, open a popup to avoid X-Frame-Options blocks
+    // If running inside Lovable preview iframe, open in a new tab to avoid embed restrictions
     if (window.self !== window.top) {
-      const width = 600;
-      const height = 700;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-      const popup = window.open(
-        authUrl, 
-        'YahooOAuth', 
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
-      
-      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+      const newTab = window.open(authUrl, '_blank', 'noopener,noreferrer');
+      if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
+        // Fallback: show manual link and try programmatic anchor click
         toast({
-          title: "Popup Blocked",
-          description: "Please allow popups for this site and try again.",
-          variant: "destructive",
+          title: "Opening Yahoo in a new tab",
+          description: "If nothing opens, we attempted to open a new tab. Please allow popups or click the link below to continue.",
         });
-        console.error('Popup was blocked by browser');
+        const a = document.createElement('a');
+        a.href = authUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
       } else {
-        console.log('Popup opened successfully');
+        console.log('New tab opened successfully');
       }
     } else {
       window.location.href = authUrl;
