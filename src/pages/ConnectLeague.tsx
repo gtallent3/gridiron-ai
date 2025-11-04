@@ -77,26 +77,51 @@ export default function ConnectLeague() {
           if (tokenError) throw tokenError;
 
           console.log('Token exchange successful, processing league data...');
+          console.log('Full tokenData:', JSON.stringify(tokenData, null, 2));
 
           // Get list of leagues from the games data
           const games = tokenData.gamesData?.fantasy_content?.users?.[0]?.user?.[1]?.games;
+          console.log('Games data:', JSON.stringify(games, null, 2));
+          
           if (!games) {
-            throw new Error('No NFL leagues found');
+            throw new Error('No NFL leagues found in Yahoo account');
           }
 
-          // Find current season NFL game
-          const nflGame = Object.values(games).find((item: any) => 
-            item?.game?.[0]?.code === 'nfl' && item?.game?.[0]?.season === new Date().getFullYear().toString()
-          ) as any;
+          // Find current season NFL game (try current year and previous year for ongoing season)
+          const currentYear = new Date().getFullYear();
+          const possibleSeasons = [currentYear.toString(), (currentYear - 1).toString()];
+          
+          console.log('Looking for NFL seasons:', possibleSeasons);
+          
+          let nflGame: any = null;
+          for (const season of possibleSeasons) {
+            nflGame = Object.values(games).find((item: any) => {
+              const gameCode = item?.game?.[0]?.code;
+              const gameSeason = item?.game?.[0]?.season;
+              console.log('Checking game:', gameCode, 'season:', gameSeason);
+              return gameCode === 'nfl' && gameSeason === season;
+            });
+            if (nflGame) {
+              console.log('Found NFL game for season:', season);
+              break;
+            }
+          }
 
           if (!nflGame) {
-            throw new Error('No current season NFL leagues found');
+            console.error('No NFL game found. Available games:', Object.values(games).map((g: any) => ({
+              code: g?.game?.[0]?.code,
+              season: g?.game?.[0]?.season
+            })));
+            throw new Error('No current or recent season NFL leagues found in your Yahoo account');
           }
 
+          console.log('NFL Game data:', JSON.stringify(nflGame, null, 2));
+          
           const leagueKey = nflGame.game?.[1]?.leagues?.[0]?.league?.[0]?.league_key;
+          console.log('Extracted league key:', leagueKey);
           
           if (!leagueKey) {
-            throw new Error('No leagues found for current season');
+            throw new Error('No leagues found for this NFL season. Please make sure you have an active league.');
           }
 
           console.log('Syncing league with key:', leagueKey);
