@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trophy, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { ManualSyncButton } from "./ManualSyncButton";
 
 type League = {
   id: string;
@@ -110,11 +111,14 @@ export function LeagueHeader({ league, userTeam }: LeagueHeaderProps) {
       <CardContent className="p-4 sm:p-6">
         <div className="flex flex-col gap-4 sm:gap-6">
           <div className="space-y-2">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">{league.league_name}</h1>
-              <Badge variant="outline" className="uppercase w-fit">
-                {league.platform}
-              </Badge>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold">{league.league_name}</h1>
+                <Badge variant="outline" className="uppercase w-fit">
+                  {league.platform}
+                </Badge>
+              </div>
+              <ManualSyncButton leagueId={league.id} />
             </div>
             {userTeam && (
               <p className="text-base sm:text-lg lg:text-xl text-muted-foreground">
