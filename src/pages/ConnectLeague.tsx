@@ -255,17 +255,32 @@ export default function ConnectLeague() {
     sessionStorage.setItem('yahoo_oauth_state', state);
     const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
 
+    console.log('Opening Yahoo OAuth URL:', authUrl);
+    console.log('Redirect URI:', redirect);
+    console.log('Is in iframe:', window.self !== window.top);
+
     // If running inside Lovable preview iframe, open a popup to avoid X-Frame-Options blocks
     if (window.self !== window.top) {
       const width = 600;
       const height = 700;
       const left = window.screenX + (window.outerWidth - width) / 2;
       const top = window.screenY + (window.outerHeight - height) / 2;
-      window.open(
+      const popup = window.open(
         authUrl, 
-        'Yahoo OAuth', 
-        `width=${width},height=${height},left=${left},top=${top},popup=yes`
+        'YahooOAuth', 
+        `width=${width},height=${height},left=${left},top=${top}`
       );
+      
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        toast({
+          title: "Popup Blocked",
+          description: "Please allow popups for this site and try again.",
+          variant: "destructive",
+        });
+        console.error('Popup was blocked by browser');
+      } else {
+        console.log('Popup opened successfully');
+      }
     } else {
       window.location.href = authUrl;
     }
