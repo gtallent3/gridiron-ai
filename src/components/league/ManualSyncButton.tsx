@@ -70,7 +70,15 @@ export function ManualSyncButton({ leagueId, onSyncComplete }: ManualSyncButtonP
         );
       }
 
+      // Force a small delay to ensure DB writes complete
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
       onSyncComplete?.();
+      
+      // Force page reload for Yahoo to ensure fresh data
+      if (platform === 'yahoo') {
+        window.location.reload();
+      }
     } catch (error) {
       console.error("Sync error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to sync data");
