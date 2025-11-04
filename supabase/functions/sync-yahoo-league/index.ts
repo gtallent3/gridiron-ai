@@ -156,6 +156,77 @@ serve(async (req) => {
 
     console.log(`League ${leagueName} (${userTeamName}) synced successfully`);
 
+    // Now fetch and store roster data for all teams
+    if (teams && typeof teams === 'object') {
+      for (const [key, value] of Object.entries(teams)) {
+        if (key === 'count') continue;
+        
+        const team = (value as any)?.team?.[0];
+        if (!team) continue;
+
+        const teamId = team.team_key || team.team_id || '';
+        const teamName = team.name || 'Unknown Team';
+        
+        console.log(`Fetching roster for team: ${teamName}`);
+
+        // Fetch roster for this team
+        try {
+          const rosterResponse = await fetch(
+            `https://fantasysports.yahooapis.com/fantasy/v2/team/${teamId}/roster?format=json`,
+            {
+              headers: {
+                'Authorization': `Bearer ${tokenData.access_token}`,
+              },
+            }
+          );
+
+          if (!rosterResponse.ok) {
+            console.warn(`Failed to fetch roster for team ${teamName}`);
+            continue;
+          }
+
+          const rosterData = await rosterResponse.json();
+          const rosterPlayers = rosterData.fantasy_content?.team?.[1]?.roster?.['0']?.players || {};
+          
+          // Convert Yahoo roster to standard format
+          const roster: any[] = [];
+          for (const [playerKey, playerValue] of Object.entries(rosterPlayers)) {
+            if (playerKey === 'count') continue;
+            const playerData = (playerValue as any)?.player?.[0];
+            if (!playerData) continue;
+
+            roster.push({
+              player_id: playerData.player_id || '',
+              player_name: playerData.name?.full || '',
+              position: playerData.primary_position || playerData.display_position || '',
+              team: playerData.editorial_team_abbr || '',
+            });
+          }
+
+          // Store team in user_teams table
+          await supabaseAdmin
+            .from('user_teams')
+            .upsert({
+              league_id: leagueRecord.id,
+              team_id: teamId,
+              team_name: teamName,
+              roster: roster,
+              wins: parseInt(team.team_standings?.outcome_totals?.wins || '0'),
+              losses: parseInt(team.team_standings?.outcome_totals?.losses || '0'),
+              ties: parseInt(team.team_standings?.outcome_totals?.ties || '0'),
+            }, {
+              onConflict: 'league_id,team_id',
+            });
+
+          console.log(`Stored roster for ${teamName}: ${roster.length} players`);
+        } catch (err) {
+          console.error(`Error processing team ${teamName}:`, err);
+        }
+      }
+    }
+
+    console.log(`All teams synced for league ${leagueName}`);
+
     return new Response(
       JSON.stringify({
         success: true,
