@@ -169,22 +169,31 @@ serve(async (req) => {
           for (const [k, v] of Object.entries(userTeams)) {
             if (k === 'count') continue;
             const teamArr = (v as any)?.team;
-            if (Array.isArray(teamArr)) {
-              // Flatten Yahoo team array of single-key objects
-              const flat: Record<string, any> = {};
-              for (const item of teamArr) {
-                if (item && typeof item === 'object' && !Array.isArray(item)) {
-                  const [key, val] = Object.entries(item)[0] || [];
-                  if (key) flat[key] = val;
+            
+            // Yahoo returns team as [[{obj1}, {obj2}, ...]] - double nested
+            if (Array.isArray(teamArr) && teamArr.length > 0) {
+              const innerArr = teamArr[0]; // Get the inner array
+              if (Array.isArray(innerArr)) {
+                // Flatten the array of single-property objects
+                const flat: Record<string, any> = {};
+                for (const item of innerArr) {
+                  if (item && typeof item === 'object' && !Array.isArray(item)) {
+                    const [key, val] = Object.entries(item)[0] || [];
+                    if (key) flat[key] = val;
+                  }
                 }
-              }
-              const tKey: string | undefined = flat['team_key'] as string | undefined;
-              const tName: string | undefined = (flat['name'] as any)?.full || flat['name'];
-              if (tKey && tKey.startsWith(`${leagueKey}.t.`)) {
-                userTeamId = tKey;
-                userTeamName = typeof tName === 'string' ? tName : null;
-                console.log('✓ Method 1: Resolved user team via users endpoint:', userTeamName, userTeamId);
-                break;
+                
+                const tKey: string | undefined = flat['team_key'] as string | undefined;
+                const tName: string | undefined = flat['name'] as string;
+                
+                console.log(`Checking team: ${tName} (${tKey}) for league ${leagueKey}`);
+                
+                if (tKey && tKey.startsWith(`${leagueKey}.t.`)) {
+                  userTeamId = tKey;
+                  userTeamName = tName || null;
+                  console.log('✓ Method 1: Resolved user team via users endpoint:', userTeamName, userTeamId);
+                  break;
+                }
               }
             }
           }
@@ -355,13 +364,26 @@ serve(async (req) => {
       for (const [key, value] of Object.entries(teams)) {
         if (key === 'count') continue;
         
-        const team = (value as any)?.team?.[0];
-        if (!team) continue;
+        // Yahoo returns team as [[{obj1}, {obj2}, ...]] - double nested
+        const teamWrapper = (value as any)?.team;
+        if (!Array.isArray(teamWrapper) || teamWrapper.length === 0) continue;
+        
+        const teamArr = teamWrapper[0]; // Get inner array
+        if (!Array.isArray(teamArr)) continue;
+        
+        // Flatten the array of single-property objects
+        const team: Record<string, any> = {};
+        for (const item of teamArr) {
+          if (item && typeof item === 'object' && !Array.isArray(item)) {
+            const [k, v] = Object.entries(item)[0] || [];
+            if (k) team[k] = v;
+          }
+        }
 
         const teamId = team.team_key || team.team_id || '';
         const teamName = team.name || 'Unknown Team';
         
-        console.log(`Fetching roster for team: ${teamName}`);
+        console.log(`Fetching roster for team: ${teamName} (${teamId})`);
 
         // Fetch roster for this team
         try {
