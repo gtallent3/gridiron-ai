@@ -124,8 +124,10 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            // For Yahoo, all players in roster are starters by default (Yahoo doesn't have starter flag)
-            const isStarter = league.platform === 'yahoo' ? true : (player.starter !== false);
+            // For Yahoo, check selected_position - bench players have "BN" or "Bench"
+            const isStarter = league.platform === 'yahoo' 
+              ? (player.selected_position && player.selected_position !== 'BN' && player.selected_position !== 'Bench')
+              : (player.starter !== false);
             
             // Match by name
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
@@ -204,8 +206,10 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            // For Yahoo, all players in roster are starters by default (Yahoo doesn't have starter flag)
-            const isStarter = league.platform === 'yahoo' ? true : (player.starter !== false);
+            // For Yahoo, check selected_position - bench players have "BN" or "Bench"
+            const isStarter = league.platform === 'yahoo' 
+              ? (player.selected_position && player.selected_position !== 'BN' && player.selected_position !== 'Bench')
+              : (player.starter !== false);
             
             // Try to find projection by ID first, then by name
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
