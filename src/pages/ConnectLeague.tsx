@@ -260,14 +260,23 @@ export default function ConnectLeague() {
     console.log('Redirect URI:', redirect);
     console.log('Is in iframe:', window.self !== window.top);
 
-    // If running inside Lovable preview iframe, open in a new tab to avoid embed restrictions
+    // If running inside Lovable preview iframe, attempt top-level redirect first
     if (window.self !== window.top) {
+      try {
+        // Break out of iframe to avoid X-Frame-Options issues
+        (window.top as Window).location.href = authUrl;
+        console.log('Attempted top-level redirect to Yahoo OAuth');
+        return;
+      } catch (e) {
+        console.warn('Top-level redirect blocked, falling back to new tab', e);
+      }
+
       const newTab = window.open(authUrl, '_blank', 'noopener,noreferrer');
       if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
         // Fallback: show manual link and try programmatic anchor click
         toast({
           title: "Opening Yahoo in a new tab",
-          description: "If nothing opens, we attempted to open a new tab. Please allow popups or click the link below to continue.",
+          description: "If nothing opens, please allow popups or copy the link to a new tab.",
         });
         const a = document.createElement('a');
         a.href = authUrl;
