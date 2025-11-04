@@ -156,6 +156,9 @@ serve(async (req) => {
       }
       
       console.log(`Successfully inserted ${insertData?.length || 0} roster entries`);
+      if (insertData && insertData.length > 0) {
+        console.log('Inserted sample row:', JSON.stringify(insertData[0], null, 2));
+      }
     }
 
     // Update fetch metadata
