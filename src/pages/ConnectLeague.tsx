@@ -37,8 +37,89 @@ export default function ConnectLeague() {
       }
     });
 
+    // Handle Yahoo OAuth callback
+    const handleYahooCallback = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      
+      if (code && window.location.pathname === '/connect-league') {
+        setIsLoading(true);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) {
+            throw new Error('Not authenticated');
+          }
+
+          // Exchange code for tokens
+          const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
+            'validate-yahoo-oauth',
+            {
+              body: { code },
+            }
+          );
+
+          if (tokenError) throw tokenError;
+
+          // Get list of leagues from the games data
+          const games = tokenData.gamesData?.fantasy_content?.users?.[0]?.user?.[1]?.games;
+          if (!games) {
+            throw new Error('No NFL leagues found');
+          }
+
+          // Find current season NFL game
+          const nflGame = Object.values(games).find((item: any) => 
+            item?.game?.[0]?.code === 'nfl' && item?.game?.[0]?.season === new Date().getFullYear().toString()
+          ) as any;
+
+          if (!nflGame) {
+            throw new Error('No current season NFL leagues found');
+          }
+
+          const leagueKey = nflGame.game?.[1]?.leagues?.[0]?.league?.[0]?.league_key;
+          
+          if (!leagueKey) {
+            throw new Error('No leagues found for current season');
+          }
+
+          // Sync the league
+          const { data: syncData, error: syncError } = await supabase.functions.invoke(
+            'sync-yahoo-league',
+            {
+              body: {
+                leagueKey,
+                tokenData: tokenData.tokenData,
+              },
+            }
+          );
+
+          if (syncError) throw syncError;
+
+          toast({
+            title: "✅ Yahoo League Connected!",
+            description: `${syncData.league.name} has been synced successfully!`,
+          });
+
+          // Clear URL params and redirect
+          window.history.replaceState({}, '', '/connect-league');
+          setTimeout(() => navigate('/'), 2000);
+        } catch (error: any) {
+          console.error('Yahoo OAuth error:', error);
+          toast({
+            title: "Connection Failed",
+            description: error.message || "Unable to connect Yahoo league. Please try again.",
+            variant: "destructive",
+          });
+          window.history.replaceState({}, '', '/connect-league');
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    handleYahooCallback();
+
     return () => subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, toast]);
 
   if (checkingAuth) {
     return null;
@@ -81,6 +162,13 @@ export default function ConnectLeague() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleYahooConnect = () => {
+    const clientId = 'dj0yJmk9VDYxV3huOTdXN25UJmQ9WVdrOWN6Qk1ORWN5TmxVbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PWQ0';
+    const redirectUri = encodeURIComponent(`${window.location.origin}/connect-league`);
+    const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code`;
+    window.location.href = authUrl;
   };
 
   const handleEspnCookieSuccess = async (credentials: { swid: string; espn_s2: string; leagueId: string }) => {
@@ -215,8 +303,8 @@ export default function ConnectLeague() {
               </CardContent>
             </Card>
 
-            {/* Yahoo Card - Coming Soon */}
-            <Card className="border-2 border-muted opacity-75">
+            {/* Yahoo Card */}
+            <Card className="border-2 border-primary/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <div className="h-10 w-10 rounded-full bg-purple-500/20 flex items-center justify-center">
@@ -224,14 +312,32 @@ export default function ConnectLeague() {
                   </div>
                   Yahoo
                 </CardTitle>
-                <CardDescription>Coming Soon</CardDescription>
+                <CardDescription>OAuth secure connection</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    Yahoo Fantasy integration is currently under development
-                  </p>
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 text-sm">
+                  <div className="flex items-start gap-2">
+                    <span>🔒</span>
+                    <div className="text-muted-foreground">
+                      <strong className="text-foreground">Secure OAuth:</strong> You'll be redirected to Yahoo to authorize access. We never see your Yahoo password.
+                    </div>
+                  </div>
                 </div>
+                
+                <Button 
+                  onClick={handleYahooConnect}
+                  disabled={isLoading}
+                  className="w-full bg-purple-600 hover:bg-purple-700"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Connecting...
+                    </>
+                  ) : (
+                    'Connect Yahoo'
+                  )}
+                </Button>
               </CardContent>
             </Card>
           </div>
