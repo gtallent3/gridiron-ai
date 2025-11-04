@@ -124,9 +124,11 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            // For Yahoo, check selected_position - bench players have "BN" or "Bench"
-            const isStarter = league.platform === 'yahoo' 
-              ? (player.selected_position && player.selected_position !== 'BN' && player.selected_position !== 'Bench')
+            // For Yahoo, use selected_position from sync (non-starters like BN/IR/NA go to bench)
+            const sp = (player.selected_position ?? '') as string;
+            const spNorm = String(sp).toUpperCase();
+            const isStarter = league.platform === 'yahoo'
+              ? (spNorm !== '' && !['BN','BENCH','IR','NA','IL','PUP'].includes(spNorm))
               : (player.starter !== false);
             
             // Match by name
@@ -206,9 +208,11 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            // For Yahoo, check selected_position - bench players have "BN" or "Bench"
+            // For Yahoo, use selected_position from sync (non-starters like BN/IR/NA go to bench)
+            const sp = (player.selected_position ?? '') as string;
+            const spNorm = String(sp).toUpperCase();
             const isStarter = league.platform === 'yahoo' 
-              ? (player.selected_position && player.selected_position !== 'BN' && player.selected_position !== 'Bench')
+              ? (spNorm !== '' && !['BN','BENCH','IR','NA','IL','PUP'].includes(spNorm))
               : (player.starter !== false);
             
             // Try to find projection by ID first, then by name

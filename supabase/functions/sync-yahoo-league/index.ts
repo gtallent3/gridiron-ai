@@ -409,28 +409,52 @@ serve(async (req) => {
           for (const [playerKey, playerValue] of Object.entries(rosterPlayers)) {
             if (playerKey === 'count') continue;
             
-            // Yahoo returns player as [[{obj1}, {obj2}, ...]] - double nested
+            // Yahoo returns player data in multiple nested blocks; merge them and extract selected_position
             const playerWrapper = (playerValue as any)?.player;
             if (!Array.isArray(playerWrapper) || playerWrapper.length === 0) continue;
-            
-            const playerArr = playerWrapper[0]; // Get inner array
-            if (!Array.isArray(playerArr)) continue;
-            
-            // Flatten the array of single-property objects
-            const playerData: Record<string, any> = {};
-            for (const item of playerArr) {
-              if (item && typeof item === 'object' && !Array.isArray(item)) {
-                const [k, v] = Object.entries(item)[0] || [];
-                if (k) playerData[k] = v;
+
+            const core: Record<string, any> = {};
+            let selectedPosition: string | null = null;
+
+            for (const block of playerWrapper) {
+              if (Array.isArray(block)) {
+                for (const item of block) {
+                  if (item && typeof item === 'object' && !Array.isArray(item)) {
+                    const [k, v] = Object.entries(item)[0] || [];
+                    if (!k) continue;
+                    if (k === 'selected_position') {
+                      if (typeof v === 'string') {
+                        selectedPosition = v;
+                      } else if (v && typeof v === 'object') {
+                        const pos = (v as any).position ?? (Array.isArray(v) ? (v as any)[0]?.position : undefined);
+                        if (typeof pos === 'string') selectedPosition = pos;
+                      }
+                    } else {
+                      core[k] = v;
+                    }
+                  }
+                }
+              } else if (block && typeof block === 'object') {
+                if ('selected_position' in (block as any)) {
+                  const v: any = (block as any).selected_position;
+                  if (typeof v === 'string') {
+                    selectedPosition = v;
+                  } else if (v && typeof v === 'object') {
+                    const pos = v.position ?? (Array.isArray(v) ? v[0]?.position : undefined);
+                    if (typeof pos === 'string') selectedPosition = pos;
+                  }
+                } else {
+                  Object.assign(core, block);
+                }
               }
             }
 
             roster.push({
-              player_id: playerData.player_id || '',
-              player_name: playerData.name?.full || playerData.name || '',
-              position: playerData.primary_position || playerData.display_position || '',
-              team: playerData.editorial_team_abbr || '',
-              selected_position: playerData.selected_position || 'BN',
+              player_id: core.player_id || '',
+              player_name: core.name?.full || core.name || '',
+              position: core.primary_position || core.display_position || '',
+              team: core.editorial_team_abbr || '',
+              selected_position: selectedPosition || 'BN',
             });
           }
 
