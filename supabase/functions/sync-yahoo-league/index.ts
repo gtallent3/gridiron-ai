@@ -458,10 +458,16 @@ serve(async (req) => {
             });
           }
 
-          // Store team in user_teams table
+          // Store team in user_teams table - delete existing first to prevent duplicates
           await supabaseAdmin
             .from('user_teams')
-            .upsert({
+            .delete()
+            .eq('league_id', leagueRecord.id)
+            .eq('team_id', teamId);
+
+          await supabaseAdmin
+            .from('user_teams')
+            .insert({
               league_id: leagueRecord.id,
               team_id: teamId,
               team_name: teamName,
@@ -469,8 +475,6 @@ serve(async (req) => {
               wins: parseInt(team.team_standings?.outcome_totals?.wins || '0'),
               losses: parseInt(team.team_standings?.outcome_totals?.losses || '0'),
               ties: parseInt(team.team_standings?.outcome_totals?.ties || '0'),
-            }, {
-              onConflict: 'league_id,team_id',
             });
 
           console.log(`Stored roster for ${teamName}: ${roster.length} players`);
