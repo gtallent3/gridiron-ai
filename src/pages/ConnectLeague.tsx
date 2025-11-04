@@ -450,12 +450,23 @@ export default function ConnectLeague() {
                   )}
                 </Button>
                 {yahooAuthUrl && (
-                  <p className="text-xs text-muted-foreground text-center mt-2">
-                    Having trouble?{' '}
-                    <a href={yahooAuthUrl} target="_blank" rel="noopener noreferrer" className="underline">
-                      Click here to open Yahoo auth
-                    </a>
-                  </p>
+                  <div className="text-xs text-muted-foreground text-center mt-2 space-y-1">
+                    <p>
+                      Having trouble?{' '}
+                      <a href={yahooAuthUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                        Click here to open Yahoo auth
+                      </a>
+                    </p>
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        className="underline"
+                        onClick={() => navigator.clipboard.writeText(yahooAuthUrl)}
+                      >
+                        Copy auth link
+                      </button>
+                      <span className="opacity-70">then paste in a new browser window</span>
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
