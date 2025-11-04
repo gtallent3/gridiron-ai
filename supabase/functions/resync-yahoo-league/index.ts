@@ -231,6 +231,8 @@ serve(async (req) => {
           ?? (Array.isArray(core.eligible_positions) ? core.eligible_positions[0] : null)
           ?? 'BN';
         
+        console.log(`Player: ${core.name?.full || core.name} -> selected_position: ${selectedPosition}`);
+        
         roster.push({
           player_id: core.player_id || '',
           player_name: core.name?.full || core.name || '',
