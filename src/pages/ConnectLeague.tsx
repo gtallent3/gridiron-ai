@@ -18,6 +18,7 @@ export default function ConnectLeague() {
   const [sleeperUsername, setSleeperUsername] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [yahooAuthUrl, setYahooAuthUrl] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -256,40 +257,28 @@ export default function ConnectLeague() {
     // Add prompt=login to force Yahoo to show login screen every time
     const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}&prompt=login`;
 
+    setYahooAuthUrl(authUrl);
+
     console.log('Opening Yahoo OAuth URL:', authUrl);
     console.log('Redirect URI:', redirect);
     console.log('Is in iframe:', window.self !== window.top);
 
-    // If running inside Lovable preview iframe, attempt top-level redirect first
-    if (window.self !== window.top) {
-      try {
-        // Break out of iframe to avoid X-Frame-Options issues
-        (window.top as Window).location.href = authUrl;
-        console.log('Attempted top-level redirect to Yahoo OAuth');
-        return;
-      } catch (e) {
-        console.warn('Top-level redirect blocked, falling back to new tab', e);
-      }
-
-      const newTab = window.open(authUrl, '_blank', 'noopener,noreferrer');
-      if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
-        // Fallback: show manual link and try programmatic anchor click
-        toast({
-          title: "Opening Yahoo in a new tab",
-          description: "If nothing opens, please allow popups or copy the link to a new tab.",
-        });
-        const a = document.createElement('a');
-        a.href = authUrl;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      } else {
-        console.log('New tab opened successfully');
-      }
+    // Always open in a new tab to avoid iframe/X-Frame-Options issues in preview
+    const newTab = window.open(authUrl, '_blank', 'noopener,noreferrer');
+    if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
+      toast({
+        title: "Opening Yahoo in a new tab",
+        description: "If nothing opens, please allow popups or click the manual link below.",
+      });
+      const a = document.createElement('a');
+      a.href = authUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     } else {
-      window.location.href = authUrl;
+      console.log('New tab opened successfully');
     }
   };
 
@@ -460,6 +449,14 @@ export default function ConnectLeague() {
                     'Connect Yahoo'
                   )}
                 </Button>
+                {yahooAuthUrl && (
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    Having trouble?{' '}
+                    <a href={yahooAuthUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                      Click here to open Yahoo auth
+                    </a>
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
