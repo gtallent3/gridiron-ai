@@ -131,7 +131,26 @@ serve(async (req) => {
     const teams = teamsData.fantasy_content?.league?.[1]?.teams;
     let userTeamId: string | null = null;
     let userTeamName: string | null = null;
+    let userGuid: string | null = null;
 
+    // Get the authenticated user's GUID first
+    try {
+      const userGuidResp = await fetch(
+        `https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1?format=json`,
+        {
+          headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
+        }
+      );
+      if (userGuidResp.ok) {
+        const guidData = await userGuidResp.json();
+        userGuid = guidData?.fantasy_content?.users?.[0]?.user?.[0]?.guid;
+        console.log('User GUID:', userGuid);
+      }
+    } catch (e) {
+      console.warn('Error fetching user GUID:', e);
+    }
+
+    // Method 1: Try to find user's team via the user teams endpoint
     try {
       const userTeamsResp = await fetch(
         `https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/teams?format=json`,
@@ -141,6 +160,8 @@ serve(async (req) => {
       );
       if (userTeamsResp.ok) {
         const userTeamsData = await userTeamsResp.json();
+        console.log('User teams response:', JSON.stringify(userTeamsData, null, 2));
+        
         const usersObj = userTeamsData?.fantasy_content?.users;
         const userObj = usersObj?.[0]?.user?.[1];
         const userTeams = userObj?.teams;
@@ -162,7 +183,7 @@ serve(async (req) => {
               if (tKey && tKey.startsWith(`${leagueKey}.t.`)) {
                 userTeamId = tKey;
                 userTeamName = typeof tName === 'string' ? tName : null;
-                console.log('Resolved user team via users endpoint:', userTeamName, userTeamId);
+                console.log('✓ Method 1: Resolved user team via users endpoint:', userTeamName, userTeamId);
                 break;
               }
             }
@@ -175,8 +196,9 @@ serve(async (req) => {
       console.warn('Error fetching user teams:', e);
     }
 
+    // Method 2: Check for is_owned_by_current_login flag in league teams
     if (!userTeamId && teams && typeof teams === 'object') {
-      // Fallback: try to infer from league teams
+      console.log('Trying Method 2: is_owned_by_current_login flag');
       for (const [key, value] of Object.entries(teams)) {
         if (key === 'count') continue;
         const teamObj = (value as any)?.team;
@@ -188,11 +210,46 @@ serve(async (req) => {
               if (k2) flat[k2] = v2;
             }
           }
+          console.log(`Team ${flat['name']}: is_owned=${flat['is_owned_by_current_login']}`);
           if (flat['is_owned_by_current_login'] === 1 || flat['is_owned_by_current_login'] === '1') {
             userTeamId = flat['team_key'] || flat['team_id'];
             userTeamName = (flat['name'] as any)?.full || flat['name'] || null;
+            console.log('✓ Method 2: Found user team via ownership flag:', userTeamName, userTeamId);
             break;
           }
+        }
+      }
+    }
+
+    // Method 3: Match by manager GUID if available
+    if (!userTeamId && userGuid && teams && typeof teams === 'object') {
+      console.log('Trying Method 3: Matching by manager GUID');
+      for (const [key, value] of Object.entries(teams)) {
+        if (key === 'count') continue;
+        const teamObj = (value as any)?.team;
+        if (Array.isArray(teamObj)) {
+          const flat: Record<string, any> = {};
+          for (const item of teamObj) {
+            if (item && typeof item === 'object' && !Array.isArray(item)) {
+              const [k2, v2] = Object.entries(item)[0] || [];
+              if (k2) flat[k2] = v2;
+            }
+          }
+          
+          // Check if any manager has matching GUID
+          const managers = flat['managers'];
+          if (managers && Array.isArray(managers)) {
+            for (const mgr of managers) {
+              const managerData = mgr?.manager;
+              if (managerData?.guid === userGuid) {
+                userTeamId = flat['team_key'] || flat['team_id'];
+                userTeamName = (flat['name'] as any)?.full || flat['name'] || null;
+                console.log('✓ Method 3: Found user team via GUID match:', userTeamName, userTeamId);
+                break;
+              }
+            }
+          }
+          if (userTeamId) break;
         }
       }
     }
