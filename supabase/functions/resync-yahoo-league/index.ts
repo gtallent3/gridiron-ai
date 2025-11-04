@@ -198,6 +198,38 @@ serve(async (req) => {
           }
         }
 
+        if (!selectedPosition) {
+          const findPos = (node: any): string | null => {
+            if (!node) return null;
+            if (Array.isArray(node)) {
+              for (const item of node) {
+                const p = findPos(item);
+                if (p) return p;
+              }
+              return null;
+            }
+            if (typeof node === 'object') {
+              if ('selected_position' in (node as any)) {
+                const v: any = (node as any).selected_position;
+                if (typeof v === 'string') return v;
+                if (Array.isArray(v)) {
+                  for (const it of v) {
+                    if (typeof it === 'string') return it;
+                    if (it && typeof it === 'object' && 'position' in it && typeof (it as any).position === 'string') return (it as any).position;
+                  }
+                }
+                if (v && typeof v === 'object' && typeof (v as any).position === 'string') return (v as any).position;
+              }
+              for (const val of Object.values(node)) {
+                const p = findPos(val);
+                if (p) return p;
+              }
+            }
+            return null;
+          };
+          selectedPosition = findPos(playerWrapper) || 'BN';
+        }
+        
         roster.push({
           player_id: core.player_id || '',
           player_name: core.name?.full || core.name || '',
