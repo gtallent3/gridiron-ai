@@ -95,32 +95,55 @@ export default function ConnectLeague() {
           console.log('Looking for NFL seasons:', possibleSeasons);
           
           let nflGame: any = null;
+          let selectedGameObj: any = null;
+          let leaguesObj: any = null;
+
+          const gameItems = Object.values(games) as any[];
           for (const season of possibleSeasons) {
-            nflGame = Object.values(games).find((item: any) => {
-              const gameCode = item?.game?.[0]?.code;
-              const gameSeason = item?.game?.[0]?.season;
-              console.log('Checking game:', gameCode, 'season:', gameSeason);
-              return gameCode === 'nfl' && gameSeason === season;
-            });
-            if (nflGame) {
-              console.log('Found NFL game for season:', season);
-              break;
+            for (const item of gameItems) {
+              const gameArr = item?.game;
+              if (!Array.isArray(gameArr)) continue;
+              const gameObj = Object.assign({}, ...gameArr);
+              const gameCode = gameObj?.code;
+              const gameSeason = gameObj?.season;
+              const leagues = gameObj?.leagues;
+              const leaguesCount = typeof leagues?.count !== 'undefined' ? leagues.count : (leagues ? Object.keys(leagues).length - (leagues.count ? 1 : 0) : 0);
+              console.log('Checking game:', gameCode, 'season:', gameSeason, 'leaguesCount:', leaguesCount);
+              if (gameCode === 'nfl' && gameSeason === season) {
+                nflGame = item;
+                selectedGameObj = gameObj;
+                leaguesObj = leagues;
+                console.log('Found NFL game for season:', season);
+                break;
+              }
             }
+            if (nflGame) break;
           }
 
-          if (!nflGame) {
-            console.error('No NFL game found. Available games:', Object.values(games).map((g: any) => ({
-              code: g?.game?.[0]?.code,
-              season: g?.game?.[0]?.season
-            })));
+          if (!nflGame || !selectedGameObj) {
+            const available = gameItems.map((g: any) => {
+              const obj = Object.assign({}, ...(Array.isArray(g?.game) ? g.game : []));
+              return { code: obj?.code, season: obj?.season };
+            });
+            console.error('No NFL game found. Available games:', available);
             throw new Error('No current or recent season NFL leagues found in your Yahoo account');
           }
 
-          console.log('NFL Game data:', JSON.stringify(nflGame, null, 2));
-          
-          const leagueKey = nflGame.game?.[1]?.leagues?.[0]?.league?.[0]?.league_key;
-          console.log('Extracted league key:', leagueKey);
-          
+          console.log('NFL Game object:', selectedGameObj);
+
+          // Extract league keys robustly
+          const leagueKeys: string[] = [];
+          if (leaguesObj && typeof leaguesObj === 'object') {
+            for (const [k, v] of Object.entries(leaguesObj)) {
+              if (k === 'count') continue;
+              const key = (v as any)?.league?.[0]?.league_key;
+              if (key) leagueKeys.push(key);
+            }
+          }
+
+          const leagueKey = leagueKeys[0];
+          console.log('Extracted league keys:', leagueKeys);
+
           if (!leagueKey) {
             throw new Error('No leagues found for this NFL season. Please make sure you have an active league.');
           }
