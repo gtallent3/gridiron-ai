@@ -73,10 +73,14 @@ serve(async (req) => {
 
     const tokenData = credentials as { access_token: string; refresh_token: string };
 
-    // Fetch teams from Yahoo API
-    console.log(`Fetching teams for league: ${league.league_id}`);
+    // Construct proper Yahoo league key format (e.g., "nfl.l.1582610")
+    const yahooLeagueKey = league.league_id.includes('.')
+      ? league.league_id
+      : `nfl.l.${league.league_id}`;
+    
+    console.log(`Fetching teams for league: ${yahooLeagueKey}`);
     const teamsResponse = await fetch(
-      `https://fantasysports.yahooapis.com/fantasy/v2/league/${league.league_id}/teams?format=json`,
+      `https://fantasysports.yahooapis.com/fantasy/v2/league/${yahooLeagueKey}/teams?format=json`,
       {
         headers: {
           Authorization: `Bearer ${tokenData.access_token}`,
@@ -129,7 +133,7 @@ serve(async (req) => {
 
       // Fetch roster for this team
       const rosterResponse = await fetch(
-        `https://fantasysports.yahooapis.com/fantasy/v2/team/${league.league_id}.t.${teamId}/roster?format=json`,
+        `https://fantasysports.yahooapis.com/fantasy/v2/team/${yahooLeagueKey}.t.${teamId}/roster?format=json`,
         {
           headers: {
             Authorization: `Bearer ${tokenData.access_token}`,
