@@ -75,6 +75,29 @@ serve(async (req) => {
 
         const lineupSlot = entry.lineupSlotId;
         const isStarter = lineupSlot < 20; // ESPN uses IDs < 20 for starting positions
+        
+        // Determine roster status based on lineup slot
+        let rosterStatus = 'active';
+        if (lineupSlot === 21) rosterStatus = 'ir';
+        else if (lineupSlot === 20) rosterStatus = 'bench';
+        else if (isStarter) rosterStatus = 'starter';
+        
+        // Calculate age from birth date if available
+        let age = null;
+        if (player.birthDate) {
+          const birthYear = player.birthDate.year;
+          const birthMonth = player.birthDate.month;
+          const birthDay = player.birthDate.day;
+          if (birthYear) {
+            const birthDate = new Date(birthYear, (birthMonth || 1) - 1, birthDay || 1);
+            const today = new Date();
+            age = today.getFullYear() - birthDate.getFullYear();
+            const monthDiff = today.getMonth() - birthDate.getMonth();
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+              age--;
+            }
+          }
+        }
 
         rosterSnapshots.push({
           league_id: leagueId,
@@ -84,6 +107,11 @@ serve(async (req) => {
           snapshot_date: snapshotDate,
           position: player.defaultPositionId ? getPositionName(player.defaultPositionId) : 'UNKNOWN',
           is_starter: isStarter,
+          roster_status: rosterStatus,
+          age: age,
+          draft_year: player.draftYear || null,
+          draft_round: player.draftRound || null,
+          team: player.proTeamId ? getTeamAbbr(player.proTeamId) : null,
         });
       }
     }
@@ -148,4 +176,16 @@ function getPositionName(positionId: number): string {
     16: 'D/ST',
   };
   return positions[positionId] || 'FLEX';
+}
+
+// Helper function to map ESPN team IDs to abbreviations
+function getTeamAbbr(teamId: number): string {
+  const teams: Record<number, string> = {
+    1: 'ATL', 2: 'BUF', 3: 'CHI', 4: 'CIN', 5: 'CLE', 6: 'DAL', 7: 'DEN',
+    8: 'DET', 9: 'GB', 10: 'TEN', 11: 'IND', 12: 'KC', 13: 'LV', 14: 'LAR',
+    15: 'MIA', 16: 'MIN', 17: 'NE', 18: 'NO', 19: 'NYG', 20: 'NYJ',
+    21: 'PHI', 22: 'ARI', 23: 'PIT', 24: 'LAC', 25: 'SF', 26: 'SEA',
+    27: 'TB', 28: 'WSH', 29: 'CAR', 30: 'JAX', 33: 'BAL', 34: 'HOU',
+  };
+  return teams[teamId] || 'FA';
 }

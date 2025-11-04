@@ -11,7 +11,19 @@ interface Transaction {
   date: number;
   type: string;
   teams: Array<{ teamId: number }>;
-  items?: Array<{ playerId: number; type: string; fromTeamId?: number; toTeamId?: number }>;
+  items?: Array<{ 
+    playerId: number; 
+    type: string; 
+    fromTeamId?: number; 
+    toTeamId?: number;
+  }>;
+  bidAmount?: number;
+  comments?: string;
+}
+
+interface Player {
+  id: number;
+  fullName: string;
 }
 
 serve(async (req) => {
@@ -62,8 +74,8 @@ serve(async (req) => {
       throw new Error('ESPN credentials not found');
     }
 
-    // Fetch transactions from ESPN
-    const espnUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/segments/0/leagues/${league.league_id}?view=mTransactions2`;
+    // Fetch transactions and player data from ESPN
+    const espnUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/segments/0/leagues/${league.league_id}?view=mTransactions2&view=players_wl`;
     
     const espnResponse = await fetch(espnUrl, {
       headers: {
@@ -77,6 +89,15 @@ serve(async (req) => {
 
     const espnData = await espnResponse.json();
     const transactions: Transaction[] = espnData.transactions || [];
+    const players = espnData.players || [];
+    
+    // Create player ID to name mapping
+    const playerMap = new Map<number, string>();
+    players.forEach((p: any) => {
+      if (p.player) {
+        playerMap.set(p.player.id, p.player.fullName);
+      }
+    });
 
     console.log(`Found ${transactions.length} transactions for league ${leagueId}`);
 
@@ -104,12 +125,27 @@ serve(async (req) => {
         toTeamId: item.toTeamId,
       })) || [];
 
+      // Extract trade partner (for trades, find the other team)
+      let tradePartner = null;
+      if (transactionType === 'trade' && teamsInvolved.length === 2) {
+        tradePartner = teamsInvolved.map(team => team.teamId.toString()).join(',');
+      }
+
+      // Get player names
+      const playerNames = playersInvolved
+        .map(p => playerMap.get(p.playerId))
+        .filter(name => name) as string[];
+
       return {
         league_id: leagueId,
         transaction_date: new Date(t.date).toISOString(),
         transaction_type: transactionType,
         teams_involved: teamsInvolved,
         players_involved: playersInvolved,
+        trade_partner: tradePartner,
+        faab_spent: t.bidAmount || null,
+        comments: t.comments || null,
+        player_names: playerNames,
         raw_data: t,
         external_transaction_id: t.id,
       };

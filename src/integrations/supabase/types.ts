@@ -391,37 +391,49 @@ export type Database = {
       }
       league_transactions: {
         Row: {
+          comments: string | null
           created_at: string | null
           external_transaction_id: string | null
+          faab_spent: number | null
           id: string
           league_id: string
+          player_names: string[] | null
           players_involved: Json
           raw_data: Json | null
           teams_involved: Json
+          trade_partner: string | null
           transaction_date: string
           transaction_type: string
           updated_at: string | null
         }
         Insert: {
+          comments?: string | null
           created_at?: string | null
           external_transaction_id?: string | null
+          faab_spent?: number | null
           id?: string
           league_id: string
+          player_names?: string[] | null
           players_involved?: Json
           raw_data?: Json | null
           teams_involved?: Json
+          trade_partner?: string | null
           transaction_date: string
           transaction_type: string
           updated_at?: string | null
         }
         Update: {
+          comments?: string | null
           created_at?: string | null
           external_transaction_id?: string | null
+          faab_spent?: number | null
           id?: string
           league_id?: string
+          player_names?: string[] | null
           players_involved?: Json
           raw_data?: Json | null
           teams_involved?: Json
+          trade_partner?: string | null
           transaction_date?: string
           transaction_type?: string
           updated_at?: string | null
@@ -1100,36 +1112,51 @@ export type Database = {
       }
       roster_snapshots: {
         Row: {
+          age: number | null
           created_at: string | null
+          draft_round: number | null
+          draft_year: number | null
           id: string
           is_starter: boolean | null
           league_id: string
           player_id: string
           player_name: string | null
           position: string | null
+          roster_status: string | null
           snapshot_date: string
+          team: string | null
           team_id: string
         }
         Insert: {
+          age?: number | null
           created_at?: string | null
+          draft_round?: number | null
+          draft_year?: number | null
           id?: string
           is_starter?: boolean | null
           league_id: string
           player_id: string
           player_name?: string | null
           position?: string | null
+          roster_status?: string | null
           snapshot_date?: string
+          team?: string | null
           team_id: string
         }
         Update: {
+          age?: number | null
           created_at?: string | null
+          draft_round?: number | null
+          draft_year?: number | null
           id?: string
           is_starter?: boolean | null
           league_id?: string
           player_id?: string
           player_name?: string | null
           position?: string | null
+          roster_status?: string | null
           snapshot_date?: string
+          team?: string | null
           team_id?: string
         }
         Relationships: [
