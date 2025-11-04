@@ -64,9 +64,15 @@ export function LeagueHeader({ league, userTeam, onSyncComplete }: LeagueHeaderP
     const roster = userTeam?.roster;
     if (!Array.isArray(roster)) return 0;
 
-    if (league.platform === 'sleeper') {
+    if (league.platform === 'sleeper' || league.platform === 'yahoo') {
       return roster
-        .filter((p: any) => p.starter !== false)
+        .filter((p: any) => {
+          if (league.platform === 'yahoo') {
+            const sp = String(p.selected_position ?? '').toUpperCase();
+            return sp !== '' && !['BN','BENCH','IR','NA','IL','PUP'].includes(sp);
+          }
+          return p.starter !== false;
+        })
         .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
     }
 
