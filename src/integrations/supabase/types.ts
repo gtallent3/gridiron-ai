@@ -268,6 +268,50 @@ export type Database = {
         }
         Relationships: []
       }
+      fetch_metadata: {
+        Row: {
+          created_at: string | null
+          endpoint_type: string
+          error_count: number | null
+          fetch_count: number | null
+          id: string
+          last_error: string | null
+          last_fetched_at: string
+          league_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          endpoint_type: string
+          error_count?: number | null
+          fetch_count?: number | null
+          id?: string
+          last_error?: string | null
+          last_fetched_at?: string
+          league_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          endpoint_type?: string
+          error_count?: number | null
+          fetch_count?: number | null
+          id?: string
+          last_error?: string | null
+          last_fetched_at?: string
+          league_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fetch_metadata_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "connected_leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           amount_due: number
@@ -344,6 +388,53 @@ export type Database = {
           vault_secret_name?: string
         }
         Relationships: []
+      }
+      league_transactions: {
+        Row: {
+          created_at: string | null
+          external_transaction_id: string | null
+          id: string
+          league_id: string
+          players_involved: Json
+          raw_data: Json | null
+          teams_involved: Json
+          transaction_date: string
+          transaction_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          external_transaction_id?: string | null
+          id?: string
+          league_id: string
+          players_involved?: Json
+          raw_data?: Json | null
+          teams_involved?: Json
+          transaction_date: string
+          transaction_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          external_transaction_id?: string | null
+          id?: string
+          league_id?: string
+          players_involved?: Json
+          raw_data?: Json | null
+          teams_involved?: Json
+          transaction_date?: string
+          transaction_type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_transactions_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "connected_leagues"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       normalized_players: {
         Row: {
@@ -1004,6 +1095,47 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "app_users"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      roster_snapshots: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_starter: boolean | null
+          league_id: string
+          player_id: string
+          position: string | null
+          snapshot_date: string
+          team_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_starter?: boolean | null
+          league_id: string
+          player_id: string
+          position?: string | null
+          snapshot_date?: string
+          team_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_starter?: boolean | null
+          league_id?: string
+          player_id?: string
+          position?: string | null
+          snapshot_date?: string
+          team_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roster_snapshots_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "connected_leagues"
+            referencedColumns: ["id"]
           },
         ]
       }

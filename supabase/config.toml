@@ -101,3 +101,15 @@ verify_jwt = true
 
 [functions.check-subscription]
 verify_jwt = true
+
+[functions.ingest-league-transactions]
+verify_jwt = true
+
+[functions.ingest-roster-snapshots]
+verify_jwt = true
+
+[functions.get-league-transactions]
+verify_jwt = true
+
+[functions.auto-ingest-all-leagues]
+verify_jwt = false
