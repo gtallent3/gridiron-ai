@@ -67,7 +67,7 @@ serve(async (req) => {
 
     console.log(`League: ${leagueName}, Season: ${season}`);
 
-    // Fetch teams/rosters
+    // Fetch teams/rosters and user info
     const teamsResponse = await fetch(
       `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/teams?format=json`,
       {
@@ -84,6 +84,30 @@ serve(async (req) => {
 
     const teamsData = await teamsResponse.json();
     console.log('Successfully fetched teams');
+
+    // Find user's team from the teams data
+    const teams = teamsData.fantasy_content?.league?.[1]?.teams;
+    let userTeamId = null;
+    let userTeamName = null;
+
+    if (teams && typeof teams === 'object') {
+      for (const [key, value] of Object.entries(teams)) {
+        if (key === 'count') continue;
+        const team = (value as any)?.team?.[0];
+        const isOwned = team?.is_owned_by_current_login === '1' || team?.is_owned_by_current_login === 1;
+        if (isOwned) {
+          userTeamId = team?.team_key || team?.team_id;
+          userTeamName = team?.name;
+          console.log('Found user team:', userTeamName, userTeamId);
+          break;
+        }
+      }
+    }
+
+    if (!userTeamId) {
+      console.error('Could not find user team in league');
+      return createErrorResponse('Could not find your team in this league', 400, corsHeaders);
+    }
 
     // Store credentials securely using the existing function
     const credentialsResult = await supabaseAdmin.rpc('store_league_credentials', {
@@ -105,20 +129,23 @@ serve(async (req) => {
 
     console.log('Credentials stored successfully');
 
-    // Insert or update league record
+    // Insert or update connected_leagues record
     const { data: leagueRecord, error: leagueError } = await supabaseAdmin
-      .from('leagues')
+      .from('connected_leagues')
       .upsert({
-        id: crypto.randomUUID(),
         user_id: user.id,
         platform: 'yahoo',
-        platform_league_id: leagueId,
-        name: leagueName,
-        season: parseInt(season),
-        roster_data: teamsData,
+        league_id: leagueId,
+        league_name: leagueName,
+        user_team_id: userTeamId,
+        scoring_type: league.scoring_type === 'head' ? 'head_to_head_points' : 'head_to_head_points',
+        league_size: parseInt(league.num_teams || '0'),
+        scoring_settings: {},
+        auto_refresh: true,
         last_synced_at: new Date().toISOString(),
+        current_week: parseInt(league.current_week || '1'),
       }, {
-        onConflict: 'user_id,platform,platform_league_id',
+        onConflict: 'user_id,platform,league_id',
       })
       .select()
       .single();
@@ -128,7 +155,7 @@ serve(async (req) => {
       return createErrorResponse('Failed to save league', 500, corsHeaders);
     }
 
-    console.log(`League ${leagueName} synced successfully`);
+    console.log(`League ${leagueName} (${userTeamName}) synced successfully`);
 
     return new Response(
       JSON.stringify({

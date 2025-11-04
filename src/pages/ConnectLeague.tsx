@@ -133,40 +133,88 @@ export default function ConnectLeague() {
 
           // Extract league keys robustly
           const leagueKeys: string[] = [];
+          const leagueNames: { key: string; name: string }[] = [];
           if (leaguesObj && typeof leaguesObj === 'object') {
             for (const [k, v] of Object.entries(leaguesObj)) {
               if (k === 'count') continue;
-              const key = (v as any)?.league?.[0]?.league_key;
-              if (key) leagueKeys.push(key);
+              const leagueData = (v as any)?.league?.[0];
+              const key = leagueData?.league_key;
+              const name = leagueData?.name;
+              if (key && name) {
+                leagueKeys.push(key);
+                leagueNames.push({ key, name });
+              }
             }
           }
 
-          const leagueKey = leagueKeys[0];
           console.log('Extracted league keys:', leagueKeys);
+          console.log('Available leagues:', leagueNames);
 
-          if (!leagueKey) {
+          if (leagueKeys.length === 0) {
             throw new Error('No leagues found for this NFL season. Please make sure you have an active league.');
           }
 
-          console.log('Syncing league with key:', leagueKey);
+          // If multiple leagues, sync all of them
+          if (leagueKeys.length > 1) {
+            let successCount = 0;
+            let failCount = 0;
+            
+            for (const { key, name } of leagueNames) {
+              try {
+                console.log('Syncing league:', name, key);
+                const { error: syncError } = await supabase.functions.invoke(
+                  'sync-yahoo-league',
+                  {
+                    body: {
+                      leagueKey: key,
+                      tokenData: tokenData.tokenData,
+                    },
+                  }
+                );
 
-          // Sync the league
-          const { data: syncData, error: syncError } = await supabase.functions.invoke(
-            'sync-yahoo-league',
-            {
-              body: {
-                leagueKey,
-                tokenData: tokenData.tokenData,
-              },
+                if (syncError) {
+                  console.error(`Failed to sync ${name}:`, syncError);
+                  failCount++;
+                } else {
+                  console.log(`Successfully synced ${name}`);
+                  successCount++;
+                }
+              } catch (err) {
+                console.error(`Error syncing ${name}:`, err);
+                failCount++;
+              }
             }
-          );
 
-          if (syncError) throw syncError;
+            if (successCount > 0) {
+              toast({
+                title: "✅ Yahoo Leagues Connected!",
+                description: `${successCount} league(s) synced successfully${failCount > 0 ? `, ${failCount} failed` : ''}!`,
+              });
+            } else {
+              throw new Error('Failed to sync any leagues');
+            }
+          } else {
+            // Single league - sync it
+            const leagueKey = leagueKeys[0];
+            console.log('Syncing single league with key:', leagueKey);
 
-          toast({
-            title: "✅ Yahoo League Connected!",
-            description: `${syncData.league.name} has been synced successfully!`,
-          });
+            const { data: syncData, error: syncError } = await supabase.functions.invoke(
+              'sync-yahoo-league',
+              {
+                body: {
+                  leagueKey,
+                  tokenData: tokenData.tokenData,
+                },
+              }
+            );
+
+            if (syncError) throw syncError;
+
+            toast({
+              title: "✅ Yahoo League Connected!",
+              description: `${syncData.league.name} has been synced successfully!`,
+            });
+          }
 
           // If we're in a popup, close it and notify parent
           if (window.opener) {
