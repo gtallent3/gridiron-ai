@@ -60,8 +60,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
       const leagueCurrentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
       const isHistorical = week < leagueCurrentWeek;
       
-      // For Sleeper, fetch actuals for past weeks, use projections for current/future
-      if (league.platform === 'sleeper') {
+      // For Sleeper and Yahoo, fetch actuals for past weeks, use projections for current/future
+      if (league.platform === 'sleeper' || league.platform === 'yahoo') {
         const starterPlayers: any[] = [];
         const benchPlayers: any[] = [];
         
@@ -124,7 +124,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            const isStarter = player.starter !== false;
+            // For Yahoo, all players in roster are starters by default (Yahoo doesn't have starter flag)
+            const isStarter = league.platform === 'yahoo' ? true : (player.starter !== false);
             
             // Match by name
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
@@ -203,7 +204,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            const isStarter = player.starter !== false;
+            // For Yahoo, all players in roster are starters by default (Yahoo doesn't have starter flag)
+            const isStarter = league.platform === 'yahoo' ? true : (player.starter !== false);
             
             // Try to find projection by ID first, then by name
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
