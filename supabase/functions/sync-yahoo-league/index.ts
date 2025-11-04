@@ -428,9 +428,9 @@ serve(async (req) => {
             roster.push({
               player_id: playerData.player_id || '',
               player_name: playerData.name?.full || playerData.name || '',
-              position: playerData.primary_position || playerData.display_position || playerData.selected_position?.position || '',
+              position: playerData.primary_position || playerData.display_position || '',
               team: playerData.editorial_team_abbr || '',
-              selected_position: playerData.selected_position?.position || 'BN',
+              selected_position: playerData.selected_position || 'BN',
             });
           }
 
