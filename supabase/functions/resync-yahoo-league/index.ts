@@ -130,13 +130,18 @@ serve(async (req) => {
       }
 
       const teamId = teamData.team_id || teamData.team_key?.split('.t.')[1];
+      // Ensure we only store the numeric team ID (not the full key)
+      const numericTeamId = teamId && typeof teamId === 'string' && teamId.includes('.')
+        ? teamId.split('.').pop()
+        : teamId;
+      
       const teamName = teamData.name || 'Unknown Team';
 
-      if (!teamId) continue;
+      if (!numericTeamId) continue;
 
       // Fetch roster for this team
       const rosterResponse = await fetch(
-        `https://fantasysports.yahooapis.com/fantasy/v2/team/${yahooLeagueKey}.t.${teamId}/roster?format=json`,
+        `https://fantasysports.yahooapis.com/fantasy/v2/team/${yahooLeagueKey}.t.${numericTeamId}/roster?format=json`,
         {
           headers: {
             Authorization: `Bearer ${tokenData.access_token}`,
@@ -244,7 +249,7 @@ serve(async (req) => {
         .from('user_teams')
         .upsert({
           league_id: leagueId,
-          team_id: teamId,
+          team_id: numericTeamId,
           team_name: teamName,
           roster: roster,
         }, {
