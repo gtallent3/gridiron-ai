@@ -80,6 +80,7 @@ serve(async (req) => {
           league_id: leagueId,
           team_id: team.id.toString(),
           player_id: player.id.toString(),
+          player_name: player.fullName || 'Unknown Player',
           snapshot_date: snapshotDate,
           position: player.defaultPositionId ? getPositionName(player.defaultPositionId) : 'UNKNOWN',
           is_starter: isStarter,

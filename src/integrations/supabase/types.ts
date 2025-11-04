@@ -1105,6 +1105,7 @@ export type Database = {
           is_starter: boolean | null
           league_id: string
           player_id: string
+          player_name: string | null
           position: string | null
           snapshot_date: string
           team_id: string
@@ -1115,6 +1116,7 @@ export type Database = {
           is_starter?: boolean | null
           league_id: string
           player_id: string
+          player_name?: string | null
           position?: string | null
           snapshot_date?: string
           team_id: string
@@ -1125,6 +1127,7 @@ export type Database = {
           is_starter?: boolean | null
           league_id?: string
           player_id?: string
+          player_name?: string | null
           position?: string | null
           snapshot_date?: string
           team_id?: string
