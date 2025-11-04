@@ -73,6 +73,19 @@ serve(async (req) => {
         const player = entry.playerPoolEntry?.player;
         if (!player) continue;
 
+        // Log player data structure for debugging
+        console.log('Player data sample:', JSON.stringify({
+          id: player.id,
+          fullName: player.fullName,
+          firstName: player.firstName,
+          lastName: player.lastName,
+          defaultPositionId: player.defaultPositionId,
+          proTeamId: player.proTeamId,
+          draftYear: player.draftYear,
+          draftRound: player.draftRound,
+          birthDate: player.birthDate,
+        }));
+
         const lineupSlot = entry.lineupSlotId;
         const isStarter = lineupSlot < 20; // ESPN uses IDs < 20 for starting positions
         
@@ -99,11 +112,17 @@ serve(async (req) => {
           }
         }
 
+        // Build player name from firstName/lastName if fullName not available
+        const playerName = player.fullName || 
+                          (player.firstName && player.lastName 
+                            ? `${player.firstName} ${player.lastName}` 
+                            : 'Unknown Player');
+
         rosterSnapshots.push({
           league_id: leagueId,
           team_id: team.id.toString(),
           player_id: player.id.toString(),
-          player_name: player.fullName || 'Unknown Player',
+          player_name: playerName,
           snapshot_date: snapshotDate,
           position: player.defaultPositionId ? getPositionName(player.defaultPositionId) : 'UNKNOWN',
           is_starter: isStarter,
