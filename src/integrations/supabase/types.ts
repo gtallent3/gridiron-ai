@@ -448,6 +448,45 @@ export type Database = {
           },
         ]
       }
+      leagues: {
+        Row: {
+          created_at: string
+          id: string
+          last_synced_at: string
+          name: string
+          platform: string
+          platform_league_id: string
+          roster_data: Json | null
+          season: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_synced_at?: string
+          name: string
+          platform: string
+          platform_league_id: string
+          roster_data?: Json | null
+          season: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_synced_at?: string
+          name?: string
+          platform?: string
+          platform_league_id?: string
+          roster_data?: Json | null
+          season?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       normalized_players: {
         Row: {
           created_at: string | null
