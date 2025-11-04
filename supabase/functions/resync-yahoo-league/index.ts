@@ -254,16 +254,21 @@ serve(async (req) => {
       const bench = roster.length - starters;
       console.log(`Team ${teamName} (${numericTeamId}) starters=${starters} bench=${bench}`);
 
-      // Update team roster in database
+      // First, delete any existing records for this team to prevent duplicates
       await supabaseAdmin
         .from('user_teams')
-        .upsert({
+        .delete()
+        .eq('league_id', leagueId)
+        .eq('team_id', numericTeamId);
+
+      // Then insert the new roster data
+      await supabaseAdmin
+        .from('user_teams')
+        .insert({
           league_id: leagueId,
           team_id: numericTeamId,
           team_name: teamName,
           roster: roster,
-        }, {
-          onConflict: 'league_id,team_id',
         });
 
       syncedCount++;
