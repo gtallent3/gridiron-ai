@@ -67,6 +67,48 @@ serve(async (req) => {
 
     console.log(`League: ${leagueName}, Season: ${season}`);
 
+    // Prepare scoring and opponent details
+    let scoringSettings: any = {};
+    let scoringType = 'standard';
+    let opponentTeamId: string | null = null;
+
+    const currentWeek = parseInt(league.current_week || '1');
+
+    // Fetch league settings to populate scoring_settings and try to infer scoring_type
+    try {
+      const settingsResponse = await fetch(
+        `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/settings?format=json`,
+        {
+          headers: {
+            'Authorization': `Bearer ${tokenData.access_token}`,
+          },
+        }
+      );
+      if (settingsResponse.ok) {
+        const settingsData = await settingsResponse.json();
+        scoringSettings = settingsData?.fantasy_content?.league?.[1]?.settings || {};
+        // Best-effort: detect PPR from stat modifiers by looking for a Receptions entry
+        const mods = scoringSettings?.stat_modifiers?.stats;
+        if (mods && typeof mods === 'object') {
+          for (const [, val] of Object.entries(mods)) {
+            const stat = (val as any)?.stat || {};
+            const name: string = (stat.name || stat.display_name || '').toString();
+            const v = parseFloat((val as any)?.value ?? (stat as any)?.value ?? 'NaN');
+            if (/reception/i.test(name) && !Number.isNaN(v)) {
+              if (v === 1) scoringType = 'ppr';
+              else if (v === 0.5) scoringType = 'half_ppr';
+              else if (v > 0) scoringType = 'custom';
+              break;
+            }
+          }
+        }
+      } else {
+        console.warn('Failed to fetch league settings');
+      }
+    } catch (err) {
+      console.warn('Error fetching league settings:', err);
+    }
+
     // Fetch teams/rosters and user info
     const teamsResponse = await fetch(
       `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/teams?format=json`,
@@ -85,27 +127,121 @@ serve(async (req) => {
     const teamsData = await teamsResponse.json();
     console.log('Successfully fetched teams');
 
-    // Find user's team from the teams data
+    // Find user's team via the user teams endpoint (more reliable than team flags)
     const teams = teamsData.fantasy_content?.league?.[1]?.teams;
-    let userTeamId = null;
-    let userTeamName = null;
+    let userTeamId: string | null = null;
+    let userTeamName: string | null = null;
 
-    if (teams && typeof teams === 'object') {
+    try {
+      const userTeamsResp = await fetch(
+        `https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/teams?format=json`,
+        {
+          headers: { 'Authorization': `Bearer ${tokenData.access_token}` },
+        }
+      );
+      if (userTeamsResp.ok) {
+        const userTeamsData = await userTeamsResp.json();
+        const usersObj = userTeamsData?.fantasy_content?.users;
+        const userObj = usersObj?.[0]?.user?.[1];
+        const userTeams = userObj?.teams;
+        if (userTeams && typeof userTeams === 'object') {
+          for (const [k, v] of Object.entries(userTeams)) {
+            if (k === 'count') continue;
+            const teamArr = (v as any)?.team;
+            if (Array.isArray(teamArr)) {
+              // Flatten Yahoo team array of single-key objects
+              const flat: Record<string, any> = {};
+              for (const item of teamArr) {
+                if (item && typeof item === 'object' && !Array.isArray(item)) {
+                  const [key, val] = Object.entries(item)[0] || [];
+                  if (key) flat[key] = val;
+                }
+              }
+              const tKey: string | undefined = flat['team_key'] as string | undefined;
+              const tName: string | undefined = (flat['name'] as any)?.full || flat['name'];
+              if (tKey && tKey.startsWith(`${leagueKey}.t.`)) {
+                userTeamId = tKey;
+                userTeamName = typeof tName === 'string' ? tName : null;
+                console.log('Resolved user team via users endpoint:', userTeamName, userTeamId);
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        console.warn('Failed to fetch user teams');
+      }
+    } catch (e) {
+      console.warn('Error fetching user teams:', e);
+    }
+
+    if (!userTeamId && teams && typeof teams === 'object') {
+      // Fallback: try to infer from league teams
       for (const [key, value] of Object.entries(teams)) {
         if (key === 'count') continue;
-        const team = (value as any)?.team?.[0];
-        const isOwned = team?.is_owned_by_current_login === '1' || team?.is_owned_by_current_login === 1;
-        if (isOwned) {
-          userTeamId = team?.team_key || team?.team_id;
-          userTeamName = team?.name;
-          console.log('Found user team:', userTeamName, userTeamId);
-          break;
+        const teamObj = (value as any)?.team;
+        if (Array.isArray(teamObj)) {
+          const flat: Record<string, any> = {};
+          for (const item of teamObj) {
+            if (item && typeof item === 'object' && !Array.isArray(item)) {
+              const [k2, v2] = Object.entries(item)[0] || [];
+              if (k2) flat[k2] = v2;
+            }
+          }
+          if (flat['is_owned_by_current_login'] === 1 || flat['is_owned_by_current_login'] === '1') {
+            userTeamId = flat['team_key'] || flat['team_id'];
+            userTeamName = (flat['name'] as any)?.full || flat['name'] || null;
+            break;
+          }
         }
       }
     }
 
+    // Try to resolve current opponent from scoreboard
+    try {
+      const scoreboardResp = await fetch(
+        `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/scoreboard;week=${currentWeek}?format=json`,
+        { headers: { 'Authorization': `Bearer ${tokenData.access_token}` } }
+      );
+      if (scoreboardResp.ok && userTeamId) {
+        const sb = await scoreboardResp.json();
+        const matchups = sb?.fantasy_content?.league?.[1]?.scoreboard?.['0']?.matchups;
+        if (matchups && typeof matchups === 'object') {
+          for (const [mk, mv] of Object.entries(matchups)) {
+            if (mk === 'count') continue;
+            const matchup = (mv as any)?.matchup;
+            const teamsContainer = Array.isArray(matchup) ? matchup.find((x: any) => x?.teams) : null;
+            const teamsObj = teamsContainer?.teams;
+            if (teamsObj && typeof teamsObj === 'object') {
+              const pair: string[] = [];
+              for (const [tk, tv] of Object.entries(teamsObj)) {
+                if (tk === 'count') continue;
+                const tArr = (tv as any)?.team;
+                if (Array.isArray(tArr)) {
+                  const flat: Record<string, any> = {};
+                  for (const item of tArr) {
+                    if (item && typeof item === 'object') {
+                      const [fk, fv] = Object.entries(item)[0] || [];
+                      if (fk) flat[fk] = fv;
+                    }
+                  }
+                  if (flat['team_key']) pair.push(flat['team_key']);
+                }
+              }
+              if (pair.includes(userTeamId) && pair.length === 2) {
+                opponentTeamId = pair.find((t) => t !== userTeamId) || null;
+                break;
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('Error fetching scoreboard/opponent:', e);
+    }
+
     if (!userTeamId) {
-      console.warn('Could not find user team; proceeding without userTeamId');
+      console.warn('Could not resolve user team; proceeding without userTeamId');
     }
 
     // Store credentials securely using the existing function
@@ -137,12 +273,13 @@ serve(async (req) => {
         league_id: leagueId,
         league_name: leagueName,
         user_team_id: userTeamId,
-        scoring_type: 'standard',
+        scoring_type: scoringType,
         league_size: parseInt(league.num_teams || '0'),
-        scoring_settings: {},
+        scoring_settings: scoringSettings || {},
         auto_refresh: true,
         last_synced_at: new Date().toISOString(),
-        current_week: parseInt(league.current_week || '1'),
+        current_week: currentWeek,
+        opponent_team_id: opponentTeamId,
       }, {
         onConflict: 'user_id,platform,league_id',
       })
