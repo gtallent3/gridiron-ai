@@ -74,6 +74,7 @@ serve(async (req) => {
     const tokenData = credentials as { access_token: string; refresh_token: string };
 
     // Fetch teams from Yahoo API
+    console.log(`Fetching teams for league: ${league.league_id}`);
     const teamsResponse = await fetch(
       `https://fantasysports.yahooapis.com/fantasy/v2/league/${league.league_id}/teams?format=json`,
       {
@@ -85,7 +86,20 @@ serve(async (req) => {
     );
 
     if (!teamsResponse.ok) {
-      throw new Error(`Failed to fetch teams from Yahoo: ${teamsResponse.statusText}`);
+      const errorText = await teamsResponse.text();
+      console.error('Yahoo API error:', {
+        status: teamsResponse.status,
+        statusText: teamsResponse.statusText,
+        body: errorText,
+        leagueId: league.league_id
+      });
+      
+      // Check if token expired
+      if (teamsResponse.status === 401) {
+        throw new Error('OAuth token expired. Please reconnect your Yahoo league.');
+      }
+      
+      throw new Error(`Failed to fetch teams from Yahoo: ${teamsResponse.statusText} - ${errorText}`);
     }
 
     const teamsData = await teamsResponse.json();
