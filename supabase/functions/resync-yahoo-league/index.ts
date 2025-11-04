@@ -240,6 +240,11 @@ serve(async (req) => {
         });
       }
 
+      // Log starters vs bench for debugging
+      const starters = roster.filter((p: any) => p.selected_position && p.selected_position !== 'BN').length;
+      const bench = roster.length - starters;
+      console.log(`Team ${teamName} (${numericTeamId}) starters=${starters} bench=${bench}`);
+
       // Update team roster in database
       await supabaseAdmin
         .from('user_teams')
