@@ -41,14 +41,30 @@ export default function ConnectLeague() {
     const handleYahooCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
+      const state = urlParams.get('state');
       
       if (code && window.location.pathname === '/connect-league') {
+        // Validate state if present
+        const savedState = sessionStorage.getItem('yahoo_oauth_state');
+        if (state && savedState && state !== savedState) {
+          toast({
+            title: "Security Error",
+            description: "Invalid OAuth state. Please try connecting again.",
+            variant: "destructive",
+          });
+          window.history.replaceState({}, '', '/connect-league');
+          return;
+        }
+        sessionStorage.removeItem('yahoo_oauth_state');
+
         setIsLoading(true);
         try {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) {
             throw new Error('Not authenticated');
           }
+
+          console.log('Processing Yahoo OAuth callback with code...');
 
           // Exchange code for tokens
           const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
@@ -59,6 +75,8 @@ export default function ConnectLeague() {
           );
 
           if (tokenError) throw tokenError;
+
+          console.log('Token exchange successful, processing league data...');
 
           // Get list of leagues from the games data
           const games = tokenData.gamesData?.fantasy_content?.users?.[0]?.user?.[1]?.games;
@@ -81,6 +99,8 @@ export default function ConnectLeague() {
             throw new Error('No leagues found for current season');
           }
 
+          console.log('Syncing league with key:', leagueKey);
+
           // Sync the league
           const { data: syncData, error: syncError } = await supabase.functions.invoke(
             'sync-yahoo-league',
@@ -99,9 +119,15 @@ export default function ConnectLeague() {
             description: `${syncData.league.name} has been synced successfully!`,
           });
 
-          // Clear URL params and redirect
-          window.history.replaceState({}, '', '/connect-league');
-          setTimeout(() => navigate('/'), 2000);
+          // If we're in a popup, close it and notify parent
+          if (window.opener) {
+            window.opener.postMessage({ type: 'yahoo-oauth-success' }, window.location.origin);
+            window.close();
+          } else {
+            // Clear URL params and redirect
+            window.history.replaceState({}, '', '/connect-league');
+            setTimeout(() => navigate('/'), 2000);
+          }
         } catch (error: any) {
           console.error('Yahoo OAuth error:', error);
           toast({
@@ -109,7 +135,13 @@ export default function ConnectLeague() {
             description: error.message || "Unable to connect Yahoo league. Please try again.",
             variant: "destructive",
           });
-          window.history.replaceState({}, '', '/connect-league');
+          
+          if (window.opener) {
+            window.opener.postMessage({ type: 'yahoo-oauth-error', error: error.message }, window.location.origin);
+            window.close();
+          } else {
+            window.history.replaceState({}, '', '/connect-league');
+          }
         } finally {
           setIsLoading(false);
         }
@@ -118,7 +150,31 @@ export default function ConnectLeague() {
 
     handleYahooCallback();
 
-    return () => subscription.unsubscribe();
+    // Listen for OAuth success from popup
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data.type === 'yahoo-oauth-success') {
+        toast({
+          title: "✅ Yahoo League Connected!",
+          description: "Your league has been synced successfully!",
+        });
+        setTimeout(() => navigate('/'), 2000);
+      } else if (event.data.type === 'yahoo-oauth-error') {
+        toast({
+          title: "Connection Failed",
+          description: event.data.error || "Unable to connect Yahoo league.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
+    return () => {
+      subscription.unsubscribe();
+      window.removeEventListener('message', handleMessage);
+    };
   }, [navigate, toast]);
 
   if (checkingAuth) {
@@ -174,9 +230,17 @@ export default function ConnectLeague() {
     sessionStorage.setItem('yahoo_oauth_state', state);
     const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
 
-    // If running inside Lovable preview iframe, open a new tab to avoid X-Frame-Options blocks
+    // If running inside Lovable preview iframe, open a popup to avoid X-Frame-Options blocks
     if (window.self !== window.top) {
-      window.open(authUrl, '_blank', 'noopener,noreferrer');
+      const width = 600;
+      const height = 700;
+      const left = window.screenX + (window.outerWidth - width) / 2;
+      const top = window.screenY + (window.outerHeight - height) / 2;
+      window.open(
+        authUrl, 
+        'Yahoo OAuth', 
+        `width=${width},height=${height},left=${left},top=${top},popup=yes`
+      );
     } else {
       window.location.href = authUrl;
     }
