@@ -129,15 +129,13 @@ serve(async (req) => {
         }
       }
 
-      const teamId = teamData.team_id || teamData.team_key?.split('.t.')[1];
-      // Ensure we only store the numeric team ID (not the full key)
-      const numericTeamId = teamId && typeof teamId === 'string' && teamId.includes('.')
-        ? teamId.split('.').pop()
-        : teamId;
+      const rawTeamKey: string | undefined = teamData.team_key;
+      const numericTeamId = (teamData.team_id ?? (rawTeamKey?.split('.t.')[1]))?.toString();
+      const teamKeyFull = rawTeamKey || (numericTeamId ? `${yahooLeagueKey}.t.${numericTeamId}` : null);
       
       const teamName = teamData.name || 'Unknown Team';
 
-      if (!numericTeamId) continue;
+      if (!numericTeamId || !teamKeyFull) continue;
 
       // Fetch roster for this team with week parameter for accurate selected_position
       const weekParam = typeof league.current_week === 'number'
@@ -145,7 +143,7 @@ serve(async (req) => {
         : '';
       
       const rosterResponse = await fetch(
-        `https://fantasysports.yahooapis.com/fantasy/v2/team/${yahooLeagueKey}.t.${numericTeamId}/roster/players${weekParam}?format=json`,
+        `https://fantasysports.yahooapis.com/fantasy/v2/team/${teamKeyFull}/roster/players${weekParam}?format=json`,
         {
           headers: {
             Authorization: `Bearer ${tokenData.access_token}`,
@@ -254,19 +252,27 @@ serve(async (req) => {
       const bench = roster.length - starters;
       console.log(`Team ${teamName} (${numericTeamId}) starters=${starters} bench=${bench}`);
 
-      // First, delete any existing records for this team to prevent duplicates
+      // First, delete any existing records for this team to prevent duplicates (numeric and full keys)
+      const altGameToNfl = (k: string) => k.replace(/^\d+\./, 'nfl.');
+      const altNflToNumeric = (k: string) => k.replace(/^nfl\./, '461.');
+      const candidateIds = Array.from(
+        new Set(
+          [numericTeamId, teamKeyFull, altGameToNfl(teamKeyFull), altNflToNumeric(teamKeyFull)].filter(Boolean) as string[]
+        )
+      );
+
       await supabaseAdmin
         .from('user_teams')
         .delete()
         .eq('league_id', leagueId)
-        .eq('team_id', numericTeamId);
+        .in('team_id', candidateIds);
 
-      // Then insert the new roster data
+      // Then insert the new roster data with canonical team key
       await supabaseAdmin
         .from('user_teams')
         .insert({
           league_id: leagueId,
-          team_id: numericTeamId,
+          team_id: teamKeyFull,
           team_name: teamName,
           roster: roster,
         });
