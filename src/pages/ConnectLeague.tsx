@@ -165,10 +165,21 @@ export default function ConnectLeague() {
   };
 
   const handleYahooConnect = () => {
+    // Build Yahoo OAuth URL (Client ID is public by design)
     const clientId = 'dj0yJmk9VDYxV3huOTdXN25UJmQ9WVdrOWN6Qk1ORWN5TmxVbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PWQ0';
-    const redirectUri = encodeURIComponent(`${window.location.origin}/connect-league`);
-    const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code`;
-    window.location.href = authUrl;
+    const redirect = `${window.location.origin}/connect-league`;
+    const redirectUri = encodeURIComponent(redirect);
+    const scope = encodeURIComponent('fspt-r');
+    const state = crypto.getRandomValues(new Uint32Array(1))[0].toString(16);
+    sessionStorage.setItem('yahoo_oauth_state', state);
+    const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
+
+    // If running inside Lovable preview iframe, open a new tab to avoid X-Frame-Options blocks
+    if (window.self !== window.top) {
+      window.open(authUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      window.location.href = authUrl;
+    }
   };
 
   const handleEspnCookieSuccess = async (credentials: { swid: string; espn_s2: string; leagueId: string }) => {
