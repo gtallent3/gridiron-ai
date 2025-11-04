@@ -273,51 +273,62 @@ export default function LeagueDashboard() {
           </TabsContent>
 
           <TabsContent value="trade" className="mt-4 sm:mt-6">
-            <div className="space-y-4">
-              <ComputeValuesCard leagueId={league.id} />
-              
-              <Tabs defaultValue="analyzer" className="spacing-mobile">
-                <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 max-w-4xl mx-auto h-auto">
-                  <TabsTrigger value="analyzer" className="text-xs sm:text-sm py-2 sm:py-3">
-                    <span className="hidden sm:inline">Trade Analyzer</span>
-                    <span className="sm:hidden">Analyzer</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="finder" className="text-xs sm:text-sm py-2 sm:py-3">
-                    <span className="hidden sm:inline">Find Trades</span>
-                    <span className="sm:hidden">Find</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="improve" className="text-xs sm:text-sm py-2 sm:py-3">
-                    <span className="hidden sm:inline">Improve</span>
-                    <span className="sm:hidden">Improve</span>
-                  </TabsTrigger>
-                  <TabsTrigger value="rankings" className="text-xs sm:text-sm py-2 sm:py-3">
-                    <span className="hidden sm:inline">Rankings</span>
-                    <span className="sm:hidden">Ranks</span>
-                  </TabsTrigger>
-                </TabsList>
+            {!userTeam ? (
+              <div className="text-center py-12 space-y-4">
+                <p className="text-muted-foreground">
+                  Unable to load your team data. Please try resyncing your league.
+                </p>
+                <Button onClick={() => navigate('/')}>
+                  Back to Leagues
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <ComputeValuesCard leagueId={league.id} />
+                
+                <Tabs defaultValue="analyzer" className="spacing-mobile">
+                  <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 max-w-4xl mx-auto h-auto">
+                    <TabsTrigger value="analyzer" className="text-xs sm:text-sm py-2 sm:py-3">
+                      <span className="hidden sm:inline">Trade Analyzer</span>
+                      <span className="sm:hidden">Analyzer</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="finder" className="text-xs sm:text-sm py-2 sm:py-3">
+                      <span className="hidden sm:inline">Find Trades</span>
+                      <span className="sm:hidden">Find</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="improve" className="text-xs sm:text-sm py-2 sm:py-3">
+                      <span className="hidden sm:inline">Improve</span>
+                      <span className="sm:hidden">Improve</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="rankings" className="text-xs sm:text-sm py-2 sm:py-3">
+                      <span className="hidden sm:inline">Rankings</span>
+                      <span className="sm:hidden">Ranks</span>
+                    </TabsTrigger>
+                  </TabsList>
 
-                <TabsContent value="analyzer">
-                  <TradeAnalyzer league={league} userTeam={userTeam} />
-                </TabsContent>
+                  <TabsContent value="analyzer">
+                    <TradeAnalyzer league={league} userTeam={userTeam} />
+                  </TabsContent>
 
-              <TabsContent value="finder">
-                <TradeFinder league={league} userTeam={userTeam!} allTeams={allTeams} />
-              </TabsContent>
+                  <TabsContent value="finder">
+                    <TradeFinder league={league} userTeam={userTeam} allTeams={allTeams} />
+                  </TabsContent>
 
-              <TabsContent value="improve">
-                <ImprovePosition 
-                  leagueId={league.id}
-                  myTeamId={userTeam!.team_id}
-                  myTeam={userTeam}
-                  allTeams={allTeams}
-                />
-              </TabsContent>
+                  <TabsContent value="improve">
+                    <ImprovePosition 
+                      leagueId={league.id}
+                      myTeamId={userTeam.team_id}
+                      myTeam={userTeam}
+                      allTeams={allTeams}
+                    />
+                  </TabsContent>
 
-                <TabsContent value="rankings">
-                  <PositionalRankings leagueId={league.id} teams={allTeams} />
-                </TabsContent>
-              </Tabs>
-            </div>
+                  <TabsContent value="rankings">
+                    <PositionalRankings leagueId={league.id} teams={allTeams} />
+                  </TabsContent>
+                </Tabs>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="waiver" className="mt-4 sm:mt-6">
