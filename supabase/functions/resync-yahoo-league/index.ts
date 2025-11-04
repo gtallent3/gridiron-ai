@@ -226,12 +226,19 @@ serve(async (req) => {
           }
         }
 
-        let selectedPosition = getSelectedPositionFromPlayerWrapper(playerWrapper)
-          ?? core.display_position
-          ?? (Array.isArray(core.eligible_positions) ? core.eligible_positions[0] : null)
-          ?? 'BN';
+        // Debug: Log the raw player wrapper structure
+        console.log(`\n=== Player: ${core.name?.full || core.name} ===`);
+        console.log('Raw playerWrapper:', JSON.stringify(playerWrapper, null, 2));
         
-        console.log(`Player: ${core.name?.full || core.name} -> selected_position: ${selectedPosition}`);
+        let selectedPosition = getSelectedPositionFromPlayerWrapper(playerWrapper);
+        console.log(`Extracted selected_position: ${selectedPosition}`);
+        
+        if (!selectedPosition) {
+          selectedPosition = core.display_position
+            ?? (Array.isArray(core.eligible_positions) ? core.eligible_positions[0] : null)
+            ?? 'BN';
+          console.log(`Fallback selected_position: ${selectedPosition}`);
+        }
         
         roster.push({
           player_id: core.player_id || '',
