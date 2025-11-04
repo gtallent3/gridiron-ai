@@ -139,9 +139,13 @@ serve(async (req) => {
 
       if (!numericTeamId) continue;
 
-      // Fetch roster for this team
+      // Fetch roster for this team with week parameter for accurate selected_position
+      const weekParam = typeof league.current_week === 'number'
+        ? `;type=week;week=${league.current_week}`
+        : '';
+      
       const rosterResponse = await fetch(
-        `https://fantasysports.yahooapis.com/fantasy/v2/team/${yahooLeagueKey}.t.${numericTeamId}/roster?format=json`,
+        `https://fantasysports.yahooapis.com/fantasy/v2/team/${yahooLeagueKey}.t.${numericTeamId}/roster/players${weekParam}?format=json`,
         {
           headers: {
             Authorization: `Bearer ${tokenData.access_token}`,
@@ -158,89 +162,81 @@ serve(async (req) => {
       const rosterData = await rosterResponse.json();
       const rosterPlayers = rosterData.fantasy_content?.team?.[1]?.roster?.['0']?.players || {};
 
+      // Helper function to extract selected_position from various Yahoo nested structures
+      function getSelectedPositionFromPlayerWrapper(playerWrapper: any): string | null {
+        const tryExtract = (val: any): string | null => {
+          if (!val) return null;
+          
+          if (typeof val === 'object' && 'position' in val && typeof val.position === 'string') {
+            return val.position;
+          }
+          
+          if (Array.isArray(val)) {
+            for (const item of val) {
+              const pos = tryExtract(item);
+              if (pos) return pos;
+            }
+            return null;
+          }
+          
+          return null;
+        };
+
+        const stack: any[] = Array.isArray(playerWrapper) ? [...playerWrapper] : [playerWrapper];
+        
+        while (stack.length) {
+          const node = stack.pop();
+          
+          if (Array.isArray(node)) {
+            for (const item of node) stack.push(item);
+            continue;
+          }
+          
+          if (node && typeof node === 'object') {
+            if ('selected_position' in node) {
+              const pos = tryExtract(node.selected_position);
+              if (pos) return pos;
+            }
+            
+            for (const v of Object.values(node)) stack.push(v);
+          }
+        }
+        return null;
+      }
+
       // Convert Yahoo roster to standard format
       const roster: any[] = [];
       for (const [playerKey, playerValue] of Object.entries(rosterPlayers)) {
         if (playerKey === 'count') continue;
 
-        // Yahoo returns player data in multiple nested blocks; merge them and extract selected_position
         const playerWrapper = (playerValue as any)?.player;
         if (!Array.isArray(playerWrapper) || playerWrapper.length === 0) continue;
 
         const core: Record<string, any> = {};
-        let selectedPosition: string | null = null;
-
         for (const block of playerWrapper) {
           if (Array.isArray(block)) {
             for (const item of block) {
               if (item && typeof item === 'object' && !Array.isArray(item)) {
                 const [k, v] = Object.entries(item)[0] || [];
-                if (!k) continue;
-                if (k === 'selected_position') {
-                  if (typeof v === 'string') {
-                    selectedPosition = v;
-                  } else if (v && typeof v === 'object') {
-                    const pos = (v as any).position ?? (Array.isArray(v) ? (v as any)[0]?.position : undefined);
-                    if (typeof pos === 'string') selectedPosition = pos;
-                  }
-                } else {
-                  core[k] = v;
-                }
+                if (k && k !== 'selected_position') core[k] = v;
               }
             }
           } else if (block && typeof block === 'object') {
-            if ('selected_position' in (block as any)) {
-              const v: any = (block as any).selected_position;
-              if (typeof v === 'string') {
-                selectedPosition = v;
-              } else if (v && typeof v === 'object') {
-                const pos = v.position ?? (Array.isArray(v) ? v[0]?.position : undefined);
-                if (typeof pos === 'string') selectedPosition = pos;
-              }
-            } else {
-              Object.assign(core, block);
-            }
+            if (!('selected_position' in block)) Object.assign(core, block);
           }
         }
 
-        if (!selectedPosition) {
-          const findPos = (node: any): string | null => {
-            if (!node) return null;
-            if (Array.isArray(node)) {
-              for (const item of node) {
-                const p = findPos(item);
-                if (p) return p;
-              }
-              return null;
-            }
-            if (typeof node === 'object') {
-              if ('selected_position' in (node as any)) {
-                const v: any = (node as any).selected_position;
-                if (typeof v === 'string') return v;
-                if (Array.isArray(v)) {
-                  for (const it of v) {
-                    if (typeof it === 'string') return it;
-                    if (it && typeof it === 'object' && 'position' in it && typeof (it as any).position === 'string') return (it as any).position;
-                  }
-                }
-                if (v && typeof v === 'object' && typeof (v as any).position === 'string') return (v as any).position;
-              }
-              for (const val of Object.values(node)) {
-                const p = findPos(val);
-                if (p) return p;
-              }
-            }
-            return null;
-          };
-          selectedPosition = findPos(playerWrapper) || 'BN';
-        }
+        let selectedPosition = getSelectedPositionFromPlayerWrapper(playerWrapper)
+          ?? core.display_position
+          ?? (Array.isArray(core.eligible_positions) ? core.eligible_positions[0] : null)
+          ?? 'BN';
         
         roster.push({
           player_id: core.player_id || '',
           player_name: core.name?.full || core.name || '',
           position: core.primary_position || core.display_position || '',
           team: core.editorial_team_abbr || '',
-          selected_position: selectedPosition || 'BN',
+          selected_position: selectedPosition,
         });
       }
 
