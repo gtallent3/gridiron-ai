@@ -70,9 +70,9 @@ serve(async (req) => {
     const tokenData = await tokenResponse.json();
     console.log('Successfully obtained access token');
 
-    // Get user's fantasy games to find NFL leagues
+    // Get user's fantasy games to find NFL leagues (including leagues in the response)
     const gamesResponse = await fetch(
-      'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl?format=json',
+      'https://fantasysports.yahooapis.com/fantasy/v2/users;use_login=1/games;game_keys=nfl/leagues?format=json',
       {
         headers: {
           'Authorization': `Bearer ${tokenData.access_token}`,
@@ -81,12 +81,12 @@ serve(async (req) => {
     );
 
     if (!gamesResponse.ok) {
-      console.error('Failed to fetch NFL games');
+      console.error('Failed to fetch NFL games and leagues');
       return createErrorResponse('Failed to fetch Yahoo fantasy games', 400, corsHeaders);
     }
 
     const gamesData = await gamesResponse.json();
-    console.log('Successfully fetched NFL games');
+    console.log('Successfully fetched NFL games and leagues');
 
     // Store token data securely (expires_in is in seconds from now)
     const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
