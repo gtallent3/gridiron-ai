@@ -136,17 +136,26 @@ serve(async (req) => {
     }
 
     console.log(`Processing ${rosterSnapshots.length} roster entries`);
+    
+    // Log a sample of what we're about to insert
+    if (rosterSnapshots.length > 0) {
+      console.log('Sample roster entry to insert:', JSON.stringify(rosterSnapshots[0], null, 2));
+    }
 
     // Batch insert roster snapshots
     if (rosterSnapshots.length > 0) {
-      const { error: insertError } = await supabase
+      const { data: insertData, error: insertError } = await supabase
         .from('roster_snapshots')
-        .insert(rosterSnapshots);
+        .insert(rosterSnapshots)
+        .select();
 
       if (insertError) {
         console.error('Error inserting roster snapshots:', insertError);
+        console.error('Failed batch sample:', JSON.stringify(rosterSnapshots.slice(0, 2), null, 2));
         throw insertError;
       }
+      
+      console.log(`Successfully inserted ${insertData?.length || 0} roster entries`);
     }
 
     // Update fetch metadata
