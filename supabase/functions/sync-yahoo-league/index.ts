@@ -105,8 +105,7 @@ serve(async (req) => {
     }
 
     if (!userTeamId) {
-      console.error('Could not find user team in league');
-      return createErrorResponse('Could not find your team in this league', 400, corsHeaders);
+      console.warn('Could not find user team; proceeding without userTeamId');
     }
 
     // Store credentials securely using the existing function
@@ -138,7 +137,7 @@ serve(async (req) => {
         league_id: leagueId,
         league_name: leagueName,
         user_team_id: userTeamId,
-        scoring_type: league.scoring_type === 'head' ? 'head_to_head_points' : 'head_to_head_points',
+        scoring_type: 'standard',
         league_size: parseInt(league.num_teams || '0'),
         scoring_settings: {},
         auto_refresh: true,
