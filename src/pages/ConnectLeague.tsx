@@ -253,7 +253,8 @@ export default function ConnectLeague() {
     const scope = encodeURIComponent('fspt-r');
     const state = crypto.getRandomValues(new Uint32Array(1))[0].toString(16);
     sessionStorage.setItem('yahoo_oauth_state', state);
-    const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}`;
+    // Add prompt=login to force Yahoo to show login screen every time
+    const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}&prompt=login`;
 
     console.log('Opening Yahoo OAuth URL:', authUrl);
     console.log('Redirect URI:', redirect);
