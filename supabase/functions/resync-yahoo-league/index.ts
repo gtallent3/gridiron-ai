@@ -74,11 +74,14 @@ serve(async (req) => {
     const tokenData = credentials as { access_token: string; refresh_token: string };
 
     // Construct proper Yahoo league key format (e.g., "nfl.l.1582610")
-    const yahooLeagueKey = league.league_id.includes('.')
-      ? league.league_id
-      : `nfl.l.${league.league_id}`;
+    const rawLeagueId = String(league.league_id).trim();
+    const yahooLeagueKey = /^nfl\.l\./.test(rawLeagueId)
+      ? rawLeagueId
+      : /^\d+$/.test(rawLeagueId)
+        ? `nfl.l.${rawLeagueId}`
+        : rawLeagueId; // fallback for already-full keys
     
-    console.log(`Fetching teams for league: ${yahooLeagueKey}`);
+    console.log(`Fetching teams for league (raw: ${rawLeagueId}) -> using key: ${yahooLeagueKey}`);
     const teamsResponse = await fetch(
       `https://fantasysports.yahooapis.com/fantasy/v2/league/${yahooLeagueKey}/teams?format=json`,
       {
