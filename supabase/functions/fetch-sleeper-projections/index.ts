@@ -158,33 +158,42 @@ serve(async (req) => {
         const playerIds = [...new Set(projections.map(p => String(p.player_id)).filter(Boolean))];
         console.log(`Week ${week}: Looking up ${playerIds.length} unique player IDs`);
         
-        const nameMap = new Map<string, string>();
+        const playerDataMap = new Map<string, { name: string, team: string | null, position: string | null }>();
         const batchSize = 1000; // Query 1000 IDs at a time to stay under header limits
         
         for (let i = 0; i < playerIds.length; i += batchSize) {
           const batch = playerIds.slice(i, i + batchSize);
-          const { data: playerNames, error: lookupError } = await supabase
+          const { data: playerData, error: lookupError } = await supabase
             .from('normalized_players')
-            .select('sleeper_id, player_name')
+            .select('sleeper_id, player_name, team, position')
             .in('sleeper_id', batch);
 
           if (lookupError) {
             console.error(`Week ${week}: Player name lookup error (batch ${Math.floor(i/batchSize) + 1}):`, lookupError);
           } else {
             // Add to map
-            (playerNames || []).forEach(p => {
-              nameMap.set(String(p.sleeper_id), p.player_name);
+            (playerData || []).forEach(p => {
+              playerDataMap.set(String(p.sleeper_id), {
+                name: p.player_name,
+                team: p.team,
+                position: p.position
+              });
             });
           }
         }
 
-        // Add player names to projections
+        // Add player data to projections
         projections.forEach(proj => {
-          proj.player_name = nameMap.get(String(proj.player_id)) || null;
+          const playerData = playerDataMap.get(String(proj.player_id));
+          if (playerData) {
+            proj.player_name = playerData.name;
+            proj.team = playerData.team;
+            proj.position = playerData.position;
+          }
         });
 
         const mappedCount = projections.filter(p => p.player_name).length;
-        console.log(`Week ${week}: Mapped ${mappedCount}/${projections.length} player names (${nameMap.size} names found in DB)`);
+        console.log(`Week ${week}: Mapped ${mappedCount}/${projections.length} player names (${playerDataMap.size} players found in DB)`);
 
         // Insert in smaller chunks to avoid CPU timeouts
         const chunkSize = 500;
