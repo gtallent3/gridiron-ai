@@ -181,26 +181,36 @@ serve(async (req) => {
         opponent: null, // Multiple opponents
       };
 
-      // For each position, calculate average fantasy_points_allowed across all opponents
+      // For each position, calculate average offensive strength of opponents this defense faces
       for (const position of positions) {
-        let totalPointsAllowed = 0;
+        let totalOffensiveStrength = 0;
         let gamesPlayed = 0;
 
         for (const match of matches) {
-          const defRank = rankingsWithRank.find(r => 
-            r.team === match.opponent && 
-            r.week === match.week && 
-            r.position === position
-          );
+          // Get offensive stats for opponent's players at this position in this game week
+          const { data: oppOffenseStats, error: offError } = await supabase
+            .from('nfl_fantasy_points')
+            .select('fantasy_points_ppr')
+            .eq('team', match.opponent) // Opponent's offensive players
+            .eq('position', position)
+            .eq('week', match.week)
+            .eq('season', season);
 
-          if (defRank) {
-            totalPointsAllowed += defRank.avg_points_allowed;
+          if (offError) {
+            console.error(`Error fetching offensive stats for ${match.opponent}:`, offError);
+            continue;
+          }
+
+          if (oppOffenseStats && oppOffenseStats.length > 0) {
+            // Calculate total points scored by opponent's offense at this position in this game
+            const totalPoints = oppOffenseStats.reduce((sum, stat) => sum + (stat.fantasy_points_ppr || 0), 0);
+            totalOffensiveStrength += totalPoints;
             gamesPlayed++;
           }
         }
 
         const posKey = position.toLowerCase();
-        sosEntry[`avg_points_allowed_${posKey}`] = gamesPlayed > 0 ? totalPointsAllowed / gamesPlayed : 0;
+        sosEntry[`avg_points_allowed_${posKey}`] = gamesPlayed > 0 ? totalOffensiveStrength / gamesPlayed : 0;
         sosEntry[`def_rank_${posKey}`] = null; // Will be calculated after
       }
 
