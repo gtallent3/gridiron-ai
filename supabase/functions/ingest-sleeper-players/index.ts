@@ -79,7 +79,7 @@ serve(async (req) => {
             // Normalize and validate position
             const rawPos = String(player.position || player.fantasy_positions?.[0] || '').toUpperCase();
             const normalizedPos = rawPos === 'DEF' ? 'DST' : rawPos;
-            const allowedPositions = new Set(['QB','RB','WR','TE','K','DST']);
+            const allowedPositions = new Set(['QB','RB','WR','TE','K','DST','DL','DE','DT','LB','DB','CB','S','IDP']);
             if (!allowedPositions.has(normalizedPos)) {
               return null;
             }
