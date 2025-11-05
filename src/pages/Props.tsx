@@ -142,11 +142,11 @@ export default function Props() {
         <div className="text-center spacing-mobile">
           <div className="inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
             <Trophy className="h-4 w-4 text-primary" />
-            <span className="text-xs sm:text-sm font-medium text-primary">Weekly Props</span>
+            <span className="text-xs sm:text-sm font-medium text-primary">Weekly Predictions</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold">PredictIQ</h1>
           <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto px-4">
-            No vig. No juice. 100% fair lines on player props
+            No vig. No juice. 100% fair lines on player predictions
           </p>
         </div>
 
@@ -300,12 +300,12 @@ export default function Props() {
           <CardContent className="pt-6 space-y-4">
             <h3 className="font-semibold text-lg">How PredictIQ Works</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>✓ <strong>No Vig, No Juice:</strong> 100% fair multipliers on all props</li>
-              <li>✓ <strong>Simple:</strong> Pick Over or Under, wager tokens, win big</li>
-              <li>✓ <strong>Weekly Updates:</strong> Fresh props every Tuesday</li>
+              <li>✓ <strong>No Vig, No Juice:</strong> 100% fair multipliers on all predictions</li>
+              <li>✓ <strong>Simple:</strong> Pick Over or Under, use tokens, earn rewards</li>
+              <li>✓ <strong>Weekly Updates:</strong> Fresh predictions every Tuesday</li>
               <li>✓ <strong>Secure:</strong> Tokens cannot be transferred or sold</li>
-              <li>✓ <strong>For Fun:</strong> No real money gambling involved</li>
-              <li>⚠️ <strong>Note:</strong> All users (including subscribers) need tokens to place predictions</li>
+              <li>✓ <strong>For Fun:</strong> No real money involved</li>
+              <li>⚠️ <strong>Note:</strong> All users (including subscribers) need tokens to make predictions</li>
             </ul>
           </CardContent>
         </Card>

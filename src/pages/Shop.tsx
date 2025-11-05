@@ -268,9 +268,9 @@ export default function Shop() {
           <CardContent className="pt-6 space-y-4">
             <h3 className="font-semibold text-lg">Why Gridiron-GM Tokens?</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
-              <li>✓ <strong>No Vig, No Juice:</strong> 100% fair lines on all props</li>
+              <li>✓ <strong>No Vig, No Juice:</strong> 100% fair lines on all predictions</li>
               <li>✓ <strong>Never Expires:</strong> Your tokens stay in your account</li>
-              <li>✓ <strong>Multiple Uses:</strong> AI features and PredictIQ</li>
+              <li>✓ <strong>Multiple Uses:</strong> AI features and predictions</li>
               <li>✓ <strong>Secure:</strong> Tokens cannot be transferred or sold</li>
               <li>✓ <strong>Weekly Rewards:</strong> Active users get free tokens</li>
             </ul>
