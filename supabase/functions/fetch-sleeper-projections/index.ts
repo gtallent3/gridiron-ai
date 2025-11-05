@@ -49,7 +49,8 @@ serve(async (req) => {
       });
     }
 
-    const season = 2025;
+    // Use current NFL season (2024)
+    const season = 2024;
     const allProjections = [];
     let totalFetched = 0;
     let totalSaved = 0;
