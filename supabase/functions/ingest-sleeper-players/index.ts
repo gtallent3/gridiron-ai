@@ -76,11 +76,19 @@ serve(async (req) => {
               return null;
             }
 
+            // Normalize and validate position
+            const rawPos = String(player.position || player.fantasy_positions?.[0] || '').toUpperCase();
+            const normalizedPos = rawPos === 'DEF' ? 'DST' : rawPos;
+            const allowedPositions = new Set(['QB','RB','WR','TE','K','DST']);
+            if (!allowedPositions.has(normalizedPos)) {
+              return null;
+            }
+
             return {
               player_id: `sleeper_${sleeperId}`, // Prefix to avoid conflicts
               sleeper_id: sleeperId,
-              player_name: player.full_name || player.first_name + ' ' + player.last_name,
-              position: player.position || player.fantasy_positions?.[0] || null,
+              player_name: player.full_name || (player.first_name && player.last_name ? player.first_name + ' ' + player.last_name : player.full_name),
+              position: normalizedPos,
               team: player.team || null,
               espn_id: player.espn_id?.toString() || null,
               yahoo_id: player.yahoo_id?.toString() || null,
