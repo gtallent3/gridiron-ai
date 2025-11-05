@@ -69,36 +69,78 @@ serve(async (req) => {
         }
 
         const data = await response.json();
-        console.log(`Week ${week}: Response type: ${typeof data}, isArray: ${Array.isArray(data)}, length: ${Array.isArray(data) ? data.length : 'N/A'}`);
+        console.log(`Week ${week}: Response type: ${typeof data}, isArray: ${Array.isArray(data)}, length: ${Array.isArray(data) ? data.length : (data && typeof data === 'object' ? Object.keys(data).length : 'N/A')}`);
         
-        if (!Array.isArray(data) || data.length === 0) {
+        let isEmpty = false;
+        if (Array.isArray(data)) {
+          isEmpty = data.length === 0;
+        } else if (data && typeof data === 'object') {
+          isEmpty = Object.keys(data).length === 0;
+        } else {
+          isEmpty = true;
+        }
+        if (isEmpty) {
           console.log(`Week ${week}: No data available (data: ${JSON.stringify(data).substring(0, 200)})`);
           continue;
         }
 
-        console.log(`Week ${week}: Fetched ${data.length} players`);
-        totalFetched += data.length;
+        const fetchedCount = Array.isArray(data) ? data.length : Object.keys(data).length;
+        console.log(`Week ${week}: Fetched ${fetchedCount} entries`);
+        totalFetched += fetchedCount;
 
-        // Transform and prepare data for insertion
-        const projections = data.map((player) => ({
-          player_id: player.player_id,
-          week: week,
-          season: season,
-          team: player.team || null,
-          position: player.position || null,
-          pts_std: player.stats?.pts_std || 0,
-          pts_ppr: player.stats?.pts_ppr || 0,
-          pts_half_ppr: player.stats?.pts_half_ppr || 0,
-          pass_yd: player.stats?.pass_yd || 0,
-          pass_td: player.stats?.pass_td || 0,
-          pass_int: player.stats?.pass_int || 0,
-          rush_yd: player.stats?.rush_yd || 0,
-          rush_td: player.stats?.rush_td || 0,
-          rec: player.stats?.rec || 0,
-          rec_yd: player.stats?.rec_yd || 0,
-          rec_td: player.stats?.rec_td || 0,
-          raw_stats: player.stats || {},
-        }));
+        // Transform and prepare data for insertion (handle array or object shapes)
+        let projections: any[] = [];
+        if (Array.isArray(data)) {
+          projections = data.map((player: any) => {
+            const stats = player.stats ?? player;
+            return {
+              player_id: player.player_id ?? player.id ?? null,
+              week,
+              season,
+              team: player.team ?? player.team_abbr ?? null,
+              position: player.position ?? player.pos ?? null,
+              pts_std: stats?.pts_std ?? 0,
+              pts_ppr: stats?.pts_ppr ?? 0,
+              pts_half_ppr: stats?.pts_half_ppr ?? 0,
+              pass_yd: stats?.pass_yd ?? 0,
+              pass_td: stats?.pass_td ?? 0,
+              pass_int: stats?.pass_int ?? 0,
+              rush_yd: stats?.rush_yd ?? 0,
+              rush_td: stats?.rush_td ?? 0,
+              rec: stats?.rec ?? 0,
+              rec_yd: stats?.rec_yd ?? 0,
+              rec_td: stats?.rec_td ?? 0,
+              raw_stats: stats ?? {},
+            };
+          });
+        } else if (data && typeof data === 'object') {
+          projections = Object.entries(data).map(([playerId, stats]: [string, any]) => ({
+            player_id: stats?.player_id ?? playerId,
+            week,
+            season,
+            team: stats?.team ?? stats?.team_abbr ?? null,
+            position: stats?.position ?? stats?.pos ?? null,
+            pts_std: stats?.pts_std ?? 0,
+            pts_ppr: stats?.pts_ppr ?? 0,
+            pts_half_ppr: stats?.pts_half_ppr ?? 0,
+            pass_yd: stats?.pass_yd ?? 0,
+            pass_td: stats?.pass_td ?? 0,
+            pass_int: stats?.pass_int ?? 0,
+            rush_yd: stats?.rush_yd ?? 0,
+            rush_td: stats?.rush_td ?? 0,
+            rec: stats?.rec ?? 0,
+            rec_yd: stats?.rec_yd ?? 0,
+            rec_td: stats?.rec_td ?? 0,
+            raw_stats: stats ?? {},
+          }));
+        }
+
+        if (!projections.length) {
+          console.log(`Week ${week}: Parsed 0 projections from response shape.`);
+          continue;
+        }
+
+        console.log(`Week ${week}: Prepared ${projections.length} projections for upsert`);
 
         // Insert in batches
         const { error: insertError, count } = await supabase
