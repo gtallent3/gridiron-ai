@@ -119,3 +119,9 @@ verify_jwt = true
 
 [functions.auto-ingest-all-leagues]
 verify_jwt = false
+
+[functions.ingest-sleeper-players]
+verify_jwt = true
+
+[functions.fetch-sleeper-projections]
+verify_jwt = true
