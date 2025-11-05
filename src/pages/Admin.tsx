@@ -108,6 +108,10 @@ export default function Admin() {
   const [playersIngesting, setPlayersIngesting] = useState(false);
   const [playersResult, setPlayersResult] = useState<any>(null);
 
+  // NFL Fantasy Points State
+  const [nflFetching, setNflFetching] = useState(false);
+  const [nflResult, setNflResult] = useState<any>(null);
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -618,6 +622,35 @@ export default function Admin() {
       setSleeperResult({ error: error.message });
     } finally {
       setSleeperFetching(false);
+    }
+  };
+
+  // NFL FANTASY POINTS
+  const handleFetchNFLFantasyPoints = async () => {
+    setNflFetching(true);
+    setNflResult(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('ingest-nfl-fantasy-points', {
+        body: { season: 2025 }
+      });
+
+      if (error) throw error;
+
+      setNflResult(data);
+      toast({
+        title: "NFL Data Fetched",
+        description: data.message || `Processed ${data.records_processed || 0} records`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fetch Error",
+        description: error.message || "Failed to fetch NFL data",
+        variant: "destructive",
+      });
+      setNflResult({ error: error.message });
+    } finally {
+      setNflFetching(false);
     }
   };
 
@@ -1151,6 +1184,55 @@ export default function Admin() {
                               {sleeperResult.message}
                               <br />
                               Check Cloud logs for detailed progress.
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg sm:text-xl">NFL Fantasy Points (nflfastR)</CardTitle>
+                  <CardDescription className="text-sm">Fetch actual NFL player stats and fantasy points</CardDescription>
+                </CardHeader>
+                <CardContent className="spacing-mobile">
+                  <div className="space-y-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm mb-2">
+                        This fetches actual weekly player stats from nflfastR for the 2025 season and calculates fantasy points (Standard, PPR, Half-PPR) based on real game data.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Data includes passing, rushing, receiving stats and is stored in the <code className="text-xs bg-background px-1 py-0.5 rounded">nfl_fantasy_points</code> table.
+                      </p>
+                    </div>
+
+                    <Button 
+                      onClick={handleFetchNFLFantasyPoints} 
+                      disabled={nflFetching}
+                      className="w-full sm:w-auto"
+                    >
+                      {nflFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {nflFetching ? "Fetching NFL Data..." : "Fetch NFL Fantasy Points"}
+                    </Button>
+
+                    {nflResult && (
+                      <div className="p-4 border rounded-lg">
+                        <div className="font-semibold mb-2">Last Fetch Results:</div>
+                        <div className="space-y-1 text-sm">
+                          {nflResult.error ? (
+                            <div className="text-destructive">Error: {nflResult.error}</div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">
+                              {nflResult.message}
+                              {nflResult.records_processed && (
+                                <>
+                                  <br />
+                                  Records processed: {nflResult.records_processed}
+                                </>
+                              )}
                             </div>
                           )}
                         </div>

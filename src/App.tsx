@@ -19,6 +19,7 @@ import ContactUs from "./pages/ContactUs";
 import NotFound from "./pages/NotFound";
 import RiskAdmin from "./pages/RiskAdmin";
 import Billing from "./pages/Billing";
+import NFLFantasyPoints from "./pages/NFLFantasyPoints";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/contact" element={<ContactUs />} />
             <Route path="/risk-admin" element={<RiskAdmin />} />
             <Route path="/settings/billing" element={<Billing />} />
+            <Route path="/nfl-stats" element={<NFLFantasyPoints />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
