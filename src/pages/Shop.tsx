@@ -272,6 +272,7 @@ export default function Shop() {
               <li>✓ <strong>Never Expires:</strong> Your tokens stay in your account</li>
               <li>✓ <strong>Multiple Uses:</strong> AI features and predictions</li>
               <li>✓ <strong>Secure:</strong> Tokens cannot be transferred or sold</li>
+              <li>✓ <strong>For Fun:</strong> No wagering real money involved</li>
               <li>✓ <strong>Weekly Rewards:</strong> Active users get free tokens</li>
             </ul>
           </CardContent>

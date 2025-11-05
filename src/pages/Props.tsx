@@ -304,7 +304,7 @@ export default function Props() {
               <li>✓ <strong>Simple:</strong> Pick Over or Under, use tokens, earn rewards</li>
               <li>✓ <strong>Weekly Updates:</strong> Fresh predictions every Tuesday</li>
               <li>✓ <strong>Secure:</strong> Tokens cannot be transferred or sold</li>
-              <li>✓ <strong>For Fun:</strong> No real money involved</li>
+              <li>✓ <strong>For Fun:</strong> No wagering real money involved</li>
               <li>⚠️ <strong>Note:</strong> All users (including subscribers) need tokens to make predictions</li>
             </ul>
           </CardContent>
