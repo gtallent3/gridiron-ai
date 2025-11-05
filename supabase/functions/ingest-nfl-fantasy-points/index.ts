@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
+import { parse } from 'https://deno.land/std@0.224.0/csv/parse.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -47,43 +48,64 @@ Deno.serve(async (req) => {
     }
 
     const csvText = await response.text();
-    const lines = csvText.split('\n');
-    const headers = lines[0].split(',').map(h => h.trim());
-    
-    console.log(`CSV headers (first 20): ${headers.slice(0, 20).join(', ')}`);
-    console.log(`Total lines: ${lines.length}`);
 
-    // Create a map of column names to indices
-    const getColumnIndex = (name: string) => headers.indexOf(name);
-    
+    // Parse CSV using Deno std CSV to handle quoted fields safely
+    const rows = await parse(csvText) as string[][];
+
+    if (!rows.length) {
+      throw new Error('Empty CSV received');
+    }
+
+    const headers = rows[0].map((h) => String(h).trim());
+    const dataRows = rows.slice(1);
+
+    console.log(`CSV rows parsed (excluding header): ${dataRows.length}`);
+
+    const getFirst = (row: Record<string, string>, keys: string[]) => {
+      for (const k of keys) {
+        const v = row[k as keyof typeof row] as unknown as string | undefined;
+        if (v !== undefined && v !== null && String(v).length > 0) return v;
+      }
+      return '';
+    };
+
+    const toInt = (v: string | number | null | undefined) => {
+      const n = parseInt((v ?? '0') as string, 10);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    const toFloat = (v: string | number | null | undefined) => {
+      const n = parseFloat((v ?? '0') as string);
+      return Number.isFinite(n) ? n : 0;
+    };
+
     const records: any[] = [];
-    
-    // Parse CSV rows
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (!line) continue;
 
-      const values = line.split(',');
-      
-      // Extract fields using header mapping
-      const player_id = values[getColumnIndex('player_id')] || '';
-      const player_name = values[getColumnIndex('player_display_name')] || values[getColumnIndex('player_name')] || '';
-      const position = values[getColumnIndex('position')] || '';
-      const team = values[getColumnIndex('recent_team')] || values[getColumnIndex('team')] || '';
-      const week = parseInt(values[getColumnIndex('week')] || '0');
-      const seasonVal = parseInt(values[getColumnIndex('season')] || '0');
-      
-      if (!player_id || week === 0 || seasonVal !== season) continue;
-      
-      // Stats fields
-      const passing_yards = parseFloat(values[getColumnIndex('passing_yards')] || '0');
-      const passing_tds = parseInt(values[getColumnIndex('passing_tds')] || '0');
-      const passing_ints = parseInt(values[getColumnIndex('passing_interceptions')] || values[getColumnIndex('interceptions')] || '0');
-      const rushing_yards = parseFloat(values[getColumnIndex('rushing_yards')] || '0');
-      const rushing_tds = parseInt(values[getColumnIndex('rushing_tds')] || '0');
-      const receiving_yards = parseFloat(values[getColumnIndex('receiving_yards')] || '0');
-      const receiving_tds = parseInt(values[getColumnIndex('receiving_tds')] || '0');
-      const receptions = parseInt(values[getColumnIndex('receptions')] || '0');
+    for (const values of dataRows) {
+      const row: Record<string, string> = {};
+      for (let i = 0; i < headers.length; i++) {
+        row[headers[i]] = (values[i] ?? '').toString().trim();
+      }
+
+      const seasonVal = toInt(getFirst(row, ['season']));
+      if (seasonVal !== season) continue;
+
+      const week = toInt(getFirst(row, ['week']));
+      const player_id = getFirst(row, ['player_id']);
+      const player_name = getFirst(row, ['player_display_name', 'player_name']);
+      const position = getFirst(row, ['position']);
+      const team = getFirst(row, ['recent_team', 'team']);
+
+      if (!player_id || !week) continue;
+
+      const passing_yards = toFloat(getFirst(row, ['passing_yards']));
+      const passing_tds = toInt(getFirst(row, ['passing_tds']));
+      const passing_ints = toInt(getFirst(row, ['passing_interceptions', 'interceptions']));
+      const rushing_yards = toFloat(getFirst(row, ['rushing_yards']));
+      const rushing_tds = toInt(getFirst(row, ['rushing_tds']));
+      const receiving_yards = toFloat(getFirst(row, ['receiving_yards']));
+      const receiving_tds = toInt(getFirst(row, ['receiving_tds']));
+      const receptions = toInt(getFirst(row, ['receptions']));
 
       // Calculate fantasy points
       const fantasy_points_std = 
@@ -119,7 +141,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    console.log(`Parsed ${records.length} player stat records for season ${season}`);
+    console.log(`Parsed ${records.length} records for season ${season}`);
 
     if (records.length === 0) {
       return new Response(
