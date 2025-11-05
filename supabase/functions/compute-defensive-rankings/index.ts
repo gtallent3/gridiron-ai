@@ -109,7 +109,7 @@ serve(async (req) => {
 
     console.log(`Created ${defensiveRankings.length} defensive stat entries`);
 
-    // Calculate rankings BEFORE inserting (1 = easiest defense, 32 = hardest)
+    // Calculate rankings BEFORE inserting (1 = hardest defense/fewest points, 32 = easiest/most points)
     const uniqueWeeks = [...new Set(defensiveRankings.map(r => r.week))];
     const rankingsWithRank: Array<DefensiveStat & { rank: number }> = [];
     
@@ -117,7 +117,7 @@ serve(async (req) => {
       for (const currentWeek of uniqueWeeks) {
         const weekPositionStats = defensiveRankings
           .filter(s => s.position === position && s.week === currentWeek)
-          .sort((a, b) => b.avg_points_allowed - a.avg_points_allowed);
+          .sort((a, b) => a.avg_points_allowed - b.avg_points_allowed); // Ascending: fewest points = rank 1
 
         weekPositionStats.forEach((stat, index) => {
           rankingsWithRank.push({
