@@ -494,6 +494,7 @@ export type Database = {
           fantasy_points_ppr: number | null
           fantasy_points_std: number | null
           id: string
+          opponent: string | null
           passing_ints: number | null
           passing_tds: number | null
           passing_yards: number | null
@@ -516,6 +517,7 @@ export type Database = {
           fantasy_points_ppr?: number | null
           fantasy_points_std?: number | null
           id?: string
+          opponent?: string | null
           passing_ints?: number | null
           passing_tds?: number | null
           passing_yards?: number | null
@@ -538,6 +540,7 @@ export type Database = {
           fantasy_points_ppr?: number | null
           fantasy_points_std?: number | null
           id?: string
+          opponent?: string | null
           passing_ints?: number | null
           passing_tds?: number | null
           passing_yards?: number | null
@@ -1305,6 +1308,7 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          opponent: string | null
           pass_int: number | null
           pass_td: number | null
           pass_yd: number | null
@@ -1328,6 +1332,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
+          opponent?: string | null
           pass_int?: number | null
           pass_td?: number | null
           pass_yd?: number | null
@@ -1351,6 +1356,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
+          opponent?: string | null
           pass_int?: number | null
           pass_td?: number | null
           pass_yd?: number | null
