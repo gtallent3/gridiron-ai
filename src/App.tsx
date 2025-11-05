@@ -20,6 +20,7 @@ import NotFound from "./pages/NotFound";
 import RiskAdmin from "./pages/RiskAdmin";
 import Billing from "./pages/Billing";
 import NFLFantasyPoints from "./pages/NFLFantasyPoints";
+import StrengthOfSchedule from "./pages/StrengthOfSchedule";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/risk-admin" element={<RiskAdmin />} />
             <Route path="/settings/billing" element={<Billing />} />
             <Route path="/nfl-stats" element={<NFLFantasyPoints />} />
+            <Route path="/strength-of-schedule" element={<StrengthOfSchedule />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -194,6 +194,54 @@ export type Database = {
         }
         Relationships: []
       }
+      defensive_rankings: {
+        Row: {
+          avg_points_allowed: number | null
+          created_at: string | null
+          fantasy_points_allowed: number | null
+          games_played: number | null
+          id: string
+          position: string
+          rank: number | null
+          season: number
+          tds_allowed: number | null
+          team: string
+          updated_at: string | null
+          week: number
+          yards_allowed: number | null
+        }
+        Insert: {
+          avg_points_allowed?: number | null
+          created_at?: string | null
+          fantasy_points_allowed?: number | null
+          games_played?: number | null
+          id?: string
+          position: string
+          rank?: number | null
+          season?: number
+          tds_allowed?: number | null
+          team: string
+          updated_at?: string | null
+          week: number
+          yards_allowed?: number | null
+        }
+        Update: {
+          avg_points_allowed?: number | null
+          created_at?: string | null
+          fantasy_points_allowed?: number | null
+          games_played?: number | null
+          id?: string
+          position?: string
+          rank?: number | null
+          season?: number
+          tds_allowed?: number | null
+          team?: string
+          updated_at?: string | null
+          week?: number
+          yards_allowed?: number | null
+        }
+        Relationships: []
+      }
       devices: {
         Row: {
           device_id: string
@@ -1374,6 +1422,60 @@ export type Database = {
           rush_yd?: number | null
           season?: number
           team?: string | null
+          updated_at?: string | null
+          week?: number
+        }
+        Relationships: []
+      }
+      strength_of_schedule: {
+        Row: {
+          avg_points_allowed_qb: number | null
+          avg_points_allowed_rb: number | null
+          avg_points_allowed_te: number | null
+          avg_points_allowed_wr: number | null
+          created_at: string | null
+          def_rank_qb: number | null
+          def_rank_rb: number | null
+          def_rank_te: number | null
+          def_rank_wr: number | null
+          id: string
+          opponent: string
+          season: number
+          team: string
+          updated_at: string | null
+          week: number
+        }
+        Insert: {
+          avg_points_allowed_qb?: number | null
+          avg_points_allowed_rb?: number | null
+          avg_points_allowed_te?: number | null
+          avg_points_allowed_wr?: number | null
+          created_at?: string | null
+          def_rank_qb?: number | null
+          def_rank_rb?: number | null
+          def_rank_te?: number | null
+          def_rank_wr?: number | null
+          id?: string
+          opponent: string
+          season?: number
+          team: string
+          updated_at?: string | null
+          week: number
+        }
+        Update: {
+          avg_points_allowed_qb?: number | null
+          avg_points_allowed_rb?: number | null
+          avg_points_allowed_te?: number | null
+          avg_points_allowed_wr?: number | null
+          created_at?: string | null
+          def_rank_qb?: number | null
+          def_rank_rb?: number | null
+          def_rank_te?: number | null
+          def_rank_wr?: number | null
+          id?: string
+          opponent?: string
+          season?: number
+          team?: string
           updated_at?: string | null
           week?: number
         }
