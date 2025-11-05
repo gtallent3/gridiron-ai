@@ -112,6 +112,10 @@ export default function Admin() {
   const [nflFetching, setNflFetching] = useState(false);
   const [nflResult, setNflResult] = useState<any>(null);
 
+  // Team Schedules State
+  const [teamSchedulesFetching, setTeamSchedulesFetching] = useState(false);
+  const [teamSchedulesResult, setTeamSchedulesResult] = useState<any>(null);
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -651,6 +655,35 @@ export default function Admin() {
       setNflResult({ error: error.message });
     } finally {
       setNflFetching(false);
+    }
+  };
+
+  // TEAM SCHEDULES
+  const handleIngestTeamSchedules = async () => {
+    setTeamSchedulesFetching(true);
+    setTeamSchedulesResult(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('ingest-team-schedules', {
+        body: { season: 2025 }
+      });
+
+      if (error) throw error;
+
+      setTeamSchedulesResult(data);
+      toast({
+        title: "Team Schedules Ingested",
+        description: `Processed ${data.records || 0} schedule records`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ingestion Error",
+        description: error.message || "Failed to ingest team schedules",
+        variant: "destructive",
+      });
+      setTeamSchedulesResult({ error: error.message });
+    } finally {
+      setTeamSchedulesFetching(false);
     }
   };
 
@@ -1231,6 +1264,56 @@ export default function Admin() {
                                 <>
                                   <br />
                                   Records processed: {nflResult.records_processed}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg sm:text-xl">Team Schedules (2025)</CardTitle>
+                  <CardDescription className="text-sm">Ingest NFL team schedules for the 2025 season</CardDescription>
+                </CardHeader>
+                <CardContent className="spacing-mobile">
+                  <div className="space-y-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm mb-2">
+                        This ingests all 32 NFL team schedules for the 2025 season (Weeks 1-18) and stores them in the <code className="text-xs bg-background px-1 py-0.5 rounded">team_schedules</code> table.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Includes home/away indicators and opponent matchups for each week. Useful for strength of schedule analysis.
+                      </p>
+                    </div>
+
+                    <Button 
+                      onClick={handleIngestTeamSchedules} 
+                      disabled={teamSchedulesFetching}
+                      className="w-full sm:w-auto"
+                      variant="secondary"
+                    >
+                      {teamSchedulesFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {teamSchedulesFetching ? "Ingesting Schedules..." : "Ingest Team Schedules"}
+                    </Button>
+
+                    {teamSchedulesResult && (
+                      <div className="p-4 border rounded-lg">
+                        <div className="font-semibold mb-2">Last Ingestion Results:</div>
+                        <div className="space-y-1 text-sm">
+                          {teamSchedulesResult.error ? (
+                            <div className="text-destructive">Error: {teamSchedulesResult.error}</div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">
+                              Successfully ingested {teamSchedulesResult.records || 0} schedule records
+                              {teamSchedulesResult.season && (
+                                <>
+                                  <br />
+                                  Season: {teamSchedulesResult.season}
                                 </>
                               )}
                             </div>
