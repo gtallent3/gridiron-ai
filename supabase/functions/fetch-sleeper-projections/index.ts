@@ -144,20 +144,27 @@ serve(async (req) => {
 
         console.log(`Week ${week}: Prepared ${projections.length} projections for upsert`);
 
-        // Insert in batches
-        const { error: insertError, count } = await supabase
-          .from("sleeper_projections")
-          .upsert(projections, { 
-            onConflict: "player_id,week,season",
-            count: "exact"
-          });
+        // Insert in smaller chunks to avoid CPU timeouts
+        const chunkSize = 500;
+        for (let i = 0; i < projections.length; i += chunkSize) {
+          const chunk = projections.slice(i, i + chunkSize);
+          const { error: insertError } = await supabase
+            .from("sleeper_projections")
+            .upsert(chunk, { 
+              onConflict: "player_id,week,season"
+            });
 
-        if (insertError) {
-          console.error(`Week ${week}: Insert error:`, insertError);
-        } else {
-          totalSaved += count || 0;
-          console.log(`Week ${week}: Saved ${count} projections`);
+          if (insertError) {
+            console.error(`Week ${week}: Upsert chunk ${Math.floor(i / chunkSize) + 1} error:`, insertError);
+          } else {
+            totalSaved += chunk.length;
+            console.log(`Week ${week}: Saved chunk ${Math.floor(i / chunkSize) + 1} (${chunk.length})`);
+          }
+
+          // Yield to event loop to avoid long CPU blocks
+          await new Promise((resolve) => setTimeout(resolve, 0));
         }
+
 
         } catch (error) {
           console.error(`Week ${week}: Error:`, error);
