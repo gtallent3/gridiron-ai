@@ -71,8 +71,8 @@ serve(async (req) => {
         // Transform to normalized format
         const players = playerEntries
           .map(([sleeperId, player]: [string, any]) => {
-            // Only include active NFL players with names
-            if (!player.player_id || !player.full_name || player.sport !== 'nfl') {
+            // Only include active NFL players with names and positions
+            if (!player.player_id || !player.full_name || player.sport !== 'nfl' || (!player.position && !player.fantasy_positions?.[0])) {
               return null;
             }
 
