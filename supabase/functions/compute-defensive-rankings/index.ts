@@ -30,6 +30,8 @@ serve(async (req) => {
 
     if (statsError) throw statsError;
 
+    console.log(`Processing ${playerStats.length} player stat records`);
+
     // Group stats by opponent (defense), position, AND week for per-week rankings
     interface DefensiveStat {
       team: string;
@@ -40,6 +42,7 @@ serve(async (req) => {
       yards_allowed: number;
       tds_allowed: number;
       games_played: number;
+      avg_points_allowed: number;
     }
 
     const defensiveStats: Record<string, DefensiveStat> = {};
@@ -64,6 +67,7 @@ serve(async (req) => {
           yards_allowed: 0,
           tds_allowed: 0,
           games_played: 0,
+          avg_points_allowed: 0,
         };
       }
 
@@ -73,23 +77,17 @@ serve(async (req) => {
       defensiveStats[key].games_played++;
     });
 
-    // Calculate averages for each week
+    // Calculate averages
     const defensiveRankings = Object.values(defensiveStats).map(stat => ({
       ...stat,
       avg_points_allowed: stat.fantasy_points_allowed / stat.games_played,
     }));
 
-    // Upsert defensive rankings
-    const { error: upsertError } = await supabase
-      .from('defensive_rankings')
-      .upsert(defensiveRankings, {
-        onConflict: 'team,week,season,position',
-      });
+    console.log(`Created ${defensiveRankings.length} defensive stat entries`);
 
-    if (upsertError) throw upsertError;
-
-    // Calculate rankings (1 = easiest defense, 32 = hardest) for each position PER WEEK
+    // Calculate rankings BEFORE inserting (1 = easiest defense, 32 = hardest)
     const uniqueWeeks = [...new Set(defensiveRankings.map(r => r.week))];
+    const rankingsWithRank: Array<DefensiveStat & { rank: number }> = [];
     
     for (const position of positions) {
       for (const currentWeek of uniqueWeeks) {
@@ -97,19 +95,30 @@ serve(async (req) => {
           .filter(s => s.position === position && s.week === currentWeek)
           .sort((a, b) => b.avg_points_allowed - a.avg_points_allowed);
 
-        for (let i = 0; i < weekPositionStats.length; i++) {
-          const { error: rankError } = await supabase
-            .from('defensive_rankings')
-            .update({ rank: i + 1 })
-            .eq('team', weekPositionStats[i].team)
-            .eq('week', currentWeek)
-            .eq('season', season)
-            .eq('position', position);
-
-          if (rankError) throw rankError;
-        }
+        weekPositionStats.forEach((stat, index) => {
+          rankingsWithRank.push({
+            ...stat,
+            rank: index + 1
+          });
+        });
       }
     }
+
+    console.log(`Calculated ranks for ${rankingsWithRank.length} entries`);
+
+    // Upsert defensive rankings with ranks already calculated
+    const { error: upsertError } = await supabase
+      .from('defensive_rankings')
+      .upsert(rankingsWithRank, {
+        onConflict: 'team,week,season,position',
+      });
+
+    if (upsertError) {
+      console.error('Upsert error:', upsertError);
+      throw upsertError;
+    }
+
+    console.log('Successfully upserted defensive rankings');
 
     // Now compute strength of schedule
     const { data: schedules, error: schedError } = await supabase
@@ -118,6 +127,8 @@ serve(async (req) => {
       .eq('season', season);
 
     if (schedError) throw schedError;
+
+    console.log(`Processing ${schedules.length} schedule entries`);
 
     const sosData = [];
 
@@ -131,14 +142,11 @@ serve(async (req) => {
 
       // Get defensive rankings for opponent for this specific week
       for (const position of positions) {
-        const { data: defRank } = await supabase
-          .from('defensive_rankings')
-          .select('rank, avg_points_allowed')
-          .eq('team', schedule.opponent)
-          .eq('week', schedule.week)
-          .eq('season', season)
-          .eq('position', position)
-          .maybeSingle();
+        const defRank = rankingsWithRank.find(r => 
+          r.team === schedule.opponent && 
+          r.week === schedule.week && 
+          r.position === position
+        );
 
         const posKey = position.toLowerCase();
         sosEntry[`def_rank_${posKey}`] = defRank?.rank || null;
@@ -148,6 +156,8 @@ serve(async (req) => {
       sosData.push(sosEntry);
     }
 
+    console.log(`Created ${sosData.length} SOS entries`);
+
     // Upsert strength of schedule
     const { error: sosError } = await supabase
       .from('strength_of_schedule')
@@ -155,13 +165,18 @@ serve(async (req) => {
         onConflict: 'team,week,season',
       });
 
-    if (sosError) throw sosError;
+    if (sosError) {
+      console.error('SOS upsert error:', sosError);
+      throw sosError;
+    }
+
+    console.log('Successfully upserted strength of schedule');
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Computed defensive rankings and SOS for ${defensiveRankings.length} entries`,
-        defensiveRankings: defensiveRankings.length,
+        message: `Computed defensive rankings and SOS for ${rankingsWithRank.length} defensive entries`,
+        defensiveRankings: rankingsWithRank.length,
         sosEntries: sosData.length,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
