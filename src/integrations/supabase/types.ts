@@ -1232,6 +1232,75 @@ export type Database = {
         }
         Relationships: []
       }
+      sleeper_projections: {
+        Row: {
+          created_at: string | null
+          id: string
+          pass_int: number | null
+          pass_td: number | null
+          pass_yd: number | null
+          player_id: string
+          position: string | null
+          pts_half_ppr: number | null
+          pts_ppr: number | null
+          pts_std: number | null
+          raw_stats: Json | null
+          rec: number | null
+          rec_td: number | null
+          rec_yd: number | null
+          rush_td: number | null
+          rush_yd: number | null
+          season: number
+          team: string | null
+          updated_at: string | null
+          week: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          pass_int?: number | null
+          pass_td?: number | null
+          pass_yd?: number | null
+          player_id: string
+          position?: string | null
+          pts_half_ppr?: number | null
+          pts_ppr?: number | null
+          pts_std?: number | null
+          raw_stats?: Json | null
+          rec?: number | null
+          rec_td?: number | null
+          rec_yd?: number | null
+          rush_td?: number | null
+          rush_yd?: number | null
+          season: number
+          team?: string | null
+          updated_at?: string | null
+          week: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          pass_int?: number | null
+          pass_td?: number | null
+          pass_yd?: number | null
+          player_id?: string
+          position?: string | null
+          pts_half_ppr?: number | null
+          pts_ppr?: number | null
+          pts_std?: number | null
+          raw_stats?: Json | null
+          rec?: number | null
+          rec_td?: number | null
+          rec_yd?: number | null
+          rush_td?: number | null
+          rush_yd?: number | null
+          season?: number
+          team?: string | null
+          updated_at?: string | null
+          week?: number
+        }
+        Relationships: []
+      }
       subscriptions: {
         Row: {
           cancel_at_period_end: boolean | null

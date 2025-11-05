@@ -99,6 +99,10 @@ export default function Admin() {
   // Scraper State
   const [scraperRunning, setScraperRunning] = useState(false);
   const [scraperResult, setScraperResult] = useState<any>(null);
+  
+  // Sleeper Projections State
+  const [sleeperFetching, setSleeperFetching] = useState(false);
+  const [sleeperResult, setSleeperResult] = useState<any>(null);
 
   useEffect(() => {
     checkAuth();
@@ -555,6 +559,35 @@ export default function Admin() {
     }
   };
 
+  // SLEEPER PROJECTIONS
+  const handleFetchSleeperProjections = async () => {
+    setSleeperFetching(true);
+    setSleeperResult(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('fetch-sleeper-projections', {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      setSleeperResult(data);
+      toast({
+        title: "Projections Fetched",
+        description: `Fetched ${data.totalFetched} projections, saved ${data.totalSaved} to database`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Fetch Error",
+        description: error.message || "Failed to fetch projections",
+        variant: "destructive",
+      });
+      setSleeperResult({ error: error.message });
+    } finally {
+      setSleeperFetching(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -993,6 +1026,54 @@ export default function Admin() {
                               <div>Errors: <span className="font-medium text-red-600">{scraperResult.errors || 0}</span></div>
                               <div className="text-xs text-muted-foreground mt-2">
                                 Snapshot Date: {scraperResult.snapshot_date}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg sm:text-xl">Sleeper NFL Projections</CardTitle>
+                  <CardDescription className="text-sm">Fetch 2025 season projections from Sleeper API</CardDescription>
+                </CardHeader>
+                <CardContent className="spacing-mobile">
+                  <div className="space-y-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm mb-2">
+                        This fetches all player projections for weeks 1-18 of the 2025 NFL season from the Sleeper API and stores them in the <code className="text-xs bg-background px-1 py-0.5 rounded">sleeper_projections</code> table.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Use the button below to manually fetch and update projections data.
+                      </p>
+                    </div>
+
+                    <Button 
+                      onClick={handleFetchSleeperProjections} 
+                      disabled={sleeperFetching}
+                      className="w-full sm:w-auto"
+                    >
+                      {sleeperFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {sleeperFetching ? "Fetching Projections..." : "Fetch Sleeper Projections"}
+                    </Button>
+
+                    {sleeperResult && (
+                      <div className="p-4 border rounded-lg">
+                        <div className="font-semibold mb-2">Last Fetch Results:</div>
+                        <div className="space-y-1 text-sm">
+                          {sleeperResult.error ? (
+                            <div className="text-destructive">Error: {sleeperResult.error}</div>
+                          ) : (
+                            <>
+                              <div>Total Fetched: <span className="font-medium">{sleeperResult.totalFetched}</span></div>
+                              <div>Saved to DB: <span className="font-medium text-green-600">{sleeperResult.totalSaved}</span></div>
+                              <div>Season: <span className="font-medium">{sleeperResult.season}</span></div>
+                              <div className="text-xs text-muted-foreground mt-2">
+                                {sleeperResult.message}
                               </div>
                             </>
                           )}
