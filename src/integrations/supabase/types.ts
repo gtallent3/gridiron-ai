@@ -1439,11 +1439,11 @@ export type Database = {
           def_rank_te: number | null
           def_rank_wr: number | null
           id: string
-          opponent: string
+          opponent: string | null
           season: number
           team: string
           updated_at: string | null
-          week: number
+          week: number | null
         }
         Insert: {
           avg_points_allowed_qb?: number | null
@@ -1456,11 +1456,11 @@ export type Database = {
           def_rank_te?: number | null
           def_rank_wr?: number | null
           id?: string
-          opponent: string
+          opponent?: string | null
           season?: number
           team: string
           updated_at?: string | null
-          week: number
+          week?: number | null
         }
         Update: {
           avg_points_allowed_qb?: number | null
@@ -1473,11 +1473,11 @@ export type Database = {
           def_rank_te?: number | null
           def_rank_wr?: number | null
           id?: string
-          opponent?: string
+          opponent?: string | null
           season?: number
           team?: string
           updated_at?: string | null
-          week?: number
+          week?: number | null
         }
         Relationships: []
       }
