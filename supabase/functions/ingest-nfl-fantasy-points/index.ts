@@ -36,8 +36,8 @@ Deno.serve(async (req) => {
 
     console.log(`Fetching NFL fantasy points for season ${season}`);
 
-    // Fetch from nflfastR public data repository
-    const url = `https://github.com/nflverse/nflfastR-data/raw/master/data/player_stats_weekly.csv`;
+    // Fetch from nflfastR public data repository (nflverse-data releases)
+    const url = `https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_${season}.csv`;
     
     console.log(`Fetching from: ${url}`);
     const response = await fetch(url);
@@ -48,39 +48,42 @@ Deno.serve(async (req) => {
 
     const csvText = await response.text();
     const lines = csvText.split('\n');
-    const headers = lines[0].split(',');
+    const headers = lines[0].split(',').map(h => h.trim());
     
-    console.log(`CSV headers: ${headers.join(', ')}`);
+    console.log(`CSV headers (first 20): ${headers.slice(0, 20).join(', ')}`);
     console.log(`Total lines: ${lines.length}`);
 
+    // Create a map of column names to indices
+    const getColumnIndex = (name: string) => headers.indexOf(name);
+    
     const records: any[] = [];
     
-    // Parse CSV and filter for the requested season
+    // Parse CSV rows
     for (let i = 1; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
       const values = line.split(',');
       
-      // Extract key fields (adjust indices based on actual CSV structure)
-      const seasonVal = parseInt(values[0] || '0');
-      if (seasonVal !== season) continue;
-
-      const week = parseInt(values[1] || '0');
-      const player_id = values[2] || '';
-      const player_name = values[3] || '';
-      const position = values[4] || '';
-      const team = values[5] || '';
+      // Extract fields using header mapping
+      const player_id = values[getColumnIndex('player_id')] || '';
+      const player_name = values[getColumnIndex('player_display_name')] || values[getColumnIndex('player_name')] || '';
+      const position = values[getColumnIndex('position')] || '';
+      const team = values[getColumnIndex('recent_team')] || values[getColumnIndex('team')] || '';
+      const week = parseInt(values[getColumnIndex('week')] || '0');
+      const seasonVal = parseInt(values[getColumnIndex('season')] || '0');
       
-      // Stats (adjust indices based on actual CSV structure)
-      const passing_yards = parseFloat(values[10] || '0');
-      const passing_tds = parseInt(values[11] || '0');
-      const passing_ints = parseInt(values[12] || '0');
-      const rushing_yards = parseFloat(values[15] || '0');
-      const rushing_tds = parseInt(values[16] || '0');
-      const receiving_yards = parseFloat(values[20] || '0');
-      const receiving_tds = parseInt(values[21] || '0');
-      const receptions = parseInt(values[19] || '0');
+      if (!player_id || week === 0 || seasonVal !== season) continue;
+      
+      // Stats fields
+      const passing_yards = parseFloat(values[getColumnIndex('passing_yards')] || '0');
+      const passing_tds = parseInt(values[getColumnIndex('passing_tds')] || '0');
+      const passing_ints = parseInt(values[getColumnIndex('passing_interceptions')] || values[getColumnIndex('interceptions')] || '0');
+      const rushing_yards = parseFloat(values[getColumnIndex('rushing_yards')] || '0');
+      const rushing_tds = parseInt(values[getColumnIndex('rushing_tds')] || '0');
+      const receiving_yards = parseFloat(values[getColumnIndex('receiving_yards')] || '0');
+      const receiving_tds = parseInt(values[getColumnIndex('receiving_tds')] || '0');
+      const receptions = parseInt(values[getColumnIndex('receptions')] || '0');
 
       // Calculate fantasy points
       const fantasy_points_std = 
