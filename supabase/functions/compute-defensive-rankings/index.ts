@@ -30,7 +30,7 @@ serve(async (req) => {
 
     if (statsError) throw statsError;
 
-    // Group stats by opponent (defense) and position
+    // Group stats by opponent (defense), position, AND week for per-week rankings
     interface DefensiveStat {
       team: string;
       week: number;
@@ -51,6 +51,7 @@ serve(async (req) => {
       
       if (!opponent || !positions.includes(position)) return;
 
+      // Create per-week defensive stats
       const key = `${opponent}_${position}_${stat.week}`;
       
       if (!defensiveStats[key]) {
@@ -69,10 +70,10 @@ serve(async (req) => {
       defensiveStats[key].fantasy_points_allowed += stat.fantasy_points_ppr || 0;
       defensiveStats[key].yards_allowed += (stat.passing_yards || 0) + (stat.rushing_yards || 0) + (stat.receiving_yards || 0);
       defensiveStats[key].tds_allowed += (stat.passing_tds || 0) + (stat.rushing_tds || 0) + (stat.receiving_tds || 0);
-      defensiveStats[key].games_played = 1;
+      defensiveStats[key].games_played++;
     });
 
-    // Calculate averages and prepare for insert
+    // Calculate averages for each week
     const defensiveRankings = Object.values(defensiveStats).map(stat => ({
       ...stat,
       avg_points_allowed: stat.fantasy_points_allowed / stat.games_played,
@@ -87,22 +88,26 @@ serve(async (req) => {
 
     if (upsertError) throw upsertError;
 
-    // Calculate rankings (1 = easiest, 32 = hardest) for each position
+    // Calculate rankings (1 = easiest defense, 32 = hardest) for each position PER WEEK
+    const uniqueWeeks = [...new Set(defensiveRankings.map(r => r.week))];
+    
     for (const position of positions) {
-      const positionStats = defensiveRankings
-        .filter(s => s.position === position)
-        .sort((a, b) => b.avg_points_allowed - a.avg_points_allowed);
+      for (const currentWeek of uniqueWeeks) {
+        const weekPositionStats = defensiveRankings
+          .filter(s => s.position === position && s.week === currentWeek)
+          .sort((a, b) => b.avg_points_allowed - a.avg_points_allowed);
 
-      for (let i = 0; i < positionStats.length; i++) {
-        const { error: rankError } = await supabase
-          .from('defensive_rankings')
-          .update({ rank: i + 1 })
-          .eq('team', positionStats[i].team)
-          .eq('week', positionStats[i].week)
-          .eq('season', positionStats[i].season)
-          .eq('position', position);
+        for (let i = 0; i < weekPositionStats.length; i++) {
+          const { error: rankError } = await supabase
+            .from('defensive_rankings')
+            .update({ rank: i + 1 })
+            .eq('team', weekPositionStats[i].team)
+            .eq('week', currentWeek)
+            .eq('season', season)
+            .eq('position', position);
 
-        if (rankError) throw rankError;
+          if (rankError) throw rankError;
+        }
       }
     }
 
@@ -124,12 +129,13 @@ serve(async (req) => {
         opponent: schedule.opponent,
       };
 
-      // Get defensive rankings for opponent
+      // Get defensive rankings for opponent for this specific week
       for (const position of positions) {
         const { data: defRank } = await supabase
           .from('defensive_rankings')
           .select('rank, avg_points_allowed')
           .eq('team', schedule.opponent)
+          .eq('week', schedule.week)
           .eq('season', season)
           .eq('position', position)
           .maybeSingle();
