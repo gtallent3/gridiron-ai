@@ -34,8 +34,8 @@ const features = [
   },
   {
     icon: Trophy,
-    title: "Props & Tokens",
-    description: "Play weekly props, earn tokens, and compete on the leaderboard.",
+    title: "PredictIQ",
+    description: "Make weekly predictions, earn tokens, and compete on the leaderboard.",
     demo: PropsDemo,
     cta: "Learn More",
     link: "/props",
@@ -164,7 +164,7 @@ export const FeatureOverview = () => {
                           </a>
                         </Button>
                       )}
-                      {feature.title === "Props & Tokens" && (
+                      {feature.title === "PredictIQ" && (
                         <p className="text-[10px] text-center text-muted-foreground">
                           Sign up now to receive 3 free tokens
                         </p>
