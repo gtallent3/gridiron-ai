@@ -35,7 +35,7 @@ serve(async (req) => {
         .eq('season', season)
         .not('opponent', 'is', null)
         .order('week')
-        .limit(100);
+        .limit(10000); // Increased to capture all weeks
       if (weeksError) throw weeksError;
       weeks = [...new Set((weeksData || []).map((w: any) => w.week).filter((w: number) => typeof w === 'number'))];
     }
