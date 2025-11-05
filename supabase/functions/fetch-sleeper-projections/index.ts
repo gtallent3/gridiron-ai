@@ -52,6 +52,16 @@ serve(async (req) => {
     // Use current NFL season (2025)
     const season = 2025;
 
+    // Helpers to coerce numeric types safely for DB columns
+    const toNum = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const toInt = (v: unknown) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? Math.round(n) : 0;
+    };
+
     // Define background task function
     async function fetchAllProjections() {
       let totalFetched = 0;
@@ -95,25 +105,25 @@ serve(async (req) => {
         if (Array.isArray(data)) {
           projections = data.map((player: any) => {
             const stats = player.stats ?? player;
-            return {
-              player_id: player.player_id ?? player.id ?? null,
-              week,
-              season,
-              team: player.team ?? player.team_abbr ?? null,
-              position: player.position ?? player.pos ?? null,
-              pts_std: stats?.pts_std ?? 0,
-              pts_ppr: stats?.pts_ppr ?? 0,
-              pts_half_ppr: stats?.pts_half_ppr ?? 0,
-              pass_yd: stats?.pass_yd ?? 0,
-              pass_td: stats?.pass_td ?? 0,
-              pass_int: stats?.pass_int ?? 0,
-              rush_yd: stats?.rush_yd ?? 0,
-              rush_td: stats?.rush_td ?? 0,
-              rec: stats?.rec ?? 0,
-              rec_yd: stats?.rec_yd ?? 0,
-              rec_td: stats?.rec_td ?? 0,
-              raw_stats: stats ?? {},
-            };
+          return {
+            player_id: player.player_id ?? player.id ?? null,
+            week,
+            season,
+            team: player.team ?? player.team_abbr ?? null,
+            position: player.position ?? player.pos ?? null,
+            pts_std: toNum(stats?.pts_std),
+            pts_ppr: toNum(stats?.pts_ppr),
+            pts_half_ppr: toNum(stats?.pts_half_ppr),
+            pass_yd: toNum(stats?.pass_yd),
+            pass_td: toInt(stats?.pass_td),
+            pass_int: toInt(stats?.pass_int),
+            rush_yd: toNum(stats?.rush_yd),
+            rush_td: toInt(stats?.rush_td),
+            rec: toNum(stats?.rec),
+            rec_yd: toNum(stats?.rec_yd),
+            rec_td: toInt(stats?.rec_td),
+            raw_stats: stats ?? {},
+          };
           });
         } else if (data && typeof data === 'object') {
           projections = Object.entries(data).map(([playerId, stats]: [string, any]) => ({
@@ -122,17 +132,17 @@ serve(async (req) => {
             season,
             team: stats?.team ?? stats?.team_abbr ?? null,
             position: stats?.position ?? stats?.pos ?? null,
-            pts_std: stats?.pts_std ?? 0,
-            pts_ppr: stats?.pts_ppr ?? 0,
-            pts_half_ppr: stats?.pts_half_ppr ?? 0,
-            pass_yd: stats?.pass_yd ?? 0,
-            pass_td: stats?.pass_td ?? 0,
-            pass_int: stats?.pass_int ?? 0,
-            rush_yd: stats?.rush_yd ?? 0,
-            rush_td: stats?.rush_td ?? 0,
-            rec: stats?.rec ?? 0,
-            rec_yd: stats?.rec_yd ?? 0,
-            rec_td: stats?.rec_td ?? 0,
+            pts_std: toNum(stats?.pts_std),
+            pts_ppr: toNum(stats?.pts_ppr),
+            pts_half_ppr: toNum(stats?.pts_half_ppr),
+            pass_yd: toNum(stats?.pass_yd),
+            pass_td: toInt(stats?.pass_td),
+            pass_int: toInt(stats?.pass_int),
+            rush_yd: toNum(stats?.rush_yd),
+            rush_td: toInt(stats?.rush_td),
+            rec: toNum(stats?.rec),
+            rec_yd: toNum(stats?.rec_yd),
+            rec_td: toInt(stats?.rec_td),
             raw_stats: stats ?? {},
           }));
         }
