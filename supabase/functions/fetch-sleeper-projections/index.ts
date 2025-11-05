@@ -49,8 +49,8 @@ serve(async (req) => {
       });
     }
 
-    // Use current NFL season (2024)
-    const season = 2024;
+    // Use current NFL season (2025)
+    const season = 2025;
     const allProjections = [];
     let totalFetched = 0;
     let totalSaved = 0;
@@ -64,14 +64,15 @@ serve(async (req) => {
       try {
         const response = await fetch(url);
         if (!response.ok) {
-          console.log(`Week ${week}: API returned ${response.status}`);
+          console.log(`Week ${week}: API returned ${response.status}, ${response.statusText}`);
           continue;
         }
 
         const data = await response.json();
+        console.log(`Week ${week}: Response type: ${typeof data}, isArray: ${Array.isArray(data)}, length: ${Array.isArray(data) ? data.length : 'N/A'}`);
         
         if (!Array.isArray(data) || data.length === 0) {
-          console.log(`Week ${week}: No data available`);
+          console.log(`Week ${week}: No data available (data: ${JSON.stringify(data).substring(0, 200)})`);
           continue;
         }
 
