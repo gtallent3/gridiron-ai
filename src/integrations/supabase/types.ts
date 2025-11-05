@@ -487,6 +487,75 @@ export type Database = {
         }
         Relationships: []
       }
+      nfl_fantasy_points: {
+        Row: {
+          created_at: string | null
+          fantasy_points_half_ppr: number | null
+          fantasy_points_ppr: number | null
+          fantasy_points_std: number | null
+          id: string
+          passing_ints: number | null
+          passing_tds: number | null
+          passing_yards: number | null
+          player_id: string
+          player_name: string
+          position: string | null
+          receiving_tds: number | null
+          receiving_yards: number | null
+          receptions: number | null
+          rushing_tds: number | null
+          rushing_yards: number | null
+          season: number
+          team: string | null
+          updated_at: string | null
+          week: number
+        }
+        Insert: {
+          created_at?: string | null
+          fantasy_points_half_ppr?: number | null
+          fantasy_points_ppr?: number | null
+          fantasy_points_std?: number | null
+          id?: string
+          passing_ints?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          player_id: string
+          player_name: string
+          position?: string | null
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          season?: number
+          team?: string | null
+          updated_at?: string | null
+          week: number
+        }
+        Update: {
+          created_at?: string | null
+          fantasy_points_half_ppr?: number | null
+          fantasy_points_ppr?: number | null
+          fantasy_points_std?: number | null
+          id?: string
+          passing_ints?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          player_id?: string
+          player_name?: string
+          position?: string | null
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          season?: number
+          team?: string | null
+          updated_at?: string | null
+          week?: number
+        }
+        Relationships: []
+      }
       normalized_players: {
         Row: {
           created_at: string | null
