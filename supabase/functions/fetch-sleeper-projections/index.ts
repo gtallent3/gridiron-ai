@@ -154,24 +154,29 @@ serve(async (req) => {
 
         console.log(`Week ${week}: Prepared ${projections.length} projections for upsert`);
 
-        // Lookup player names from normalized_players
-        // Ensure player_id is converted to string to match sleeper_id (text column)
+        // Lookup player names from normalized_players in batches to avoid header size limits
         const playerIds = [...new Set(projections.map(p => String(p.player_id)).filter(Boolean))];
         console.log(`Week ${week}: Looking up ${playerIds.length} unique player IDs`);
         
-        const { data: playerNames, error: lookupError } = await supabase
-          .from('normalized_players')
-          .select('sleeper_id, player_name')
-          .in('sleeper_id', playerIds);
+        const nameMap = new Map<string, string>();
+        const batchSize = 1000; // Query 1000 IDs at a time to stay under header limits
+        
+        for (let i = 0; i < playerIds.length; i += batchSize) {
+          const batch = playerIds.slice(i, i + batchSize);
+          const { data: playerNames, error: lookupError } = await supabase
+            .from('normalized_players')
+            .select('sleeper_id, player_name')
+            .in('sleeper_id', batch);
 
-        if (lookupError) {
-          console.error(`Week ${week}: Player name lookup error:`, lookupError);
+          if (lookupError) {
+            console.error(`Week ${week}: Player name lookup error (batch ${Math.floor(i/batchSize) + 1}):`, lookupError);
+          } else {
+            // Add to map
+            (playerNames || []).forEach(p => {
+              nameMap.set(String(p.sleeper_id), p.player_name);
+            });
+          }
         }
-
-        // Create a map of player_id -> player_name (normalize keys to strings)
-        const nameMap = new Map(
-          (playerNames || []).map(p => [String(p.sleeper_id), p.player_name])
-        );
 
         // Add player names to projections
         projections.forEach(proj => {
