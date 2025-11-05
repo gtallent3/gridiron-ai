@@ -155,23 +155,31 @@ serve(async (req) => {
         console.log(`Week ${week}: Prepared ${projections.length} projections for upsert`);
 
         // Lookup player names from normalized_players
-        const playerIds = [...new Set(projections.map(p => p.player_id).filter(Boolean))];
-        const { data: playerNames } = await supabase
+        // Ensure player_id is converted to string to match sleeper_id (text column)
+        const playerIds = [...new Set(projections.map(p => String(p.player_id)).filter(Boolean))];
+        console.log(`Week ${week}: Looking up ${playerIds.length} unique player IDs`);
+        
+        const { data: playerNames, error: lookupError } = await supabase
           .from('normalized_players')
           .select('sleeper_id, player_name')
           .in('sleeper_id', playerIds);
 
-        // Create a map of player_id -> player_name
+        if (lookupError) {
+          console.error(`Week ${week}: Player name lookup error:`, lookupError);
+        }
+
+        // Create a map of player_id -> player_name (normalize keys to strings)
         const nameMap = new Map(
-          (playerNames || []).map(p => [p.sleeper_id, p.player_name])
+          (playerNames || []).map(p => [String(p.sleeper_id), p.player_name])
         );
 
         // Add player names to projections
         projections.forEach(proj => {
-          proj.player_name = nameMap.get(proj.player_id) || null;
+          proj.player_name = nameMap.get(String(proj.player_id)) || null;
         });
 
-        console.log(`Week ${week}: Mapped ${nameMap.size} player names`);
+        const mappedCount = projections.filter(p => p.player_name).length;
+        console.log(`Week ${week}: Mapped ${mappedCount}/${projections.length} player names (${nameMap.size} names found in DB)`);
 
         // Insert in smaller chunks to avoid CPU timeouts
         const chunkSize = 500;
