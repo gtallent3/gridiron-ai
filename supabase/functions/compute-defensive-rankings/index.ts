@@ -21,16 +21,26 @@ serve(async (req) => {
 
     console.log(`Computing defensive rankings for season ${season}${week ? `, week ${week}` : ''}`);
 
-    // Get all player stats with opponent data
-    const { data: playerStats, error: statsError } = await supabase
-      .from('nfl_fantasy_points')
-      .select('*')
-      .eq('season', season)
-      .not('opponent', 'is', null);
+    // Prepare to fetch stats efficiently and avoid 1000-row default limits
+    const positions = ['QB', 'RB', 'WR', 'TE'];
 
-    if (statsError) throw statsError;
+    // Determine which weeks to process
+    let weeks: number[] = [];
+    if (week) {
+      weeks = [week];
+    } else {
+      const { data: weeksData, error: weeksError } = await supabase
+        .from('nfl_fantasy_points')
+        .select('week')
+        .eq('season', season)
+        .not('opponent', 'is', null)
+        .order('week')
+        .limit(100);
+      if (weeksError) throw weeksError;
+      weeks = [...new Set((weeksData || []).map((w: any) => w.week).filter((w: number) => typeof w === 'number'))];
+    }
 
-    console.log(`Processing ${playerStats.length} player stat records`);
+    console.log(`Will process ${weeks.length} week(s): [${weeks.join(', ')}]`);
 
     // Group stats by opponent (defense), position, AND week for per-week rankings
     interface DefensiveStat {
@@ -46,42 +56,54 @@ serve(async (req) => {
     }
 
     const defensiveStats: Record<string, DefensiveStat> = {};
-    const positions = ['QB', 'RB', 'WR', 'TE'];
 
-    playerStats.forEach(stat => {
-      const opponent = stat.opponent;
-      const position = stat.position;
-      
-      if (!opponent || !positions.includes(position)) return;
+    for (const currentWeek of weeks) {
+      const { data: weekStats, error: statsError } = await supabase
+        .from('nfl_fantasy_points')
+        .select('*')
+        .eq('season', season)
+        .eq('week', currentWeek)
+        .in('position', positions)
+        .not('opponent', 'is', null)
+        .limit(10000);
 
-      // Create per-week defensive stats
-      const key = `${opponent}_${position}_${stat.week}`;
-      
-      if (!defensiveStats[key]) {
-        defensiveStats[key] = {
-          team: opponent,
-          week: stat.week,
-          season: season,
-          position: position,
-          fantasy_points_allowed: 0,
-          yards_allowed: 0,
-          tds_allowed: 0,
-          games_played: 0,
-          avg_points_allowed: 0,
-        };
-      }
+      if (statsError) throw statsError;
+      console.log(`Week ${currentWeek}: processing ${weekStats?.length || 0} player stat records`);
 
-      defensiveStats[key].fantasy_points_allowed += stat.fantasy_points_ppr || 0;
-      defensiveStats[key].yards_allowed += (stat.passing_yards || 0) + (stat.rushing_yards || 0) + (stat.receiving_yards || 0);
-      defensiveStats[key].tds_allowed += (stat.passing_tds || 0) + (stat.rushing_tds || 0) + (stat.receiving_tds || 0);
-      defensiveStats[key].games_played++;
-    });
+      (weekStats || []).forEach((stat: any) => {
+        const opponent = stat.opponent as string | null;
+        const position = stat.position as string | null;
+        if (!opponent || !position || !positions.includes(position)) return;
 
-    // Calculate averages
+        // Create per-week defensive stats (one record per defense-position-week)
+        const key = `${opponent}_${position}_${currentWeek}`;
+        if (!defensiveStats[key]) {
+          defensiveStats[key] = {
+            team: opponent,
+            week: currentWeek,
+            season: season,
+            position: position,
+            fantasy_points_allowed: 0,
+            yards_allowed: 0,
+            tds_allowed: 0,
+            // For per-week entries, each defense plays one game
+            games_played: 1,
+            avg_points_allowed: 0,
+          };
+        }
+
+        defensiveStats[key].fantasy_points_allowed += stat.fantasy_points_ppr || 0;
+        defensiveStats[key].yards_allowed += (stat.passing_yards || 0) + (stat.rushing_yards || 0) + (stat.receiving_yards || 0);
+        defensiveStats[key].tds_allowed += (stat.passing_tds || 0) + (stat.rushing_tds || 0) + (stat.receiving_tds || 0);
+      });
+    }
+
+    // Calculate averages (per-week entries: avg == total allowed that week)
     const defensiveRankings = Object.values(defensiveStats).map(stat => ({
       ...stat,
-      avg_points_allowed: stat.fantasy_points_allowed / stat.games_played,
+      avg_points_allowed: stat.fantasy_points_allowed,
     }));
+
 
     console.log(`Created ${defensiveRankings.length} defensive stat entries`);
 
