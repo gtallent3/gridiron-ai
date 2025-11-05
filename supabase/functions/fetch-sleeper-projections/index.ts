@@ -154,6 +154,25 @@ serve(async (req) => {
 
         console.log(`Week ${week}: Prepared ${projections.length} projections for upsert`);
 
+        // Lookup player names from normalized_players
+        const playerIds = [...new Set(projections.map(p => p.player_id).filter(Boolean))];
+        const { data: playerNames } = await supabase
+          .from('normalized_players')
+          .select('sleeper_id, player_name')
+          .in('sleeper_id', playerIds);
+
+        // Create a map of player_id -> player_name
+        const nameMap = new Map(
+          (playerNames || []).map(p => [p.sleeper_id, p.player_name])
+        );
+
+        // Add player names to projections
+        projections.forEach(proj => {
+          proj.player_name = nameMap.get(proj.player_id) || null;
+        });
+
+        console.log(`Week ${week}: Mapped ${nameMap.size} player names`);
+
         // Insert in smaller chunks to avoid CPU timeouts
         const chunkSize = 500;
         for (let i = 0; i < projections.length; i += chunkSize) {

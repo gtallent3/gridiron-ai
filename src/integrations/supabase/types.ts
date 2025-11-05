@@ -1240,6 +1240,7 @@ export type Database = {
           pass_td: number | null
           pass_yd: number | null
           player_id: string
+          player_name: string | null
           position: string | null
           pts_half_ppr: number | null
           pts_ppr: number | null
@@ -1262,6 +1263,7 @@ export type Database = {
           pass_td?: number | null
           pass_yd?: number | null
           player_id: string
+          player_name?: string | null
           position?: string | null
           pts_half_ppr?: number | null
           pts_ppr?: number | null
@@ -1284,6 +1286,7 @@ export type Database = {
           pass_td?: number | null
           pass_yd?: number | null
           player_id?: string
+          player_name?: string | null
           position?: string | null
           pts_half_ppr?: number | null
           pts_ppr?: number | null
