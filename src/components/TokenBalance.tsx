@@ -98,7 +98,7 @@ export const TokenBalance = () => {
                   Subscriber Benefits
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Unlimited access to AI tools (Trade Analyzer, Start/Sit, AI Chat) but still need tokens for prop betting
+                  Unlimited access to AI tools (Trade Analyzer, Start/Sit, AI Chat) but still need tokens for PredictIQ
                 </p>
               </div>
             )}
@@ -114,14 +114,14 @@ export const TokenBalance = () => {
                   <li>✓ AI Assistant (Free)</li>
                   <li>✓ Start/Sit Advice (Free)</li>
                   <li>✓ Trade Analysis (Free)</li>
-                  <li>⚠️ Props Betting (Tokens Required)</li>
+                  <li>⚠️ PredictIQ (Tokens Required)</li>
                 </>
               ) : (
                 <>
                   <li>• AI Assistant (1 token/question)</li>
                   <li>• Start/Sit Advice (1 token)</li>
                   <li>• Trade Analysis (1 token)</li>
-                  <li>• Props Betting</li>
+                  <li>• PredictIQ</li>
                 </>
               )}
             </ul>

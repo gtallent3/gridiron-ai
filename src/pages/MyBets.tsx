@@ -74,7 +74,7 @@ export default function MyBets() {
     } catch (error: any) {
       toast({
         title: "Error",
-        description: "Failed to load betting history",
+        description: "Failed to load prediction history",
         variant: "destructive",
       });
     }
@@ -169,15 +169,15 @@ export default function MyBets() {
     <main className="container mx-auto px-4 sm:px-6 pt-20 sm:pt-24 pb-8 sm:pb-12">
         <div className="max-w-6xl mx-auto spacing-mobile">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">My Bets</h1>
-            <p className="text-sm sm:text-base text-muted-foreground">View your betting history and active bets</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">My Predictions</h1>
+            <p className="text-sm sm:text-base text-muted-foreground">View your prediction history and active predictions</p>
           </div>
 
           {/* Summary Cards */}
           <div className="grid grid-cols-3 gap-3 sm:gap-4">
             <Card>
               <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
-                <CardTitle className="text-xs sm:text-sm font-medium break-words">Active Bets</CardTitle>
+                <CardTitle className="text-xs sm:text-sm font-medium break-words">Active Predictions</CardTitle>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="text-xl sm:text-2xl font-bold">{pendingBets.length}</div>
@@ -186,7 +186,7 @@ export default function MyBets() {
 
             <Card>
               <CardHeader className="pb-2 sm:pb-3 p-3 sm:p-6">
-                <CardTitle className="text-xs sm:text-sm font-medium break-words">Total Bets</CardTitle>
+                <CardTitle className="text-xs sm:text-sm font-medium break-words">Total Predictions</CardTitle>
               </CardHeader>
               <CardContent className="p-3 sm:p-6 pt-0">
                 <div className="text-xl sm:text-2xl font-bold">{bets.length}</div>
@@ -211,7 +211,7 @@ export default function MyBets() {
           <Tabs defaultValue="pending" className="spacing-mobile">
             <TabsList className="grid w-full grid-cols-2 h-auto">
               <TabsTrigger value="pending" className="text-xs sm:text-sm py-2 sm:py-3">
-                <span className="hidden sm:inline">Active Bets ({pendingBets.length})</span>
+                <span className="hidden sm:inline">Active Predictions ({pendingBets.length})</span>
                 <span className="sm:hidden">Active ({pendingBets.length})</span>
               </TabsTrigger>
               <TabsTrigger value="history" className="text-xs sm:text-sm py-2 sm:py-3">
@@ -224,7 +224,7 @@ export default function MyBets() {
               {pendingBets.length === 0 ? (
                 <Card>
                   <CardContent className="py-12 text-center text-muted-foreground">
-                    No active bets. Visit the <a href="/props" className="text-primary hover:underline">Props page</a> to place a bet!
+                    No active predictions. Visit the <a href="/props" className="text-primary hover:underline">PredictIQ page</a> to place a prediction!
                   </CardContent>
                 </Card>
               ) : (
@@ -236,7 +236,7 @@ export default function MyBets() {
               {settledBets.length === 0 ? (
                 <Card>
                   <CardContent className="py-12 text-center text-muted-foreground">
-                    No betting history yet.
+                    No prediction history yet.
                   </CardContent>
                 </Card>
               ) : (

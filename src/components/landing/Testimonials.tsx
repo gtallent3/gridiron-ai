@@ -19,7 +19,7 @@ const testimonials = [
   {
     name: "James L.",
     league: "10-Team Standard",
-    quote: "Props betting is addictive! Love earning tokens and competing on the leaderboard.",
+    quote: "PredictIQ is addictive! Love earning tokens and competing on the leaderboard.",
     rating: 5,
   },
 ];

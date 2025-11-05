@@ -10,7 +10,7 @@ type MobileMenuProps = {
 
 export const MobileMenu = ({ user }: MobileMenuProps) => {
   const [open, setOpen] = useState(false);
-  const [bettingOpen, setBettingOpen] = useState(false);
+  const [predictIQOpen, setPredictIQOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
   const handleNavClick = () => {
@@ -34,11 +34,11 @@ export const MobileMenu = ({ user }: MobileMenuProps) => {
             Dashboard
           </a>
 
-          {/* Betting Collapsible */}
-          <Collapsible open={bettingOpen} onOpenChange={setBettingOpen}>
+          {/* PredictIQ Collapsible */}
+          <Collapsible open={predictIQOpen} onOpenChange={setPredictIQOpen}>
             <CollapsibleTrigger className="flex items-center justify-between w-full text-base font-medium hover:text-primary transition-colors py-2">
-              Betting
-              <ChevronDown className={`h-4 w-4 transition-transform ${bettingOpen ? 'rotate-180' : ''}`} />
+              PredictIQ
+              <ChevronDown className={`h-4 w-4 transition-transform ${predictIQOpen ? 'rotate-180' : ''}`} />
             </CollapsibleTrigger>
             <CollapsibleContent className="pl-4 space-y-2 mt-2">
               <a 
@@ -46,14 +46,14 @@ export const MobileMenu = ({ user }: MobileMenuProps) => {
                 onClick={handleNavClick}
                 className="block text-sm text-muted-foreground hover:text-primary transition-colors py-2"
               >
-                Props Betting
+                PredictIQ
               </a>
               <a 
                 href="/my-bets" 
                 onClick={handleNavClick}
                 className="block text-sm text-muted-foreground hover:text-primary transition-colors py-2"
               >
-                My Bets
+                My Predictions
               </a>
               <a 
                 href="/leaderboard" 

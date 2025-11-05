@@ -833,7 +833,7 @@ export default function Admin() {
               <Card>
                 <CardHeader>
                   <CardTitle>Create New Prop</CardTitle>
-                  <CardDescription>Add a new weekly prop for betting</CardDescription>
+                  <CardDescription>Add a new weekly prop for PredictIQ</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -1024,7 +1024,7 @@ export default function Admin() {
                           <SelectItem value="ai_assistant">AI Assistant</SelectItem>
                           <SelectItem value="start_sit">Start/Sit</SelectItem>
                           <SelectItem value="trade_analysis">Trade Analysis</SelectItem>
-                          <SelectItem value="prop_bet">Props Betting</SelectItem>
+                          <SelectItem value="prop_bet">PredictIQ</SelectItem>
                           <SelectItem value="weekly_reward">Weekly Rewards</SelectItem>
                         </SelectContent>
                       </Select>

@@ -257,7 +257,7 @@ export default function Profile() {
                     <div>
                       <p className="font-medium">Monthly Token Bonus</p>
                       <p className="text-sm text-muted-foreground">
-                        Receive 10 bonus tokens each month for prop betting
+                        Receive 10 bonus tokens each month for PredictIQ
                       </p>
                     </div>
                   </div>
@@ -266,9 +266,9 @@ export default function Profile() {
                       <div className="h-2 w-2 rounded-full bg-amber-500" />
                     </div>
                     <div>
-                      <p className="font-medium">Prop Betting</p>
+                      <p className="font-medium">PredictIQ</p>
                       <p className="text-sm text-muted-foreground">
-                        Use tokens to place prop bets (subscribers still need tokens for betting)
+                        Use tokens to place predictions (subscribers still need tokens for predictions)
                       </p>
                     </div>
                   </div>

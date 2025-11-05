@@ -145,7 +145,7 @@ export default function Shop() {
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold">Power Up Your Game</h1>
           <p className="text-muted-foreground text-base sm:text-lg max-w-2xl mx-auto px-4">
-            Get tokens to unlock premium AI features and weekly props betting
+            Get tokens to unlock premium AI features and weekly PredictIQ
           </p>
         </div>
 
@@ -270,7 +270,7 @@ export default function Shop() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>✓ <strong>No Vig, No Juice:</strong> 100% fair lines on all props</li>
               <li>✓ <strong>Never Expires:</strong> Your tokens stay in your account</li>
-              <li>✓ <strong>Multiple Uses:</strong> AI features and props betting</li>
+              <li>✓ <strong>Multiple Uses:</strong> AI features and PredictIQ</li>
               <li>✓ <strong>Secure:</strong> Tokens cannot be transferred or sold</li>
               <li>✓ <strong>Weekly Rewards:</strong> Active users get free tokens</li>
             </ul>

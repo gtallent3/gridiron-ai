@@ -35,17 +35,17 @@ export const Header = ({ user }: HeaderProps) => {
               Dashboard
             </a>
             
-            {/* Betting Dropdown */}
+            {/* PredictIQ Dropdown */}
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-1 h-9 text-sm text-muted-foreground hover:text-primary transition-colors outline-none">
-                Betting <ChevronDown className="h-3 w-3" />
+                PredictIQ <ChevronDown className="h-3 w-3" />
               </DropdownMenuTrigger>
               <DropdownMenuContent className="bg-card border-border z-50">
                 <DropdownMenuItem asChild>
-                  <a href="/props" className="cursor-pointer">Props Betting</a>
+                  <a href="/props" className="cursor-pointer">PredictIQ</a>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                  <a href="/my-bets" className="cursor-pointer">My Bets</a>
+                  <a href="/my-bets" className="cursor-pointer">My Predictions</a>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <a href="/leaderboard" className="cursor-pointer">Leaderboard</a>

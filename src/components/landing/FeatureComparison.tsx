@@ -8,7 +8,7 @@ const comparisonData = [
   { feature: "Trade Analyzer", free: "2-player limit", synced: "Real roster impact" },
   { feature: "AI Assistant", free: "Generic advice", synced: "Personalized insights" },
   { feature: "Token Rewards", free: false, synced: true },
-  { feature: "Props Betting", free: false, synced: true },
+  { feature: "PredictIQ", free: false, synced: true },
   { feature: "Waiver Wire AI", free: false, synced: true },
   { feature: "Weekly Projections", free: "League average", synced: "Your league settings" },
 ];
