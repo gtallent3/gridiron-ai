@@ -51,14 +51,16 @@ serve(async (req) => {
 
     // Use current NFL season (2025)
     const season = 2025;
-    const allProjections = [];
-    let totalFetched = 0;
-    let totalSaved = 0;
 
-    console.log("Starting Sleeper projection fetch for season", season);
+    // Define background task function
+    async function fetchAllProjections() {
+      let totalFetched = 0;
+      let totalSaved = 0;
 
-    // Fetch projections for all 18 weeks
-    for (let week = 1; week <= 18; week++) {
+      console.log("Starting Sleeper projection fetch for season", season);
+
+      // Fetch projections for all 18 weeks
+      for (let week = 1; week <= 18; week++) {
       const url = `https://api.sleeper.app/v1/projections/nfl/regular/${season}/${week}`;
       
       try {
@@ -157,18 +159,30 @@ serve(async (req) => {
           console.log(`Week ${week}: Saved ${count} projections`);
         }
 
-      } catch (error) {
-        console.error(`Week ${week}: Error:`, error);
+        } catch (error) {
+          console.error(`Week ${week}: Error:`, error);
+        }
       }
+
+      console.log(`Completed: Fetched ${totalFetched} projections, saved ${totalSaved} to database`);
     }
 
+    // Start background task
+    // @ts-ignore - EdgeRuntime is available in Deno Deploy
+    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(fetchAllProjections());
+    } else {
+      // Fallback for local testing
+      fetchAllProjections().catch(err => console.error('Background task error:', err));
+    }
+
+    // Return immediate response
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Fetched ${totalFetched} projections, saved ${totalSaved} to database`,
+        message: `Started fetching projections for season ${season}. Check logs for progress.`,
         season,
-        totalFetched,
-        totalSaved,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
