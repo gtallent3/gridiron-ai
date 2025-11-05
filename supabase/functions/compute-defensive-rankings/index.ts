@@ -29,16 +29,18 @@ serve(async (req) => {
     if (week) {
       weeks = [week];
     } else {
+      // Use team_schedules to get distinct weeks to avoid 1,000 row limits on stats
       const { data: weeksData, error: weeksError } = await supabase
-        .from('nfl_fantasy_points')
+        .from('team_schedules')
         .select('week')
         .eq('season', season)
-        .not('opponent', 'is', null)
         .order('week')
-        .limit(10000); // Increased to capture all weeks
+        .limit(1000);
       if (weeksError) throw weeksError;
       weeks = [...new Set((weeksData || []).map((w: any) => w.week).filter((w: number) => typeof w === 'number'))];
     }
+
+    console.log(`Will process ${weeks.length} week(s): [${weeks.join(', ')}]`);
 
     console.log(`Will process ${weeks.length} week(s): [${weeks.join(', ')}]`);
 
