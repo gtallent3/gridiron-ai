@@ -176,7 +176,7 @@ export default function Props() {
         {props.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
-              No active props available. Check back later!
+              No active predictions available. Check back later!
             </CardContent>
           </Card>
         ) : (
