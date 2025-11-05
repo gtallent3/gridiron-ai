@@ -1470,6 +1470,39 @@ export type Database = {
           },
         ]
       }
+      team_schedules: {
+        Row: {
+          created_at: string
+          id: string
+          is_home: boolean
+          opponent: string
+          season: number
+          team: string
+          updated_at: string
+          week: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_home?: boolean
+          opponent: string
+          season?: number
+          team: string
+          updated_at?: string
+          week: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_home?: boolean
+          opponent?: string
+          season?: number
+          team?: string
+          updated_at?: string
+          week?: number
+        }
+        Relationships: []
+      }
       team_strategies: {
         Row: {
           created_at: string | null
