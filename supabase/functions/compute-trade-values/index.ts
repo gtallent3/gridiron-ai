@@ -125,6 +125,9 @@ serve(async (req) => {
       // Skip if no team (FA/retired players)
       if (!data.team || data.team === '') continue;
       
+      // Skip players with no projections (likely out for season)
+      if (data.projected_weeks.length === 0 || data.projected_total === 0) continue;
+      
       // Calculate actual PPG
       const actualPPG = data.actual_weeks.length > 0 
         ? data.actual_total / data.actual_weeks.length 
