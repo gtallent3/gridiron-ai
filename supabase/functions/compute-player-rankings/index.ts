@@ -260,7 +260,7 @@ serve(async (req) => {
         const chunk = dedupedRankings.slice(i, i + chunkSize);
         const { error: upsertError } = await supabase
           .from('player_rankings')
-          .insert(chunk);
+          .upsert(chunk, { onConflict: 'player_id,season', ignoreDuplicates: false });
 
         if (upsertError) {
           console.error(`Chunk ${Math.floor(i / chunkSize) + 1} error:`, upsertError);
@@ -283,8 +283,13 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error computing player rankings:', error);
+    const errPayload = typeof error === 'string' 
+      ? { error }
+      : (error && typeof error === 'object' && 'message' in (error as any))
+        ? { error: (error as any).message, details: error }
+        : { error: 'Unknown error', details: error };
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify(errPayload),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
