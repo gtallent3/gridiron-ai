@@ -6,6 +6,32 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Utility to get current NFL week
+function getCurrentNFLWeek(): { week: number; season: number } {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth(); // 0-11
+  
+  // NFL season typically starts first Thursday of September
+  // Week 1 starts around Sept 5-10
+  // If we're in Jan-Aug, we're in the previous season's playoff/offseason
+  let season = year;
+  if (month < 8) { // Before September
+    season = year - 1;
+  }
+  
+  // Determine week number based on date
+  // NFL Week 1 typically starts ~Sept 7
+  const seasonStart = new Date(season, 8, 7); // Sept 7
+  const daysSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (1000 * 60 * 60 * 24));
+  let week = Math.floor(daysSinceStart / 7) + 1;
+  
+  // Clamp to valid range (1-18)
+  week = Math.max(1, Math.min(18, week));
+  
+  return { week, season };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -17,21 +43,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const season = 2025;
+    // Get current NFL week and season
+    const { week: currentWeek, season } = getCurrentNFLWeek();
     
-    console.log(`Computing player rankings for season ${season}`);
-
-    // Determine current week from latest projections
-    const { data: latestWeekRow } = await supabase
-      .from('sleeper_projections')
-      .select('week')
-      .eq('season', season)
-      .order('week', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    const currentWeek = latestWeekRow?.week ?? 1;
-    console.log(`Current week: ${currentWeek}`);
+    console.log(`Computing player rankings for season ${season}, current week: ${currentWeek}`);
 
     // Fetch all ROS projections (current week onwards)
     const { data: projections, error: projError } = await supabase
