@@ -116,6 +116,10 @@ export default function Admin() {
   const [teamSchedulesFetching, setTeamSchedulesFetching] = useState(false);
   const [teamSchedulesResult, setTeamSchedulesResult] = useState<any>(null);
 
+  // Player Pool State
+  const [playerPoolComputing, setPlayerPoolComputing] = useState(false);
+  const [playerPoolResult, setPlayerPoolResult] = useState<any>(null);
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -684,6 +688,35 @@ export default function Admin() {
       setTeamSchedulesResult({ error: error.message });
     } finally {
       setTeamSchedulesFetching(false);
+    }
+  };
+
+  // PLAYER POOL
+  const handleComputePlayerPool = async () => {
+    setPlayerPoolComputing(true);
+    setPlayerPoolResult(null);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('compute-player-pool', {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      setPlayerPoolResult(data);
+      toast({
+        title: "Player Pool Computed",
+        description: `Inserted ${data.recordsInserted || 0} records for season ${data.season}`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Computation Error",
+        description: error.message || "Failed to compute player pool",
+        variant: "destructive",
+      });
+      setPlayerPoolResult({ error: error.message });
+    } finally {
+      setPlayerPoolComputing(false);
     }
   };
 
@@ -1314,6 +1347,58 @@ export default function Admin() {
                                 <>
                                   <br />
                                   Season: {teamSchedulesResult.season}
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg sm:text-xl">Player Pool (Combined Data)</CardTitle>
+                  <CardDescription className="text-sm">Build player pool combining actual stats and projections</CardDescription>
+                </CardHeader>
+                <CardContent className="spacing-mobile">
+                  <div className="space-y-4">
+                    <div className="p-4 bg-muted rounded-lg">
+                      <p className="text-sm mb-2">
+                        This combines actual NFL stats (past weeks) with Sleeper projections (upcoming weeks) into a unified <code className="text-xs bg-background px-1 py-0.5 rounded">player_pool</code> table with 18 weeks per player.
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        <strong>Important:</strong> Run NFL Fantasy Points and Sleeper Projections first. Scheduled to run automatically daily at 6 AM ET.
+                      </p>
+                    </div>
+
+                    <Button 
+                      onClick={handleComputePlayerPool} 
+                      disabled={playerPoolComputing}
+                      className="w-full sm:w-auto"
+                      variant="default"
+                    >
+                      {playerPoolComputing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {playerPoolComputing ? "Computing Player Pool..." : "Compute Player Pool"}
+                    </Button>
+
+                    {playerPoolResult && (
+                      <div className="p-4 border rounded-lg">
+                        <div className="font-semibold mb-2">Last Computation Results:</div>
+                        <div className="space-y-1 text-sm">
+                          {playerPoolResult.error ? (
+                            <div className="text-destructive">Error: {playerPoolResult.error}</div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground">
+                              Successfully inserted {playerPoolResult.recordsInserted || 0} records
+                              {playerPoolResult.season && (
+                                <>
+                                  <br />
+                                  Season: {playerPoolResult.season}
+                                  <br />
+                                  Current Week: {playerPoolResult.currentWeek}
                                 </>
                               )}
                             </div>
