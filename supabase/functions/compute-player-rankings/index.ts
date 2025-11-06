@@ -50,6 +50,12 @@ serve(async (req) => {
     const actuals = (poolData || []).filter(p => p.is_actual && p.week < currentWeek);
     const projections = (poolData || []).filter(p => !p.is_actual && p.week >= currentWeek);
 
+    const totalPool = poolData?.length || 0;
+    const actualCount = actuals.length;
+    const projCount = projections.length;
+    const nonZeroProjCount = projections.filter(p => Number(p.points_ppr || 0) > 0).length;
+    console.log(`Pool rows: ${totalPool}, actuals: ${actualCount}, projections: ${projCount}, non-zero projections: ${nonZeroProjCount}`);
+
     // Fetch SOS data
     const { data: sosData, error: sosError } = await supabase
       .from('strength_of_schedule')
@@ -164,7 +170,9 @@ serve(async (req) => {
     }
 
     // Compute rankings for all players
-    const rankings = [];
+    const rankings = [] as any[];
+    const debugCounts = { withProjs: 0, withNonZeroProjs: 0, noProjs: 0, projectedGt0: 0 };
+    const anomalySamples: any[] = [];
 
     for (const [playerKey, playerInfo] of allPlayers.entries()) {
       // Get projections and actuals for this player using composite key
@@ -196,6 +204,14 @@ serve(async (req) => {
       const totalActualPts = acts.reduce((sum, a) => sum + Number(a.points_ppr || 0), 0);
       const avgActualPpg = acts.length > 0 ? totalActualPts / acts.length : 0;
 
+      // Debug counts
+      if (projs.length > 0) debugCounts.withProjs++; else debugCounts.noProjs++;
+      if (nonByeProjs.length > 0) debugCounts.withNonZeroProjs++;
+      if (avgProjectedPpgRos > 0) debugCounts.projectedGt0++;
+      if (avgProjectedPpgRos === 0 && nonByeProjs.length > 0 && anomalySamples.length < 5) {
+        anomalySamples.push({ player: playerInfo.player_name, position: playerInfo.position, team: playerInfo.team, projs: projs.map(p => ({ week: p.week, pts: Number(p.points_ppr || 0) })) });
+      }
+
       // Get SOS rankings
       const sosKey = `${playerInfo.team}:${playerInfo.position}`;
       const sos = sosRankMap.get(sosKey);
@@ -219,6 +235,11 @@ serve(async (req) => {
         current_week: currentWeek,
         updated_at: new Date().toISOString(),
       });
+    }
+
+    console.log('Projection debug summary:', JSON.stringify(debugCounts));
+    if (anomalySamples.length > 0) {
+      console.log('Projection anomalies (expected >0 but got 0) sample:', JSON.stringify(anomalySamples));
     }
 
     // Deduplicate by player_id to avoid unique constraint violations
