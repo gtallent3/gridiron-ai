@@ -36,25 +36,38 @@ serve(async (req) => {
     
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek}`);
 
-    // Fetch all player pool data for the season
-    const { data: poolData, error: poolError } = await supabase
+    // Fetch actuals and projections separately to avoid pagination issues
+    const { data: actualsData, error: actualsError } = await supabase
       .from('player_pool')
       .select('player_id, player_name, position, team, week, points_ppr, is_actual')
       .eq('season', season)
+      .eq('is_actual', true)
+      .lt('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .not('team', 'is', null);
+      .not('team', 'is', null)
+      .limit(10000);
 
-    if (poolError) throw poolError;
+    if (actualsError) throw actualsError;
 
-    // Separate actuals (past weeks) from projections (future weeks)
-    const actuals = (poolData || []).filter(p => p.is_actual && p.week < currentWeek);
-    const projections = (poolData || []).filter(p => !p.is_actual && p.week >= currentWeek);
+    const { data: projectionsData, error: projectionsError } = await supabase
+      .from('player_pool')
+      .select('player_id, player_name, position, team, week, points_ppr, is_actual')
+      .eq('season', season)
+      .eq('is_actual', false)
+      .gte('week', currentWeek)
+      .in('position', ['QB', 'RB', 'WR', 'TE'])
+      .not('team', 'is', null)
+      .limit(10000);
 
-    const totalPool = poolData?.length || 0;
+    if (projectionsError) throw projectionsError;
+
+    const actuals = actualsData || [];
+    const projections = projectionsData || [];
+
     const actualCount = actuals.length;
     const projCount = projections.length;
     const nonZeroProjCount = projections.filter(p => Number(p.points_ppr || 0) > 0).length;
-    console.log(`Pool rows: ${totalPool}, actuals: ${actualCount}, projections: ${projCount}, non-zero projections: ${nonZeroProjCount}`);
+    console.log(`Fetched separately - actuals: ${actualCount}, projections: ${projCount}, non-zero projections: ${nonZeroProjCount}`);
 
     // Fetch SOS data
     const { data: sosData, error: sosError } = await supabase
