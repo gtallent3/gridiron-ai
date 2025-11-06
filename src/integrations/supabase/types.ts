@@ -586,6 +586,54 @@ export type Database = {
           },
         ]
       }
+      player_rankings: {
+        Row: {
+          avg_actual_ppg: number
+          avg_projected_ppg_ros: number
+          bye_week: number | null
+          current_week: number
+          id: string
+          player_id: string
+          player_name: string
+          playoff_sos_rank: number | null
+          position: string
+          ros_sos_rank: number | null
+          season: number
+          team: string
+          updated_at: string
+        }
+        Insert: {
+          avg_actual_ppg?: number
+          avg_projected_ppg_ros?: number
+          bye_week?: number | null
+          current_week: number
+          id?: string
+          player_id: string
+          player_name: string
+          playoff_sos_rank?: number | null
+          position: string
+          ros_sos_rank?: number | null
+          season?: number
+          team: string
+          updated_at?: string
+        }
+        Update: {
+          avg_actual_ppg?: number
+          avg_projected_ppg_ros?: number
+          bye_week?: number | null
+          current_week?: number
+          id?: string
+          player_id?: string
+          player_name?: string
+          playoff_sos_rank?: number | null
+          position?: string
+          ros_sos_rank?: number | null
+          season?: number
+          team?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       player_value_cache: {
         Row: {
           consistency_multiplier: number

@@ -22,6 +22,7 @@ import Billing from "./pages/Billing";
 import NFLFantasyPoints from "./pages/NFLFantasyPoints";
 import StrengthOfSchedule from "./pages/StrengthOfSchedule";
 import TradeValues from "./pages/TradeValues";
+import PlayerRankings from "./pages/PlayerRankings";
 
 const queryClient = new QueryClient();
 
@@ -50,6 +51,7 @@ const App = () => (
             <Route path="/nfl-stats" element={<NFLFantasyPoints />} />
             <Route path="/strength-of-schedule" element={<StrengthOfSchedule />} />
             <Route path="/trade-values" element={<TradeValues />} />
+            <Route path="/player-rankings" element={<PlayerRankings />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
