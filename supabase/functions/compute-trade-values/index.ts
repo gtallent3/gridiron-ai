@@ -377,15 +377,28 @@ serve(async (req) => {
       scaledOut.push(r);
     }
 
-    // Save to trade_value_weekly - upsert to handle existing records
-    console.log(`Upserting ${scaledOut.length} trade values...`);
+    // Save to trade_value_weekly - delete today's snapshot first to avoid player_id conflicts
+    const today = new Date().toISOString().slice(0, 10);
+    console.log(`Deleting existing records for snapshot_date: ${today}`);
+    
+    const { error: deleteError } = await supabase
+      .from('trade_value_weekly')
+      .delete()
+      .eq('snapshot_date', today);
+    
+    if (deleteError) {
+      console.error('Delete error:', deleteError);
+      return new Response(
+        JSON.stringify({ error: `Failed to clear existing records: ${deleteError.message}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    console.log(`Inserting ${scaledOut.length} trade values...`);
     
     const { error: insertError } = await supabase
       .from('trade_value_weekly')
-      .upsert(scaledOut, { 
-        onConflict: 'player_id,snapshot_date',
-        ignoreDuplicates: false 
-      });
+      .insert(scaledOut);
 
     if (insertError) {
       console.error('Insert error:', insertError);
