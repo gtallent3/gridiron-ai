@@ -129,6 +129,7 @@ serve(async (req) => {
         season: actual.season,
         points_ppr: actual.fantasy_points_ppr || 0,
         is_actual: true,
+        did_not_play: false, // Player was in the actual stats, so they played
         passing_yards: actual.passing_yards || 0,
         passing_tds: actual.passing_tds || 0,
         passing_ints: actual.passing_ints || 0,
@@ -162,8 +163,8 @@ serve(async (req) => {
         }
       }
       
-      // For past weeks (< currentWeek), mark as actual to indicate it's historical
-      // but keep points at 0 or projection value to indicate injury/DNP
+      // For past weeks (< currentWeek), mark as actual AND did_not_play (injury/out)
+      // For future weeks, mark as projection
       const isPastWeek = proj.week < currentWeek;
       
       poolMap.set(key, {
@@ -175,6 +176,7 @@ serve(async (req) => {
         season: proj.season,
         points_ppr: proj.pts_ppr || 0,
         is_actual: isPastWeek, // Mark past weeks as actual (even if they're projections)
+        did_not_play: isPastWeek, // Past week with projection = player didn't play (injured/out)
         passing_yards: proj.pass_yd || 0,
         passing_tds: proj.pass_td || 0,
         passing_ints: proj.pass_int || 0,

@@ -39,7 +39,7 @@ serve(async (req) => {
     // Fetch actuals and projections separately to avoid pagination issues
     const { data: actualsData, error: actualsError } = await supabase
       .from('player_pool')
-      .select('player_id, player_name, position, team, week, points_ppr, is_actual')
+      .select('player_id, player_name, position, team, week, points_ppr, is_actual, did_not_play')
       .eq('season', season)
       .eq('is_actual', true)
       .lt('week', currentWeek)
@@ -213,8 +213,8 @@ serve(async (req) => {
       const totalProjPts = nonByeProjs.reduce((sum, p) => sum + Number(p.points_ppr || 0), 0);
       const avgProjectedPpgRos = nonByeProjs.length > 0 ? totalProjPts / nonByeProjs.length : 0;
 
-      // Calculate average actual PPG from past weeks (only count games actually played)
-      const gamesPlayed = acts.filter(a => Number(a.points_ppr || 0) > 0);
+      // Calculate average actual PPG from past weeks (exclude injury/DNP weeks)
+      const gamesPlayed = acts.filter(a => !a.did_not_play);
       const totalActualPts = gamesPlayed.reduce((sum, a) => sum + Number(a.points_ppr || 0), 0);
       const avgActualPpg = gamesPlayed.length > 0 ? totalActualPts / gamesPlayed.length : 0;
 
