@@ -85,7 +85,7 @@ export default function TradeValues() {
 
       // Step 1: Compute Team SOS
       const { error: sosError } = await supabase.functions.invoke('compute-team-sos', {
-        body: { season: 2025, currentWeek: 1 }
+        body: { season: 2025, currentWeek: 10 }
       });
       if (sosError) throw new Error(`SOS computation failed: ${sosError.message}`);
 

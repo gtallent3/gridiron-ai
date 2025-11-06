@@ -20,26 +20,40 @@ Deno.serve(async (req) => {
     
     console.log(`Computing team SOS for season ${season}, current week ${currentWeek}`);
 
-    // Get team schedules for remaining weeks
-    const { data: schedules } = await supabase
-      .from('team_schedules')
-      .select('team, week, opponent')
-      .eq('season', season)
-      .gte('week', currentWeek);
+    // Fetch both queries in parallel to reduce latency
+    const [schedulesResult, sosDataResult] = await Promise.all([
+      supabase
+        .from('team_schedules')
+        .select('team, week, opponent')
+        .eq('season', season)
+        .gte('week', currentWeek),
+      supabase
+        .from('strength_of_schedule')
+        .select('team, def_rank_qb, def_rank_rb, def_rank_wr, def_rank_te')
+        .eq('season', season)
+    ]);
 
-    if (!schedules) {
+    const { data: schedules, error: schedError } = schedulesResult;
+    const { data: sosData, error: sosError } = sosDataResult;
+
+    if (schedError) {
+      console.error('Schedule fetch error:', schedError);
+      throw new Error(`Failed to fetch schedules: ${schedError.message}`);
+    }
+    if (sosError) {
+      console.error('SOS data fetch error:', sosError);
+      throw new Error(`Failed to fetch SOS data: ${sosError.message}`);
+    }
+
+    if (!schedules || schedules.length === 0) {
       throw new Error('No schedule data found');
     }
 
-    // Get strength of schedule data (season-to-date defensive rankings)
-    const { data: sosData } = await supabase
-      .from('strength_of_schedule')
-      .select('team, def_rank_qb, def_rank_rb, def_rank_wr, def_rank_te')
-      .eq('season', season);
-
-    if (!sosData) {
+    if (!sosData || sosData.length === 0) {
       throw new Error('No SOS data found');
     }
+
+    console.log(`Fetched ${schedules.length} schedule records, ${sosData.length} SOS records`);
 
     // Create defense rank map by team and position
     const defRankMap = new Map<string, number>();
@@ -107,13 +121,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Upsert to database
-    const { error: upsertError } = await supabase
-      .from('team_sos')
-      .upsert(teamSosData, { onConflict: 'team,season,position' });
+    // Upsert to database in chunks to avoid timeout
+    console.log(`Upserting ${teamSosData.length} team-position combinations...`);
+    const chunkSize = 50;
+    for (let i = 0; i < teamSosData.length; i += chunkSize) {
+      const chunk = teamSosData.slice(i, i + chunkSize);
+      const { error: upsertError } = await supabase
+        .from('team_sos')
+        .upsert(chunk, { onConflict: 'team,season,position' });
 
-    if (upsertError) {
-      throw upsertError;
+      if (upsertError) {
+        console.error(`Upsert error on chunk ${i / chunkSize + 1}:`, upsertError);
+        throw upsertError;
+      }
     }
 
     console.log(`Successfully computed SOS for ${teamSosData.length} team-position combinations`);
