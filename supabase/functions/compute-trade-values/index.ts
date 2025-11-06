@@ -90,20 +90,20 @@ serve(async (req) => {
           team: p.team,
           projSum: 0,
           projCount: 0,
-          ros_sos_rank: null,
-          playoff_sos_rank: null
+          ros_values: [] as number[],
+          po_values: [] as number[],
         };
       }
       const proj = Number(p.pts_std || 0);
       byPlayerProj[p.player_id].projSum += proj;
       byPlayerProj[p.player_id].projCount += 1;
 
-      // Take the first non-null SOS values (they're team-level, same for all weeks)
-      if (p.ros_sos_rank != null && byPlayerProj[p.player_id].ros_sos_rank === null) {
-        byPlayerProj[p.player_id].ros_sos_rank = Number(p.ros_sos_rank);
+      // Collect all non-null SOS values and pick the most frequent later (mode)
+      if (p.ros_sos_rank != null) {
+        byPlayerProj[p.player_id].ros_values.push(Number(p.ros_sos_rank));
       }
-      if (p.playoff_sos_rank != null && byPlayerProj[p.player_id].playoff_sos_rank === null) {
-        byPlayerProj[p.player_id].playoff_sos_rank = Number(p.playoff_sos_rank);
+      if (p.playoff_sos_rank != null) {
+        byPlayerProj[p.player_id].po_values.push(Number(p.playoff_sos_rank));
       }
     }
 
@@ -124,19 +124,31 @@ serve(async (req) => {
       return (rank - 16.5) / 15.5;
     };
 
+    // Pick the most frequent value (mode) among provided SOS ranks
+    const pickMode = (values: number[]): number | null => {
+      if (!values || values.length === 0) return null;
+      const counts = new Map<number, number>();
+      for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
+      let best: number | null = null;
+      let bestCount = 0;
+      for (const [v, c] of counts.entries()) {
+        if (c > bestCount) { best = v; bestCount = c; }
+      }
+      return best;
+    };
     // Compute raw values per player
     const rows: any[] = [];
 
     for (const [pid, agg] of Object.entries(byPlayerProj)) {
-      const { player_name, position, team, projSum, projCount, ros_sos_rank, playoff_sos_rank } = agg;
+      const { player_name, position, team, projSum, projCount, ros_values, po_values } = agg;
       if (!position || !player_name) continue;
 
       const projROSppg = projCount ? projSum / projCount : 0;
       const actual = actualSummary[pid] || { recent: 0, season: 0 };
       
-      // Use the SOS ranks directly (no averaging needed since they're team-level)
-      const avgReg = ros_sos_rank ?? 16;
-      const avgPO = playoff_sos_rank ?? 16;
+      // Use mode of SOS ranks recorded in projections (team-level constants)
+      const avgReg = pickMode(ros_values) ?? 16;
+      const avgPO = pickMode(po_values) ?? 16;
       const sosRegNorm = normSoS(avgReg);
       const sosPONorm = normSoS(avgPO);
 
