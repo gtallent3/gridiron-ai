@@ -213,9 +213,10 @@ serve(async (req) => {
       const totalProjPts = nonByeProjs.reduce((sum, p) => sum + Number(p.points_ppr || 0), 0);
       const avgProjectedPpgRos = nonByeProjs.length > 0 ? totalProjPts / nonByeProjs.length : 0;
 
-      // Calculate average actual PPG from past weeks
-      const totalActualPts = acts.reduce((sum, a) => sum + Number(a.points_ppr || 0), 0);
-      const avgActualPpg = acts.length > 0 ? totalActualPts / acts.length : 0;
+      // Calculate average actual PPG from past weeks (only count games actually played)
+      const gamesPlayed = acts.filter(a => Number(a.points_ppr || 0) > 0);
+      const totalActualPts = gamesPlayed.reduce((sum, a) => sum + Number(a.points_ppr || 0), 0);
+      const avgActualPpg = gamesPlayed.length > 0 ? totalActualPts / gamesPlayed.length : 0;
 
       // Debug counts
       if (projs.length > 0) debugCounts.withProjs++; else debugCounts.noProjs++;

@@ -78,7 +78,7 @@ serve(async (req) => {
       if (actuals.length < pageSize) break;
     }
 
-    // Fetch projections for current and future weeks (fetch all records with range)
+    // Fetch projections for ALL weeks (to fill in missing injury/bye data for past weeks)
     let allProjections: any[] = [];
     let projectionsPage = 0;
     
@@ -87,7 +87,6 @@ serve(async (req) => {
         .from('sleeper_projections')
         .select('*')
         .eq('season', season)
-        .gte('week', currentWeek)
         .in('position', ['QB', 'RB', 'WR', 'TE'])
         .not('team', 'is', null)
         .range(projectionsPage * pageSize, (projectionsPage + 1) * pageSize - 1);
@@ -143,7 +142,7 @@ serve(async (req) => {
       });
     }
 
-    // Add projections (current and future weeks) - only if not already present from actuals
+    // Add projections - fill in missing weeks for injured/bye players
     for (const proj of allProjections) {
       const key = `${proj.player_id}-${proj.week}-${proj.season}`;
       
@@ -163,6 +162,10 @@ serve(async (req) => {
         }
       }
       
+      // For past weeks (< currentWeek), mark as actual to indicate it's historical
+      // but keep points at 0 or projection value to indicate injury/DNP
+      const isPastWeek = proj.week < currentWeek;
+      
       poolMap.set(key, {
         player_id: proj.player_id,
         player_name: proj.player_name,
@@ -171,7 +174,7 @@ serve(async (req) => {
         week: proj.week,
         season: proj.season,
         points_ppr: proj.pts_ppr || 0,
-        is_actual: false,
+        is_actual: isPastWeek, // Mark past weeks as actual (even if they're projections)
         passing_yards: proj.pass_yd || 0,
         passing_tds: proj.pass_td || 0,
         passing_ints: proj.pass_int || 0,
