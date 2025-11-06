@@ -19,7 +19,7 @@ serve(async (req) => {
 
     console.log('Starting trade value computation...');
 
-    // Determine current week from actual stats (max week with actuals + 1)
+    // Determine current week from actual stats (max week with actuals)
     const { data: actualsWeek } = await supabase
       .from('nfl_fantasy_points')
       .select('week')
@@ -34,307 +34,160 @@ serve(async (req) => {
       );
     }
 
-    const currentWeek = actualsWeek[0].week + 1;
-    console.log(`Current week: ${currentWeek} (based on max actual stats week ${actualsWeek[0].week})`);
+    const lastCompletedWeek = actualsWeek[0].week;
+    const currentWeek = lastCompletedWeek + 1;
+    console.log(`Current week: ${currentWeek} (last completed: ${lastCompletedWeek})`);
 
-    // Fetch actual fantasy points (weeks < currentWeek)
+    // Fetch actual PPR fantasy points (completed weeks only)
     const { data: actuals } = await supabase
       .from('nfl_fantasy_points')
-      .select('player_id, player_name, position, team, week, fantasy_points_std')
+      .select('player_id, player_name, position, team, week, fantasy_points_ppr')
       .eq('season', 2025)
-      .lt('week', currentWeek);
+      .lte('week', lastCompletedWeek);
 
-    // Fetch ROS projections (weeks >= currentWeek)
+    // Fetch projected PPR points for remaining season
     const { data: projections } = await supabase
       .from('sleeper_projections')
-      .select('player_id, player_name, position, team, week, pts_std, ros_sos_rank, playoff_sos_rank')
+      .select('player_id, player_name, position, team, week, pts_ppr')
       .eq('season', 2025)
       .gte('week', currentWeek);
 
-    // Fetch injury status from player_valuations (any recent injury status)
-    const { data: injuryData } = await supabase
-      .from('player_valuations')
-      .select('player_id, injury_status')
-      .eq('season', 2025)
-      .in('injury_status', ['IR', 'Out', 'Doubtful'])
-      .order('week', { ascending: false });
-    
-    // Deduplicate by player_id (keep most recent)
-    const uniqueInjuries = new Map();
-    for (const p of injuryData || []) {
-      if (!uniqueInjuries.has(p.player_id)) {
-        uniqueInjuries.set(p.player_id, p.injury_status);
-      }
-    }
-    
-    const injuredPlayers = new Set(uniqueInjuries.keys());
-    console.log(`Found ${injuredPlayers.size} injured players (IR/Out/Doubtful)`);
+    console.log(`Fetched ${actuals?.length || 0} actual PPR records, ${projections?.length || 0} projected PPR records`);
 
-    // Fetch team-level SOS as fallback
-    const { data: teamSOS } = await supabase
-      .from('team_sos')
-      .select('team, position, ros_sos_rank, playoff_sos_rank');
+    // Build actual points by player
+    const playerData: Record<string, {
+      player_id: string;
+      player_name: string;
+      position: string;
+      team: string;
+      actual_weeks: number[];
+      actual_total: number;
+      projected_weeks: number[];
+      projected_total: number;
+    }> = {};
 
-    const teamSOSMap: Record<string, { ros: number | null; po: number | null }> = {};
-    for (const row of teamSOS || []) {
-      // @ts-ignore - row is a generic object from Supabase
-      if (!row.team || !row.position) continue;
-      // @ts-ignore - access fields from row
-      teamSOSMap[`${row.team}-${row.position}`] = {
-        // @ts-ignore
-        ros: row.ros_sos_rank ?? null,
-        // @ts-ignore
-        po: row.playoff_sos_rank ?? null,
-      };
-    }
-
-    console.log(`Fetched ${actuals?.length || 0} actual records, ${projections?.length || 0} projections, ${teamSOS?.length || 0} team SOS`);
-    // Build actual points summary by player
-    const actualSummary: Record<string, { recent: number; season: number }> = {};
-    const byPlayerActual: Record<string, Array<{ week: number; pts: number }>> = {};
-    const playerMeta: Record<string, { player_name: string | null; position: string | null; team: string | null }> = {};
-
+    // Process actuals
     for (const a of actuals || []) {
-      if (!a.player_id || a.week >= currentWeek) continue;
-      if (!byPlayerActual[a.player_id]) byPlayerActual[a.player_id] = [];
-      if (!playerMeta[a.player_id]) {
-        // Capture latest known metadata from actuals
-        // @ts-ignore - dynamic fields from Supabase
-        playerMeta[a.player_id] = { player_name: a.player_name || null, position: a.position || null, team: a.team || null };
-      }
-      const pts = Number(a.fantasy_points_std || 0);
-      byPlayerActual[a.player_id].push({ week: a.week, pts });
-    }
-
-    for (const [pid, weeks] of Object.entries(byPlayerActual)) {
-      weeks.sort((x, y) => x.week - y.week);
-      const last3 = weeks.slice(-3).map(w => w.pts);
-      const recent = last3.length ? last3.reduce((a, b) => a + b, 0) / last3.length : 0;
-      const season = weeks.length ? weeks.reduce((a, b) => a + b.pts, 0) / weeks.length : 0;
-      actualSummary[pid] = { recent, season };
-    }
-
-    // Build ROS projection summary by player - only include players with teams
-    const byPlayerProj: Record<string, any> = {};
-    let week15Count = 0;
-    let week15WithSOS = 0;
-    
-    for (const p of projections || []) {
-      if (!p.player_id || p.week < currentWeek) continue;
-      if (!p.team || p.team === '') continue; // Skip players without teams
+      if (!a.player_id || !a.player_name || !a.position) continue;
       
-      if (!byPlayerProj[p.player_id]) {
-        byPlayerProj[p.player_id] = {
+      if (!playerData[a.player_id]) {
+        playerData[a.player_id] = {
+          player_id: a.player_id,
+          player_name: a.player_name,
+          position: a.position,
+          team: a.team || '',
+          actual_weeks: [],
+          actual_total: 0,
+          projected_weeks: [],
+          projected_total: 0,
+        };
+      }
+      
+      const pts = Number(a.fantasy_points_ppr || 0);
+      playerData[a.player_id].actual_weeks.push(a.week);
+      playerData[a.player_id].actual_total += pts;
+    }
+
+    // Process projections
+    for (const p of projections || []) {
+      if (!p.player_id || !p.player_name || !p.position) continue;
+      
+      if (!playerData[p.player_id]) {
+        playerData[p.player_id] = {
           player_id: p.player_id,
           player_name: p.player_name,
           position: p.position,
-          team: p.team,
-          projSum: 0,
-          projCount: 0,
-          // Keep week 15 explicitly when available and also collect all values
-          ros_sos_rank_w15: null as number | null,
-          playoff_sos_rank_w15: null as number | null,
-          ros_values: [] as number[],
-          po_values: [] as number[],
+          team: p.team || '',
+          actual_weeks: [],
+          actual_total: 0,
+          projected_weeks: [],
+          projected_total: 0,
         };
       }
-      const proj = Number(p.pts_std || 0);
-      byPlayerProj[p.player_id].projSum += proj;
-      byPlayerProj[p.player_id].projCount += 1;
-
-      // Always collect values across weeks
-      if (p.ros_sos_rank != null) byPlayerProj[p.player_id].ros_values.push(Number(p.ros_sos_rank));
-      if (p.playoff_sos_rank != null) byPlayerProj[p.player_id].po_values.push(Number(p.playoff_sos_rank));
-
-      // Prefer week 15 SOS values (byes end at week 14)
-      if (p.week === 15) {
-        week15Count++;
-        if (p.ros_sos_rank != null) {
-          byPlayerProj[p.player_id].ros_sos_rank_w15 = Number(p.ros_sos_rank);
-          week15WithSOS++;
-        }
-        if (p.playoff_sos_rank != null) {
-          byPlayerProj[p.player_id].playoff_sos_rank_w15 = Number(p.playoff_sos_rank);
-        }
+      
+      const pts = Number(p.pts_ppr || 0);
+      playerData[p.player_id].projected_weeks.push(p.week);
+      playerData[p.player_id].projected_total += pts;
+      
+      // Update team if missing from actuals
+      if (!playerData[p.player_id].team && p.team) {
+        playerData[p.player_id].team = p.team;
       }
     }
 
-    // Ensure active players from actuals are included even if missing projections
-    for (const [pid, _stats] of Object.entries(actualSummary)) {
-      if (!byPlayerProj[pid]) {
-        const meta = playerMeta[pid];
-        if (!meta || !meta.team || !meta.position) continue;
-        byPlayerProj[pid] = {
-          player_id: pid,
-          player_name: meta.player_name,
-          position: meta.position,
-          team: meta.team,
-          projSum: 0,
-          projCount: 0,
-          ros_sos_rank_w15: null as number | null,
-          playoff_sos_rank_w15: null as number | null,
-          ros_values: [] as number[],
-          po_values: [] as number[],
-        };
-      }
-    }
-
-    console.log(`Processed ${week15Count} week 15 records, ${week15WithSOS} had SOS data`);
-    
-    // Filter out players with no SOS data at all (but allow team-level SOS fallback)
-    const validPlayers = Object.entries(byPlayerProj).filter(([pid, agg]) => {
-      // Must have a team
-      if (!agg.team || agg.team === '' || !agg.position) return false;
-      const key = `${agg.team}-${agg.position}`;
-      const hasTeamSOS = (teamSOSMap[key]?.ros ?? null) != null || (teamSOSMap[key]?.po ?? null) != null;
-      return hasTeamSOS || agg.ros_values.length > 0 || agg.po_values.length > 0 || agg.ros_sos_rank_w15 != null || agg.playoff_sos_rank_w15 != null;
-    });
-    
-    console.log(`Filtered from ${Object.keys(byPlayerProj).length} to ${validPlayers.length} players with teams and SOS data`);
-    
-    // Sample a few players to check SOS values
-    const samplePlayers = validPlayers.slice(0, 3).map(([pid, agg]) => agg);
-    for (const sp of samplePlayers) {
-      console.log(`Sample: ${sp.player_name} - W15 ROS: ${sp.ros_sos_rank_w15}, W15 PO: ${sp.playoff_sos_rank_w15}, All ROS: [${sp.ros_values.slice(0,3).join(',')}], All PO: [${sp.po_values.slice(0,3).join(',')}]`);
-    }
-
-    // 2025 NFL Bye Week Schedule (hardcoded since team_schedules doesn't have bye data)
-    const byeWeekSchedule: Record<string, number> = {
-      'ATL': 5, 'CHI': 5, 'GB': 5, 'PIT': 5,
-      'HOU': 6, 'MIN': 6,
-      'BAL': 7, 'BUF': 7,
-      'ARI': 8, 'DET': 8, 'JAX': 8, 'LV': 8, 'LAR': 8, 'SEA': 8,
-      'CLE': 9, 'NYJ': 9, 'PHI': 9, 'TB': 9,
-      'CIN': 10, 'DAL': 10, 'KC': 10, 'TEN': 10,
-      'IND': 11, 'NO': 11,
-      'DEN': 12, 'LAC': 12, 'MIA': 12, 'WAS': 12,
-      'CAR': 14, 'NE': 14, 'NYG': 14, 'SF': 14,
-    };
-
-    // Build bye adjustment by team
-    const byeAdjByTeam: Record<string, number> = {};
-    for (const [team, byeWeek] of Object.entries(byeWeekSchedule)) {
-      let adj = 1.0;
-      if (byeWeek < currentWeek) adj = 1.05;  // Bye already passed - slight boost
-      else if (byeWeek >= currentWeek) adj = 0.9;  // Bye upcoming - slight penalty
-      byeAdjByTeam[team] = adj;
-    }
-    
-    console.log(`Applied bye week adjustments for ${Object.keys(byeAdjByTeam).length} teams (current week: ${currentWeek})`);
-
-    // Helper to normalize SoS rank (1-32) to -1 to +1
-    const normSoS = (rank: number) => {
-      if (!rank || rank < 1 || rank > 32) return 0;
-      return (rank - 16.5) / 15.5;
-    };
-
-    // Pick the most frequent value (mode) among provided SOS ranks
-    const pickMode = (values: number[]): number | null => {
-      if (!values || values.length === 0) return null;
-      const counts = new Map<number, number>();
-      for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
-      let best: number | null = null;
-      let bestCount = 0;
-      for (const [v, c] of counts.entries()) {
-        if (c > bestCount) { best = v; bestCount = c; }
-      }
-      return best;
-    };
-    // Compute raw values per player
+    // Compute trade values
     const rows: any[] = [];
-    let defaultedToSixteen = 0;
-    let usedWeek15 = 0;
-    let usedMode = 0;
-    let usedTeamSOS = 0;
-
-    for (const [pid, agg] of validPlayers) {
-      const { player_name, position, team, projSum, projCount, ros_sos_rank_w15, playoff_sos_rank_w15, ros_values, po_values } = agg;
-      if (!position || !player_name) continue;
-
-      // Skip injured players entirely
-      if (injuredPlayers.has(pid)) {
-        console.log(`Skipping ${player_name} - injured (IR/Out/Doubtful)`);
-        continue;
-      }
-
-      const projROSppg = projCount ? projSum / projCount : 0;
+    
+    for (const [pid, data] of Object.entries(playerData)) {
+      // Skip if no position or invalid position
+      if (!data.position || !['QB', 'RB', 'WR', 'TE'].includes(data.position)) continue;
       
-      // Skip players with no meaningful ROS projection (0 or near-zero indicates injury/inactive)
-      if (projROSppg < 0.1) {
-        console.log(`Skipping ${player_name} - no ROS projection (${projROSppg.toFixed(2)} ppg)`);
-        continue;
-      }
+      // Skip if no team (FA/retired players)
+      if (!data.team || data.team === '') continue;
       
-      const actual = actualSummary[pid] || { recent: 0, season: 0 };
+      // Calculate actual PPG
+      const actualPPG = data.actual_weeks.length > 0 
+        ? data.actual_total / data.actual_weeks.length 
+        : 0;
       
-      // Prefer week 15 SOS ranks; fall back to mode across weeks; then team-level SOS; default 16
-      const key = `${team}-${position}`;
-      const teamFallbackReg = teamSOSMap[key]?.ros ?? null;
-      const teamFallbackPO = teamSOSMap[key]?.po ?? null;
-
-      const avgReg = (ros_sos_rank_w15 ?? pickMode(ros_values) ?? teamFallbackReg ?? 16);
-      const avgPO = (playoff_sos_rank_w15 ?? pickMode(po_values) ?? teamFallbackPO ?? 16);
+      // Calculate projected PPG for ROS
+      const projectedPPG = data.projected_weeks.length > 0 
+        ? data.projected_total / data.projected_weeks.length 
+        : 0;
       
-      // Track which source was used
-      if (ros_sos_rank_w15 != null) usedWeek15++;
-      else if (pickMode(ros_values) != null) usedMode++;
-      else if (teamFallbackReg != null) usedTeamSOS++;
-      else defaultedToSixteen++;
-      const sosRegNorm = normSoS(avgReg);
-      const sosPONorm = normSoS(avgPO);
-
-      // Position-specific scarcity multipliers (minimal impact)
-      let scarcity = 1.0;
-      let sosMult = 0.03;  // Reduced from 0.1-0.15
-      let sosPlayoffMult = 0.05;  // Reduced from 0.08-0.25
-
-      if (position === 'QB') {
-        scarcity = 1.05;
-      } else if (position === 'RB') {
-        scarcity = 1.03;
-      } else if (position === 'WR') {
-        scarcity = 1.02;
-      } else if (position === 'TE') {
-        scarcity = 1.08;
+      // Skip players with no data
+      if (actualPPG === 0 && projectedPPG === 0) continue;
+      
+      // Trade value calculation:
+      // If player has both actual and projected: weight 60% projected, 40% actual
+      // If only projected (rookies, etc): use projected only
+      // If only actual (injured/no projections): use actual only
+      let tradeValue: number;
+      
+      if (data.actual_weeks.length > 0 && data.projected_weeks.length > 0) {
+        tradeValue = (projectedPPG * 0.6) + (actualPPG * 0.4);
+      } else if (data.projected_weeks.length > 0) {
+        tradeValue = projectedPPG;
       } else {
-        continue;
+        tradeValue = actualPPG;
       }
-
-      const byeAdj = byeAdjByTeam[team] ?? 1.0;
-      // Minimal SoS adjustment (max 8% swing instead of 40%)
-      const sosAdj = 1 + (sosRegNorm * sosMult) + (sosPONorm * sosPlayoffMult);
-
-      // Core formula: heavily weight ROS projection and actual season average
-      // 70% ROS projection, 30% actual season average
-      const baseVal = (projROSppg * 0.70) + (actual.season * 0.30);
-
-      // Apply minimal adjustments
-      let raw = baseVal * sosAdj * byeAdj * scarcity;
-
-      // Floor for very low performers
-      if (baseVal < 3) raw *= 0.5;
-
+      
+      // Calculate last 3 weeks PPG for meta_recent_ppg
+      const recentWeeks = data.actual_weeks.slice(-3);
+      let recentPPG = 0;
+      if (recentWeeks.length > 0) {
+        let recentTotal = 0;
+        for (const a of actuals || []) {
+          if (a.player_id === pid && recentWeeks.includes(a.week)) {
+            recentTotal += Number(a.fantasy_points_ppr || 0);
+          }
+        }
+        recentPPG = recentTotal / recentWeeks.length;
+      }
+      
       rows.push({
         player_id: pid,
-        player_name,
-        position,
-        team,
-        raw_value: Math.max(raw, 0),
-        meta_proj_ros_ppg: Number(projROSppg.toFixed(2)),
-        meta_recent_ppg: Number((actual.recent || 0).toFixed(2)),
-        meta_season_ppg: Number((actual.season || 0).toFixed(2)),
-        meta_sos_reg_rank: Number(avgReg.toFixed(2)),
-        meta_sos_po_rank: Number(avgPO.toFixed(2)),
-        meta_bye_adj: Number(byeAdj.toFixed(3)),
-        snapshot_date: new Date().toISOString().slice(0,10),
+        player_name: data.player_name,
+        position: data.position,
+        team: data.team,
+        trade_value: Number(tradeValue.toFixed(2)),
+        raw_value: Number(tradeValue.toFixed(2)),
+        meta_proj_ros_ppg: Number(projectedPPG.toFixed(2)),
+        meta_recent_ppg: Number(recentPPG.toFixed(2)),
+        meta_season_ppg: Number(actualPPG.toFixed(2)),
+        meta_sos_reg_rank: null,
+        meta_sos_po_rank: null,
+        meta_bye_adj: null,
+        snapshot_date: new Date().toISOString().slice(0, 10),
         current_week: currentWeek
       });
     }
 
-    // Sort all rows by raw_value descending for consistent ranking
-    rows.sort((a, b) => b.raw_value - a.raw_value);
+    // Sort by trade value descending
+    rows.sort((a, b) => b.trade_value - a.trade_value);
+    
+    console.log(`Computed trade values for ${rows.length} players`);
 
-    // Normalize and scale ALL positions together to 1-100
     if (rows.length === 0) {
       return new Response(
         JSON.stringify({ error: 'No players to compute' }),
@@ -342,42 +195,7 @@ serve(async (req) => {
       );
     }
 
-    // Get the overall top value across all positions
-    const topValue = rows[0].raw_value;
-    if (topValue === 0) {
-      return new Response(
-        JSON.stringify({ error: 'No valid player values' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Apply logarithmic scaling to spread values from 1-100
-    // This ensures top players are near 100 but not all exactly 100
-    // and lower-tier players spread nicely down to 1
-    const scaledOut: any[] = [];
-    
-    for (const r of rows) {
-      if (r.raw_value === 0) {
-        r.trade_value = 1;
-      } else {
-        // Calculate ratio relative to top player
-        const ratio = r.raw_value / topValue;
-        
-        // Apply power curve for better distribution
-        // Top player: ratio=1.0 → curved ≈ 1.0 → value ≈ 100
-        // 50% of top: ratio=0.5 → curved ≈ 0.7 → value ≈ 70
-        // 25% of top: ratio=0.25 → curved ≈ 0.5 → value ≈ 50
-        const curved = Math.pow(ratio, 0.6);
-        
-        // Scale to 1-100
-        let tv = 1 + (curved * 99);
-        tv = Math.max(1, Math.min(tv, 100));
-        r.trade_value = Number(tv.toFixed(1));
-      }
-      scaledOut.push(r);
-    }
-
-    // Save to trade_value_weekly - delete today's snapshot first to avoid player_id conflicts
+    // Save to trade_value_weekly - delete today's snapshot first
     const today = new Date().toISOString().slice(0, 10);
     console.log(`Deleting existing records for snapshot_date: ${today}`);
     
@@ -394,11 +212,11 @@ serve(async (req) => {
       );
     }
     
-    console.log(`Inserting ${scaledOut.length} trade values...`);
+    console.log(`Inserting ${rows.length} trade values...`);
     
     const { error: insertError } = await supabase
       .from('trade_value_weekly')
-      .insert(scaledOut);
+      .insert(rows);
 
     if (insertError) {
       console.error('Insert error:', insertError);
@@ -409,12 +227,11 @@ serve(async (req) => {
     }
 
     console.log('Trade values computed successfully');
-    console.log(`SOS source breakdown: Week15=${usedWeek15}, Mode=${usedMode}, TeamSOS=${usedTeamSOS}, Default16=${defaultedToSixteen}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        count: scaledOut.length,
+        count: rows.length,
         current_week: currentWeek
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
