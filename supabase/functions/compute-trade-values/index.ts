@@ -75,11 +75,13 @@ serve(async (req) => {
       actualSummary[pid] = { recent, season };
     }
 
-    // Build ROS projection summary by player
+    // Build ROS projection summary by player - only include players with teams
     const byPlayerProj: Record<string, any> = {};
     
     for (const p of projections || []) {
       if (!p.player_id || p.week < currentWeek) continue;
+      if (!p.team || p.team === '') continue; // Skip players without teams
+      
       if (!byPlayerProj[p.player_id]) {
         byPlayerProj[p.player_id] = {
           player_id: p.player_id,
@@ -191,7 +193,10 @@ serve(async (req) => {
       });
     }
 
-    // Normalize and scale by position
+    // Sort all rows by raw_value descending for consistent ranking
+    rows.sort((a, b) => b.raw_value - a.raw_value);
+
+    // Normalize and scale by position using fixed baselines
     const byPos: Record<string, any[]> = {};
     for (const r of rows) {
       if (!byPos[r.position]) byPos[r.position] = [];
@@ -203,36 +208,26 @@ serve(async (req) => {
     for (const [pos, list] of Object.entries(byPos)) {
       if (list.length === 0) continue;
 
-      const vals = list.map(r => r.raw_value);
-      const minV = Math.min(...vals);
-      const maxV = Math.max(...vals);
-      const range = Math.max(1e-9, maxV - minV);
-
-      // Normalize to 0-1
-      for (const r of list) {
-        r._norm = (r.raw_value - minV) / range;
-      }
+      // Sort by raw value for deterministic ordering
+      list.sort((a, b) => b.raw_value - a.raw_value);
 
       const posMax = (pos === 'QB' || pos === 'TE') ? 50 : 100;
       const topN = (pos === 'QB' || pos === 'TE') ? 20 : 30;
-      const targetAvg = pos === 'QB' || pos === 'TE' ? 20 : (pos === 'RB' ? 25 : 30);
+      
+      // Use fixed baseline: top player = posMax, scale down from there
+      const topValue = list[0].raw_value;
+      if (topValue === 0) continue;
 
-      // Map to 1..posMax
-      for (const r of list) {
-        r.trade_value = 1 + r._norm * (posMax - 1);
-      }
-
-      // Calibrate average of top N
-      const sorted = [...list].sort((a, b) => b.trade_value - a.trade_value);
-      const top = sorted.slice(0, Math.min(topN, sorted.length));
-      const currentAvg = top.length ? top.reduce((a, b) => a + b.trade_value, 0) / top.length : 1;
-      const factor = currentAvg > 0 ? targetAvg / currentAvg : 1;
-
-      for (const r of list) {
-        let tv = r.trade_value * factor;
+      // Assign values proportionally to raw_value, with top player = posMax
+      for (let i = 0; i < list.length; i++) {
+        const r = list[i];
+        // Use exponential decay to spread values: top players get high values, bottom gets ~1
+        const ratio = r.raw_value / topValue;
+        // Apply power curve to create better separation at top
+        const curved = Math.pow(ratio, 0.7);
+        let tv = 1 + (curved * (posMax - 1));
         tv = Math.max(1, Math.min(tv, posMax));
         r.trade_value = Number(tv.toFixed(2));
-        delete r._norm;
         scaledOut.push(r);
       }
     }
