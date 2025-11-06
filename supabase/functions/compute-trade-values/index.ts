@@ -41,12 +41,14 @@ serve(async (req) => {
     const { data: actuals } = await supabase
       .from('nfl_fantasy_points')
       .select('player_id, player_name, position, team, week, fantasy_points_std')
+      .eq('season', 2025)
       .lt('week', currentWeek);
 
     // Fetch ROS projections (weeks >= currentWeek)
     const { data: projections } = await supabase
       .from('sleeper_projections')
       .select('player_id, player_name, position, team, week, pts_std, ros_sos_rank, playoff_sos_rank')
+      .eq('season', 2025)
       .gte('week', currentWeek);
 
     // Fetch team-level SOS as fallback
@@ -71,10 +73,16 @@ serve(async (req) => {
     // Build actual points summary by player
     const actualSummary: Record<string, { recent: number; season: number }> = {};
     const byPlayerActual: Record<string, Array<{ week: number; pts: number }>> = {};
+    const playerMeta: Record<string, { player_name: string | null; position: string | null; team: string | null }> = {};
 
     for (const a of actuals || []) {
       if (!a.player_id || a.week >= currentWeek) continue;
       if (!byPlayerActual[a.player_id]) byPlayerActual[a.player_id] = [];
+      if (!playerMeta[a.player_id]) {
+        // Capture latest known metadata from actuals
+        // @ts-ignore - dynamic fields from Supabase
+        playerMeta[a.player_id] = { player_name: a.player_name || null, position: a.position || null, team: a.team || null };
+      }
       const pts = Number(a.fantasy_points_std || 0);
       byPlayerActual[a.player_id].push({ week: a.week, pts });
     }
@@ -132,13 +140,35 @@ serve(async (req) => {
       }
     }
 
+    // Ensure active players from actuals are included even if missing projections
+    for (const [pid, _stats] of Object.entries(actualSummary)) {
+      if (!byPlayerProj[pid]) {
+        const meta = playerMeta[pid];
+        if (!meta || !meta.team || !meta.position) continue;
+        byPlayerProj[pid] = {
+          player_id: pid,
+          player_name: meta.player_name,
+          position: meta.position,
+          team: meta.team,
+          projSum: 0,
+          projCount: 0,
+          ros_sos_rank_w15: null as number | null,
+          playoff_sos_rank_w15: null as number | null,
+          ros_values: [] as number[],
+          po_values: [] as number[],
+        };
+      }
+    }
+
     console.log(`Processed ${week15Count} week 15 records, ${week15WithSOS} had SOS data`);
     
-    // Filter out players with no SOS data at all
+    // Filter out players with no SOS data at all (but allow team-level SOS fallback)
     const validPlayers = Object.entries(byPlayerProj).filter(([pid, agg]) => {
-      // Must have a team AND have SOS data
-      if (!agg.team || agg.team === '') return false;
-      return agg.ros_values.length > 0 || agg.po_values.length > 0 || agg.ros_sos_rank_w15 != null || agg.playoff_sos_rank_w15 != null;
+      // Must have a team
+      if (!agg.team || agg.team === '' || !agg.position) return false;
+      const key = `${agg.team}-${agg.position}`;
+      const hasTeamSOS = (teamSOSMap[key]?.ros ?? null) != null || (teamSOSMap[key]?.po ?? null) != null;
+      return hasTeamSOS || agg.ros_values.length > 0 || agg.po_values.length > 0 || agg.ros_sos_rank_w15 != null || agg.playoff_sos_rank_w15 != null;
     });
     
     console.log(`Filtered from ${Object.keys(byPlayerProj).length} to ${validPlayers.length} players with teams and SOS data`);
@@ -264,6 +294,7 @@ serve(async (req) => {
         meta_sos_reg_rank: Number(avgReg.toFixed(2)),
         meta_sos_po_rank: Number(avgPO.toFixed(2)),
         meta_bye_adj: Number(byeAdj.toFixed(3)),
+        snapshot_date: new Date().toISOString().slice(0,10),
         current_week: currentWeek
       });
     }
