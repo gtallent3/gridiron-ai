@@ -51,6 +51,25 @@ serve(async (req) => {
       .eq('season', 2025)
       .gte('week', currentWeek);
 
+    // Fetch injury status from player_valuations (any recent injury status)
+    const { data: injuryData } = await supabase
+      .from('player_valuations')
+      .select('player_id, injury_status')
+      .eq('season', 2025)
+      .in('injury_status', ['IR', 'Out', 'Doubtful'])
+      .order('week', { ascending: false });
+    
+    // Deduplicate by player_id (keep most recent)
+    const uniqueInjuries = new Map();
+    for (const p of injuryData || []) {
+      if (!uniqueInjuries.has(p.player_id)) {
+        uniqueInjuries.set(p.player_id, p.injury_status);
+      }
+    }
+    
+    const injuredPlayers = new Set(uniqueInjuries.keys());
+    console.log(`Found ${injuredPlayers.size} injured players (IR/Out/Doubtful)`);
+
     // Fetch team-level SOS as fallback
     const { data: teamSOS } = await supabase
       .from('team_sos')
@@ -232,7 +251,20 @@ serve(async (req) => {
       const { player_name, position, team, projSum, projCount, ros_sos_rank_w15, playoff_sos_rank_w15, ros_values, po_values } = agg;
       if (!position || !player_name) continue;
 
+      // Skip injured players entirely
+      if (injuredPlayers.has(pid)) {
+        console.log(`Skipping ${player_name} - injured (IR/Out/Doubtful)`);
+        continue;
+      }
+
       const projROSppg = projCount ? projSum / projCount : 0;
+      
+      // Skip players with no meaningful ROS projection (0 or near-zero indicates injury/inactive)
+      if (projROSppg < 0.1) {
+        console.log(`Skipping ${player_name} - no ROS projection (${projROSppg.toFixed(2)} ppg)`);
+        continue;
+      }
+      
       const actual = actualSummary[pid] || { recent: 0, season: 0 };
       
       // Prefer week 15 SOS ranks; fall back to mode across weeks; then team-level SOS; default 16
@@ -345,12 +377,15 @@ serve(async (req) => {
       scaledOut.push(r);
     }
 
-    // Save to trade_value_weekly
-    console.log(`Inserting ${scaledOut.length} trade values...`);
+    // Save to trade_value_weekly - upsert to handle existing records
+    console.log(`Upserting ${scaledOut.length} trade values...`);
     
     const { error: insertError } = await supabase
       .from('trade_value_weekly')
-      .upsert(scaledOut, { onConflict: 'player_id,snapshot_date' });
+      .upsert(scaledOut, { 
+        onConflict: 'player_id,snapshot_date',
+        ignoreDuplicates: false 
+      });
 
     if (insertError) {
       console.error('Insert error:', insertError);
