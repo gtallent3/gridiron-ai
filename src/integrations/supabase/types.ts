@@ -1357,6 +1357,7 @@ export type Database = {
           created_at: string | null
           id: string
           opponent: string | null
+          opponent_def_rank: number | null
           pass_int: number | null
           pass_td: number | null
           pass_yd: number | null
@@ -1381,6 +1382,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           opponent?: string | null
+          opponent_def_rank?: number | null
           pass_int?: number | null
           pass_td?: number | null
           pass_yd?: number | null
@@ -1405,6 +1407,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           opponent?: string | null
+          opponent_def_rank?: number | null
           pass_int?: number | null
           pass_td?: number | null
           pass_yd?: number | null
