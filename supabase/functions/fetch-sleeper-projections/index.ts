@@ -224,6 +224,21 @@ serve(async (req) => {
           defRankMap.set(key, dr.rank);
         });
 
+        // Fallback: Season-to-date strength of schedule when weekly rankings missing
+        const { data: sosData } = await supabase
+          .from('strength_of_schedule')
+          .select('team, def_rank_qb, def_rank_rb, def_rank_wr, def_rank_te')
+          .eq('season', season)
+          .in('team', opponents);
+
+        const sosRankMap = new Map<string, number>();
+        (sosData || []).forEach((row: any) => {
+          if (row.def_rank_qb != null) sosRankMap.set(`${row.team}:QB`, row.def_rank_qb);
+          if (row.def_rank_rb != null) sosRankMap.set(`${row.team}:RB`, row.def_rank_rb);
+          if (row.def_rank_wr != null) sosRankMap.set(`${row.team}:WR`, row.def_rank_wr);
+          if (row.def_rank_te != null) sosRankMap.set(`${row.team}:TE`, row.def_rank_te);
+        });
+
         // Add opponent and defensive rank to projections
         projections.forEach(proj => {
           if (proj.team) {
@@ -231,10 +246,19 @@ serve(async (req) => {
             if (opponent) {
               proj.opponent = opponent;
               if (proj.position) {
-                const rankKey = `${opponent}:${proj.position}`;
-                const defRank = defRankMap.get(rankKey);
+                const pos = String(proj.position).toUpperCase();
+                const rankKey = `${opponent}:${pos}`;
+                let defRank = defRankMap.get(rankKey);
                 if (defRank !== undefined) {
                   proj.opponent_def_rank = defRank;
+                } else {
+                  // Fallback to season-to-date strength of schedule for supported positions
+                  if (pos === 'QB' || pos === 'RB' || pos === 'WR' || pos === 'TE') {
+                    const sosRank = sosRankMap.get(rankKey);
+                    if (sosRank !== undefined) {
+                      proj.opponent_def_rank = sosRank;
+                    }
+                  }
                 }
               }
             }
