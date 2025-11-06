@@ -125,8 +125,15 @@ serve(async (req) => {
 
     console.log(`Fetched ${allActuals.length} actual, ${allPastProjections.length} past-projection (for DNP fill) and ${allProjections.length} future-projection records`);
 
+    // Normalize player name by removing suffixes
+    const normalizeName = (name: string): string => {
+      return name
+        .replace(/\s+(Jr\.?|Sr\.?|II|III|IV|V)$/i, '')
+        .trim();
+    };
+
     // Build player pool records using a Map to ensure uniqueness
-    // Key format: "player_id-week-season"
+    // Key format: "normalized_name:position-week-season" to handle cross-source player_id differences
     const poolMap = new Map<string, any>();
 
     // Add actual stats (past weeks) - these take priority
@@ -142,7 +149,8 @@ serve(async (req) => {
         }
       }
       
-      const key = `${actual.player_id}-${actual.week}-${actual.season}`;
+      const normalizedName = normalizeName(actual.player_name);
+      const key = `${normalizedName}:${actual.position}-${actual.week}-${actual.season}`;
       poolMap.set(key, {
         player_id: actual.player_id,
         player_name: actual.player_name,
@@ -168,7 +176,8 @@ serve(async (req) => {
 
     // Add filler projections for PAST weeks (only where there is no actual record)
     for (const proj of allPastProjections) {
-      const key = `${proj.player_id}-${proj.week}-${proj.season}`;
+      const normalizedName = normalizeName(proj.player_name);
+      const key = `${normalizedName}:${proj.position}-${proj.week}-${proj.season}`;
       if (poolMap.has(key)) continue; // already have an actual
 
       const normalizedTeam = normalizeTeam(proj.team);
@@ -208,7 +217,8 @@ serve(async (req) => {
 
     // Add projections (CURRENT and FUTURE weeks) - used for ROS calculations only
     for (const proj of allProjections) {
-      const key = `${proj.player_id}-${proj.week}-${proj.season}`;
+      const normalizedName = normalizeName(proj.player_name);
+      const key = `${normalizedName}:${proj.position}-${proj.week}-${proj.season}`;
       // Skip if we somehow already have a record
       if (poolMap.has(key)) continue;
 
