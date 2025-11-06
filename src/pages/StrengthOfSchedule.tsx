@@ -131,7 +131,7 @@ export default function StrengthOfSchedulePage() {
     : sos.slice(0, 50); // Show first 50 if no team selected
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="container mx-auto p-6 pt-24 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Strength of Schedule</h1>
         <div className="flex gap-2">
