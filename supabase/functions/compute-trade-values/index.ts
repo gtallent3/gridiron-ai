@@ -54,8 +54,25 @@ serve(async (req) => {
       .select('team, week, opponent')
       .eq('opponent', 'BYE');
 
-    console.log(`Fetched ${actuals?.length || 0} actual records, ${projections?.length || 0} projections`);
+    // Fetch team-level SOS as fallback
+    const { data: teamSOS } = await supabase
+      .from('team_sos')
+      .select('team, position, ros_sos_rank, playoff_sos_rank');
 
+    const teamSOSMap: Record<string, { ros: number | null; po: number | null }> = {};
+    for (const row of teamSOS || []) {
+      // @ts-ignore - row is a generic object from Supabase
+      if (!row.team || !row.position) continue;
+      // @ts-ignore - access fields from row
+      teamSOSMap[`${row.team}-${row.position}`] = {
+        // @ts-ignore
+        ros: row.ros_sos_rank ?? null,
+        // @ts-ignore
+        po: row.playoff_sos_rank ?? null,
+      };
+    }
+
+    console.log(`Fetched ${actuals?.length || 0} actual records, ${projections?.length || 0} projections, ${teamSOS?.length || 0} team SOS`);
     // Build actual points summary by player
     const actualSummary: Record<string, { recent: number; season: number }> = {};
     const byPlayerActual: Record<string, Array<{ week: number; pts: number }>> = {};
@@ -90,22 +107,25 @@ serve(async (req) => {
           team: p.team,
           projSum: 0,
           projCount: 0,
-          ros_sos_rank: null,
-          playoff_sos_rank: null,
+          // Keep week 15 explicitly when available and also collect all values
+          ros_sos_rank_w15: null as number | null,
+          playoff_sos_rank_w15: null as number | null,
+          ros_values: [] as number[],
+          po_values: [] as number[],
         };
       }
       const proj = Number(p.pts_std || 0);
       byPlayerProj[p.player_id].projSum += proj;
       byPlayerProj[p.player_id].projCount += 1;
 
-      // Use week 15 SOS values (byes end at week 14, so week 15 is clean)
+      // Always collect values across weeks
+      if (p.ros_sos_rank != null) byPlayerProj[p.player_id].ros_values.push(Number(p.ros_sos_rank));
+      if (p.playoff_sos_rank != null) byPlayerProj[p.player_id].po_values.push(Number(p.playoff_sos_rank));
+
+      // Prefer week 15 SOS values (byes end at week 14)
       if (p.week === 15) {
-        if (p.ros_sos_rank != null) {
-          byPlayerProj[p.player_id].ros_sos_rank = Number(p.ros_sos_rank);
-        }
-        if (p.playoff_sos_rank != null) {
-          byPlayerProj[p.player_id].playoff_sos_rank = Number(p.playoff_sos_rank);
-        }
+        if (p.ros_sos_rank != null) byPlayerProj[p.player_id].ros_sos_rank_w15 = Number(p.ros_sos_rank);
+        if (p.playoff_sos_rank != null) byPlayerProj[p.player_id].playoff_sos_rank_w15 = Number(p.playoff_sos_rank);
       }
     }
 
@@ -126,19 +146,35 @@ serve(async (req) => {
       return (rank - 16.5) / 15.5;
     };
 
+    // Pick the most frequent value (mode) among provided SOS ranks
+    const pickMode = (values: number[]): number | null => {
+      if (!values || values.length === 0) return null;
+      const counts = new Map<number, number>();
+      for (const v of values) counts.set(v, (counts.get(v) || 0) + 1);
+      let best: number | null = null;
+      let bestCount = 0;
+      for (const [v, c] of counts.entries()) {
+        if (c > bestCount) { best = v; bestCount = c; }
+      }
+      return best;
+    };
     // Compute raw values per player
     const rows: any[] = [];
 
     for (const [pid, agg] of Object.entries(byPlayerProj)) {
-      const { player_name, position, team, projSum, projCount, ros_sos_rank, playoff_sos_rank } = agg;
+      const { player_name, position, team, projSum, projCount, ros_sos_rank_w15, playoff_sos_rank_w15, ros_values, po_values } = agg;
       if (!position || !player_name) continue;
 
       const projROSppg = projCount ? projSum / projCount : 0;
       const actual = actualSummary[pid] || { recent: 0, season: 0 };
       
-      // Use week 15 SOS ranks (default to 16 if not available)
-      const avgReg = ros_sos_rank ?? 16;
-      const avgPO = playoff_sos_rank ?? 16;
+      // Prefer week 15 SOS ranks; fall back to mode across weeks; then team-level SOS; default 16
+      const key = `${team}-${position}`;
+      const teamFallbackReg = teamSOSMap[key]?.ros ?? null;
+      const teamFallbackPO = teamSOSMap[key]?.po ?? null;
+
+      const avgReg = (ros_sos_rank_w15 ?? pickMode(ros_values) ?? teamFallbackReg ?? 16);
+      const avgPO = (playoff_sos_rank_w15 ?? pickMode(po_values) ?? teamFallbackPO ?? 16);
       const sosRegNorm = normSoS(avgReg);
       const sosPONorm = normSoS(avgPO);
 
