@@ -34,6 +34,8 @@ export default function TradeValues() {
       const { data, error } = await supabase
         .from('trade_value_weekly')
         .select('*')
+        .not('team', 'is', null)
+        .neq('team', '')
         .order('trade_value', { ascending: false });
 
       if (error) throw error;
