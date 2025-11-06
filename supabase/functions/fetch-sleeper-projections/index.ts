@@ -195,6 +195,54 @@ serve(async (req) => {
         const mappedCount = projections.filter(p => p.player_name).length;
         console.log(`Week ${week}: Mapped ${mappedCount}/${projections.length} player names (${playerDataMap.size} players found in DB)`);
 
+        // Lookup opponents from team_schedules
+        const teams = [...new Set(projections.map(p => p.team).filter(Boolean))];
+        const { data: scheduleData } = await supabase
+          .from('team_schedules')
+          .select('team, opponent')
+          .eq('season', season)
+          .eq('week', week)
+          .in('team', teams);
+
+        const opponentMap = new Map<string, string>();
+        (scheduleData || []).forEach(s => {
+          opponentMap.set(s.team, s.opponent);
+        });
+
+        // Lookup defensive rankings for opponents
+        const opponents = [...new Set(Array.from(opponentMap.values()))];
+        const { data: defRankData } = await supabase
+          .from('defensive_rankings')
+          .select('team, position, rank')
+          .eq('season', season)
+          .eq('week', week)
+          .in('team', opponents);
+
+        const defRankMap = new Map<string, number>();
+        (defRankData || []).forEach(dr => {
+          const key = `${dr.team}:${dr.position}`;
+          defRankMap.set(key, dr.rank);
+        });
+
+        // Add opponent and defensive rank to projections
+        projections.forEach(proj => {
+          if (proj.team) {
+            const opponent = opponentMap.get(proj.team);
+            if (opponent) {
+              proj.opponent = opponent;
+              if (proj.position) {
+                const rankKey = `${opponent}:${proj.position}`;
+                const defRank = defRankMap.get(rankKey);
+                if (defRank !== undefined) {
+                  proj.opponent_def_rank = defRank;
+                }
+              }
+            }
+          }
+        });
+
+        console.log(`Week ${week}: Added opponent data and defensive ranks to projections`);
+
         // Insert in smaller chunks to avoid CPU timeouts
         const chunkSize = 500;
         for (let i = 0; i < projections.length; i += chunkSize) {
