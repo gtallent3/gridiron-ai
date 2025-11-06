@@ -78,7 +78,7 @@ serve(async (req) => {
       if (actuals.length < pageSize) break;
     }
 
-    // Fetch projections ONLY for past weeks (to fill in missing injury/bye data)
+    // Fetch projections for current and future weeks (fetch all records with range)
     let allProjections: any[] = [];
     let projectionsPage = 0;
     
@@ -87,7 +87,7 @@ serve(async (req) => {
         .from('sleeper_projections')
         .select('*')
         .eq('season', season)
-        .lt('week', currentWeek)  // Only fetch past weeks
+        .gte('week', currentWeek)
         .in('position', ['QB', 'RB', 'WR', 'TE'])
         .not('team', 'is', null)
         .range(projectionsPage * pageSize, (projectionsPage + 1) * pageSize - 1);
@@ -130,7 +130,6 @@ serve(async (req) => {
         season: actual.season,
         points_ppr: actual.fantasy_points_ppr || 0,
         is_actual: true,
-        did_not_play: false, // Player was in the actual stats, so they played
         passing_yards: actual.passing_yards || 0,
         passing_tds: actual.passing_tds || 0,
         passing_ints: actual.passing_ints || 0,
@@ -144,7 +143,7 @@ serve(async (req) => {
       });
     }
 
-    // Add projections ONLY to fill missing past weeks (injury/DNP)
+    // Add projections (current and future weeks) - only if not already present from actuals
     for (const proj of allProjections) {
       const key = `${proj.player_id}-${proj.week}-${proj.season}`;
       
@@ -164,7 +163,6 @@ serve(async (req) => {
         }
       }
       
-      // These are all past weeks with missing actuals = player didn't play (injured/out)
       poolMap.set(key, {
         player_id: proj.player_id,
         player_name: proj.player_name,
@@ -173,8 +171,7 @@ serve(async (req) => {
         week: proj.week,
         season: proj.season,
         points_ppr: proj.pts_ppr || 0,
-        is_actual: true,  // Past week, so mark as actual
-        did_not_play: true,  // But player didn't play (used projection to fill gap)
+        is_actual: false,
         passing_yards: proj.pass_yd || 0,
         passing_tds: proj.pass_td || 0,
         passing_ints: proj.pass_int || 0,

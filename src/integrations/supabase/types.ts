@@ -589,7 +589,6 @@ export type Database = {
       player_pool: {
         Row: {
           created_at: string | null
-          did_not_play: boolean
           id: string
           is_actual: boolean
           opponent: string | null
@@ -613,7 +612,6 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
-          did_not_play?: boolean
           id?: string
           is_actual?: boolean
           opponent?: string | null
@@ -637,7 +635,6 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
-          did_not_play?: boolean
           id?: string
           is_actual?: boolean
           opponent?: string | null
