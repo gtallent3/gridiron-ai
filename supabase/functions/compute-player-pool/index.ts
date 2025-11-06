@@ -40,6 +40,20 @@ serve(async (req) => {
       return team;
     };
 
+    // Fetch team schedules to identify bye weeks
+    const { data: schedules, error: schedulesError } = await supabase
+      .from('team_schedules')
+      .select('team, week')
+      .eq('season', season);
+    
+    if (schedulesError) throw schedulesError;
+    
+    // Create a set of team-week combinations that have games
+    const teamWeeksWithGames = new Set<string>();
+    for (const schedule of schedules || []) {
+      teamWeeksWithGames.add(`${schedule.team}-${schedule.week}`);
+    }
+
     // Fetch actual stats for past weeks (fetch all records with range)
     let allActuals: any[] = [];
     let actualsPage = 0;
@@ -94,11 +108,22 @@ serve(async (req) => {
 
     // Add actual stats (past weeks)
     for (const actual of allActuals) {
+      const normalizedTeam = normalizeTeam(actual.team);
+      let opponent = actual.opponent;
+      
+      // If opponent is null, check if it's a bye week
+      if (!opponent) {
+        const hasGame = teamWeeksWithGames.has(`${normalizedTeam}-${actual.week}`);
+        if (!hasGame) {
+          opponent = 'BYE';
+        }
+      }
+      
       poolRecords.push({
         player_id: actual.player_id,
         player_name: actual.player_name,
         position: actual.position,
-        team: normalizeTeam(actual.team),
+        team: normalizedTeam,
         week: actual.week,
         season: actual.season,
         points_ppr: actual.fantasy_points_ppr || 0,
@@ -111,18 +136,29 @@ serve(async (req) => {
         receptions: actual.receptions || 0,
         receiving_yards: actual.receiving_yards || 0,
         receiving_tds: actual.receiving_tds || 0,
-        opponent: actual.opponent,
+        opponent: opponent,
         opponent_def_rank: null, // Actuals don't have this
       });
     }
 
     // Add projections (current and future weeks)
     for (const proj of allProjections) {
+      const normalizedTeam = normalizeTeam(proj.team);
+      let opponent = proj.opponent;
+      
+      // If opponent is null, check if it's a bye week
+      if (!opponent) {
+        const hasGame = teamWeeksWithGames.has(`${normalizedTeam}-${proj.week}`);
+        if (!hasGame) {
+          opponent = 'BYE';
+        }
+      }
+      
       poolRecords.push({
         player_id: proj.player_id,
         player_name: proj.player_name,
         position: proj.position,
-        team: normalizeTeam(proj.team),
+        team: normalizedTeam,
         week: proj.week,
         season: proj.season,
         points_ppr: proj.pts_ppr || 0,
@@ -135,7 +171,7 @@ serve(async (req) => {
         receptions: proj.rec || 0,
         receiving_yards: proj.rec_yd || 0,
         receiving_tds: proj.rec_td || 0,
-        opponent: proj.opponent,
+        opponent: opponent,
         opponent_def_rank: proj.opponent_def_rank,
       });
     }
