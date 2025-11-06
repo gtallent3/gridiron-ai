@@ -139,8 +139,15 @@ serve(async (req) => {
 
     console.log(`Processed ${week15Count} week 15 records, ${week15WithSOS} had SOS data`);
     
+    // Filter out players with no SOS data at all
+    const validPlayers = Object.entries(byPlayerProj).filter(([pid, agg]) => {
+      return agg.ros_values.length > 0 || agg.po_values.length > 0 || agg.ros_sos_rank_w15 != null || agg.playoff_sos_rank_w15 != null;
+    });
+    
+    console.log(`Filtered from ${Object.keys(byPlayerProj).length} to ${validPlayers.length} players with SOS data`);
+    
     // Sample a few players to check SOS values
-    const samplePlayers = Object.values(byPlayerProj).slice(0, 3);
+    const samplePlayers = validPlayers.slice(0, 3).map(([pid, agg]) => agg);
     for (const sp of samplePlayers) {
       console.log(`Sample: ${sp.player_name} - W15 ROS: ${sp.ros_sos_rank_w15}, W15 PO: ${sp.playoff_sos_rank_w15}, All ROS: [${sp.ros_values.slice(0,3).join(',')}], All PO: [${sp.po_values.slice(0,3).join(',')}]`);
     }
@@ -181,7 +188,7 @@ serve(async (req) => {
     let usedMode = 0;
     let usedTeamSOS = 0;
 
-    for (const [pid, agg] of Object.entries(byPlayerProj)) {
+    for (const [pid, agg] of validPlayers) {
       const { player_name, position, team, projSum, projCount, ros_sos_rank_w15, playoff_sos_rank_w15, ros_values, po_values } = agg;
       if (!position || !player_name) continue;
 
