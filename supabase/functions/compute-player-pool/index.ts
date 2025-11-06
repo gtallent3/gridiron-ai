@@ -78,7 +78,7 @@ serve(async (req) => {
       if (actuals.length < pageSize) break;
     }
 
-    // Fetch projections for ALL weeks (to fill in missing injury/bye data for past weeks)
+    // Fetch projections ONLY for past weeks (to fill in missing injury/bye data)
     let allProjections: any[] = [];
     let projectionsPage = 0;
     
@@ -87,6 +87,7 @@ serve(async (req) => {
         .from('sleeper_projections')
         .select('*')
         .eq('season', season)
+        .lt('week', currentWeek)  // Only fetch past weeks
         .in('position', ['QB', 'RB', 'WR', 'TE'])
         .not('team', 'is', null)
         .range(projectionsPage * pageSize, (projectionsPage + 1) * pageSize - 1);
@@ -143,7 +144,7 @@ serve(async (req) => {
       });
     }
 
-    // Add projections - fill in missing weeks for injured/bye players
+    // Add projections ONLY to fill missing past weeks (injury/DNP)
     for (const proj of allProjections) {
       const key = `${proj.player_id}-${proj.week}-${proj.season}`;
       
@@ -163,10 +164,7 @@ serve(async (req) => {
         }
       }
       
-      // For past weeks (< currentWeek), mark as actual AND did_not_play (injury/out)
-      // For future weeks, mark as projection
-      const isPastWeek = proj.week < currentWeek;
-      
+      // These are all past weeks with missing actuals = player didn't play (injured/out)
       poolMap.set(key, {
         player_id: proj.player_id,
         player_name: proj.player_name,
@@ -175,8 +173,8 @@ serve(async (req) => {
         week: proj.week,
         season: proj.season,
         points_ppr: proj.pts_ppr || 0,
-        is_actual: isPastWeek, // Mark past weeks as actual (even if they're projections)
-        did_not_play: isPastWeek, // Past week with projection = player didn't play (injured/out)
+        is_actual: true,  // Past week, so mark as actual
+        did_not_play: true,  // But player didn't play (used projection to fill gap)
         passing_yards: proj.pass_yd || 0,
         passing_tds: proj.pass_td || 0,
         passing_ints: proj.pass_int || 0,
