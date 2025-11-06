@@ -90,21 +90,20 @@ serve(async (req) => {
           team: p.team,
           projSum: 0,
           projCount: 0,
-          sosRanksRegular: [],
-          sosRanksPlayoff: []
+          ros_sos_rank: null,
+          playoff_sos_rank: null
         };
       }
       const proj = Number(p.pts_std || 0);
       byPlayerProj[p.player_id].projSum += proj;
       byPlayerProj[p.player_id].projCount += 1;
 
-      const sosRank = Number(p.ros_sos_rank || 16);
-      const playoffSosRank = Number(p.playoff_sos_rank || 16);
-      
-      if ([15, 16, 17].includes(p.week)) {
-        byPlayerProj[p.player_id].sosRanksPlayoff.push(playoffSosRank);
-      } else {
-        byPlayerProj[p.player_id].sosRanksRegular.push(sosRank);
+      // Take the first non-null SOS values (they're team-level, same for all weeks)
+      if (p.ros_sos_rank != null && byPlayerProj[p.player_id].ros_sos_rank === null) {
+        byPlayerProj[p.player_id].ros_sos_rank = Number(p.ros_sos_rank);
+      }
+      if (p.playoff_sos_rank != null && byPlayerProj[p.player_id].playoff_sos_rank === null) {
+        byPlayerProj[p.player_id].playoff_sos_rank = Number(p.playoff_sos_rank);
       }
     }
 
@@ -129,14 +128,15 @@ serve(async (req) => {
     const rows: any[] = [];
 
     for (const [pid, agg] of Object.entries(byPlayerProj)) {
-      const { player_name, position, team, projSum, projCount, sosRanksRegular, sosRanksPlayoff } = agg;
+      const { player_name, position, team, projSum, projCount, ros_sos_rank, playoff_sos_rank } = agg;
       if (!position || !player_name) continue;
 
       const projROSppg = projCount ? projSum / projCount : 0;
       const actual = actualSummary[pid] || { recent: 0, season: 0 };
       
-      const avgReg = sosRanksRegular.length ? sosRanksRegular.reduce((a: number, b: number) => a + b, 0) / sosRanksRegular.length : 16;
-      const avgPO = sosRanksPlayoff.length ? sosRanksPlayoff.reduce((a: number, b: number) => a + b, 0) / sosRanksPlayoff.length : 16;
+      // Use the SOS ranks directly (no averaging needed since they're team-level)
+      const avgReg = ros_sos_rank ?? 16;
+      const avgPO = playoff_sos_rank ?? 16;
       const sosRegNorm = normSoS(avgReg);
       const sosPONorm = normSoS(avgPO);
 
