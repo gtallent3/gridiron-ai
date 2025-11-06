@@ -105,59 +105,66 @@ serve(async (req) => {
     };
 
     // Build a complete player map from both actuals and projections
-    // Use composite key: normalized_name:position:team to handle players with same name
+    // Use composite key: normalized_name:position to handle cross-team changes and avoid duplicates
     const allPlayers = new Map<string, { player_id: string, player_name: string, position: string, team: string }>();
     
-    // Add all players from actuals
+    // Add all players from actuals (only if not present yet)
     for (const act of actuals || []) {
       if (act.team && act.player_name && act.position) {
         const normalizedName = normalizeName(act.player_name);
-        const normalizedTeam = normalizeTeam(act.team);
-        const key = `${normalizedName}:${act.position}:${normalizedTeam}`;
-        allPlayers.set(key, {
-          player_id: act.player_id,
-          player_name: act.player_name,
-          position: act.position,
-          team: act.team
-        });
+        const key = `${normalizedName}:${act.position}`;
+        if (!allPlayers.has(key)) {
+          allPlayers.set(key, {
+            player_id: act.player_id,
+            player_name: act.player_name,
+            position: act.position,
+            team: normalizeTeam(act.team)
+          });
+        }
       }
     }
     
-    // Add players from projections (if not already present)
+    // Merge players from projections (overwrite to prefer projection ids/teams when available)
     for (const proj of projections || []) {
       if (proj.team && proj.player_name && proj.position) {
         const normalizedName = normalizeName(proj.player_name);
-        const normalizedTeam = normalizeTeam(proj.team);
-        const key = `${normalizedName}:${proj.position}:${normalizedTeam}`;
-        if (!allPlayers.has(key)) {
+        const key = `${normalizedName}:${proj.position}`;
+        const existing = allPlayers.get(key);
+        if (!existing) {
           allPlayers.set(key, {
             player_id: proj.player_id,
             player_name: proj.player_name,
             position: proj.position,
-            team: proj.team
+            team: normalizeTeam(proj.team)
+          });
+        } else {
+          // Prefer projection identifiers/team for ROS context
+          allPlayers.set(key, {
+            player_id: proj.player_id || existing.player_id,
+            player_name: existing.player_name || proj.player_name,
+            position: existing.position,
+            team: normalizeTeam(proj.team) || existing.team,
           });
         }
       }
     }
 
-    // Group projections by normalized_name:position:team
+    // Group projections by normalized_name:position
     const playerProjections = new Map<string, any[]>();
     for (const proj of projections || []) {
       const normalizedName = normalizeName(proj.player_name);
-      const normalizedTeam = normalizeTeam(proj.team);
-      const key = `${normalizedName}:${proj.position}:${normalizedTeam}`;
+      const key = `${normalizedName}:${proj.position}`;
       if (!playerProjections.has(key)) {
         playerProjections.set(key, []);
       }
       playerProjections.get(key)!.push(proj);
     }
 
-    // Group actuals by normalized_name:position:team
+    // Group actuals by normalized_name:position
     const playerActuals = new Map<string, any[]>();
     for (const act of actuals || []) {
       const normalizedName = normalizeName(act.player_name);
-      const normalizedTeam = normalizeTeam(act.team);
-      const key = `${normalizedName}:${act.position}:${normalizedTeam}`;
+      const key = `${normalizedName}:${act.position}`;
       if (!playerActuals.has(key)) {
         playerActuals.set(key, []);
       }
@@ -221,10 +228,26 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Computed ${rankings.length} player rankings`);
+    // Deduplicate by player_id to avoid unique constraint violations
+    const rankingsById = new Map<string, any>();
+    for (const r of rankings) {
+      const existing = rankingsById.get(r.player_id);
+      if (!existing) {
+        rankingsById.set(r.player_id, r);
+      } else {
+        // Prefer entry with projections; otherwise higher actual PPG
+        const pick = (r.avg_projected_ppg_ros ?? 0) > (existing.avg_projected_ppg_ros ?? 0)
+          ? r
+          : ((r.avg_projected_ppg_ros ?? 0) === (existing.avg_projected_ppg_ros ?? 0) && (r.avg_actual_ppg ?? 0) > (existing.avg_actual_ppg ?? 0) ? r : existing);
+        rankingsById.set(r.player_id, pick);
+      }
+    }
+    const dedupedRankings = Array.from(rankingsById.values());
+
+    console.log(`Computed ${rankings.length} player rankings, ${dedupedRankings.length} after dedupe`);
 
     // Upsert to player_rankings table
-    if (rankings.length > 0) {
+    if (dedupedRankings.length > 0) {
       // Delete existing rankings for this season first
       await supabase
         .from('player_rankings')
@@ -233,8 +256,8 @@ serve(async (req) => {
 
       // Insert new rankings in chunks
       const chunkSize = 500;
-      for (let i = 0; i < rankings.length; i += chunkSize) {
-        const chunk = rankings.slice(i, i + chunkSize);
+      for (let i = 0; i < dedupedRankings.length; i += chunkSize) {
+        const chunk = dedupedRankings.slice(i, i + chunkSize);
         const { error: upsertError } = await supabase
           .from('player_rankings')
           .insert(chunk);
@@ -250,7 +273,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        playersProcessed: rankings.length,
+        playersProcessed: dedupedRankings.length,
         season,
         currentWeek,
         message: 'Player rankings computed and saved',
