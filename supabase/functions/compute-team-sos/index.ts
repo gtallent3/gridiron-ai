@@ -121,20 +121,8 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Upsert to database in chunks to avoid timeout
-    console.log(`Upserting ${teamSosData.length} team-position combinations...`);
-    const chunkSize = 50;
-    for (let i = 0; i < teamSosData.length; i += chunkSize) {
-      const chunk = teamSosData.slice(i, i + chunkSize);
-      const { error: upsertError } = await supabase
-        .from('team_sos')
-        .upsert(chunk, { onConflict: 'team,season,position' });
-
-      if (upsertError) {
-        console.error(`Upsert error on chunk ${i / chunkSize + 1}:`, upsertError);
-        throw upsertError;
-      }
-    }
+    // Note: team_sos table was removed - SOS data computed but not stored
+    console.log(`Computed SOS for ${teamSosData.length} team-position combinations`);
 
     console.log(`Successfully computed SOS for ${teamSosData.length} team-position combinations`);
 

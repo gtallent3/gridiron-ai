@@ -216,12 +216,20 @@ serve(async (req) => {
         }
       }
 
-      // Batch insert stats for this week
+      // Batch insert stats for this week into nfl_fantasy_points
       if (playerStatsToInsert.length > 0) {
         await supabase
-          .from('player_stats')
-          .upsert(playerStatsToInsert, {
-            onConflict: 'player_id,week,season,source',
+          .from('nfl_fantasy_points')
+          .upsert(playerStatsToInsert.map(s => ({
+            player_id: s.player_id,
+            player_name: s.player_name,
+            team: s.team,
+            position: s.position,
+            week: s.week,
+            season: s.season,
+            fantasy_points_ppr: s.fantasy_points_ppr || 0
+          })), {
+            onConflict: 'player_id,week,season',
             ignoreDuplicates: false
           });
         console.log(`Inserted ${playerStatsToInsert.length} stats for week ${week}`);

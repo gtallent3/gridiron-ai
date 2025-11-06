@@ -211,10 +211,10 @@ serve(async (req) => {
           if (row.def_rank_te != null) sosRankMap.set(`${row.team}:TE`, row.def_rank_te);
         });
 
-        // Get team SOS rankings
+        // Get team SOS rankings from strength_of_schedule table
         const { data: teamSosData } = await supabase
-          .from('team_sos')
-          .select('team, position, ros_sos_rank, playoff_sos_rank')
+          .from('strength_of_schedule')
+          .select('team')
           .eq('season', season);
 
         const teamSosMap = new Map<string, { ros: number, playoff: number }>();

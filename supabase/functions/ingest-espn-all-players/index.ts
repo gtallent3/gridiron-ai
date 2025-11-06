@@ -307,15 +307,7 @@ Deno.serve(async (req) => {
         });
 
         if (rows.length) {
-          // Upsert in tiny chunk
-          for (let i = 0; i < rows.length; i += ROW_CHUNK) {
-            const chunk = rows.slice(i, i + ROW_CHUNK);
-            const { error } = await supabase
-              .from('player_pool')
-              .upsert(chunk, { onConflict: 'league_id,season,week,player_id,source', ignoreDuplicates: false });
-            if (error) throw error;
-            totalUpserts += chunk.length;
-          }
+          // Note: player_pool table was removed - data stored in projected_player_stats instead
           totalSelected += rows.length;
         }
 

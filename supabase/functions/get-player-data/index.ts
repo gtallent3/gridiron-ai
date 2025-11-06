@@ -603,7 +603,7 @@ serve(async (req) => {
         week: player.week,
         season: player.season,
         source_type: player.source_type,
-        provenance: player.source_type === 'actual' ? 'player_stats' : 'espn_projection',
+        provenance: player.source_type === 'actual' ? 'nfl_fantasy_points' : 'espn_projection',
         projection_in_use: player.source_type !== 'actual',
         // Surface projection helpers for UI
         projected_fp: typeof chosenProjected === 'number' ? Math.round(chosenProjected * 100) / 100 : (player as any).projected_fp,

@@ -80,12 +80,11 @@ serve(async (req) => {
 
     // Fetch recent actual stats for consistency calculation
     const { data: actuals, error: actualsError } = await supabase
-      .from('player_stats')
+      .from('nfl_fantasy_points')
       .select('*')
       .eq('season', season)
       .gte('week', Math.max(1, currentWeek - 5))
-      .lt('week', currentWeek)
-      .eq('finalized', true);
+      .lt('week', currentWeek);
 
     if (actualsError) throw actualsError;
 

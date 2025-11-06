@@ -45,11 +45,11 @@ export function PlayerAutocomplete({
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
-          .from('player_valuations')
+        const { data, error} = await supabase
+          .from('trade_value_weekly')
           .select('player_id, player_name, team, position')
           .or(`player_name.ilike.%${query}%`)
-          .order('player_name')
+          .order('trade_value', { ascending: false })
           .limit(50);
 
         if (error) throw error;

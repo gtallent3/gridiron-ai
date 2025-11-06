@@ -27,20 +27,15 @@ serve(async (req) => {
 
     console.log(`Fetching player market: Season ${season}, Week ${week}, Position ${position}, Status ${status}`);
 
-    // Try to get actuals first for current week, fallback to projections
+    // Try to get actuals from nfl_fantasy_points
     let query = supabase
-      .from('player_stats')
+      .from('nfl_fantasy_points')
       .select('*')
       .eq('season', season)
-      .eq('week', week)
-      .eq('source_type', 'actual')
-      .eq('finalized', true);
+      .eq('week', week);
 
     if (position) {
       query = query.eq('position', position);
-    }
-    if (status) {
-      query = query.eq('waiver_status', status);
     }
 
     const { data: actuals, error: actualsError } = await query.limit(limit);

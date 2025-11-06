@@ -112,13 +112,11 @@ serve(async (req) => {
     const normalizedPlayerIds = allPlayerIds.map(id => playerIdMap.get(id) || id);
 
     // Fetch player valuations from database using normalized IDs
-    // We need ppg_projection to calculate consistent ROS values
+    // Use trade values for calculations
     const { data: valuations } = await supabase
-      .from('player_valuations')
+      .from('trade_value_weekly')
       .select('*')
-      .in('player_id', normalizedPlayerIds)
-      .eq('season', currentSeason)
-      .eq('week', currentWeek);
+      .in('player_id', normalizedPlayerIds);
 
     const valuationMap = new Map(
       (valuations || []).map(v => [v.player_id, v])
@@ -359,23 +357,7 @@ serve(async (req) => {
       must_win_mode: mustWinMode,
     };
 
-    // Save evaluation
-    await supabase.from('trade_evaluations').insert({
-      league_id: leagueId,
-      user_id: user.id,
-      my_team_id: myTeam.team_id,
-      their_team_id: theirTeam.team_id,
-      my_players: myPlayers,
-      their_players: theirPlayers,
-      grade,
-      verdict,
-      confidence,
-      ros_points_delta: rosDelta,
-      next_3_weeks_delta: next3Delta,
-      best_player_bonus_applied: bestPlayerBonusApplied,
-      summary,
-      key_factors: keyFactors,
-    });
+    // Note: trade_evaluations table was removed - evaluation computed but not stored
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

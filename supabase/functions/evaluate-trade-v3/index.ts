@@ -106,25 +106,7 @@ serve(async (req) => {
       teamBId
     );
 
-    // Save evaluation
-    const { error: saveError } = await supabase
-      .from('trade_evaluations')
-      .insert({
-        user_id: user.id,
-        league_id: leagueId,
-        my_team_id: teamAId,
-        their_team_id: teamBId,
-        my_players: teamAGives,
-        their_players: teamBGives,
-        verdict: evaluation.verdict,
-        grade: evaluation.trade_grade,
-        confidence: evaluation.confidence,
-        ros_points_delta: evaluation.ros_points_delta,
-        next_3_weeks_delta: evaluation.next_3_weeks_delta,
-        summary: evaluation.explanation,
-      });
-
-    if (saveError) console.error('Error saving evaluation:', saveError);
+    // Note: trade_evaluations table was removed - evaluation computed but not stored
 
     return new Response(
       JSON.stringify(evaluation),

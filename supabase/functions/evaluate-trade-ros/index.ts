@@ -405,22 +405,7 @@ serve(async (req) => {
       },
     };
 
-    // Save evaluation
-    await supabase.from('trade_evaluations').insert({
-      user_id: user.id,
-      league_id: leagueId,
-      my_team_id: teamAId,
-      their_team_id: teamBId,
-      my_players: teamAGives,
-      their_players: teamBGives,
-      verdict: isFair ? 'fair' : teamANet > 0 ? 'accept' : 'reject',
-      grade: isFair ? 'B' : teamANet > 5 ? 'A' : teamANet > 0 ? 'B' : 'C',
-      confidence: 85,
-      ros_points_delta: teamANet,
-      next_3_weeks_delta: teamANet * 0.3,
-      best_player_bonus_applied: eliteBonus > 0,
-      summary: verdict,
-    });
+    // Note: trade_evaluations table was removed - evaluation computed but not stored
 
     return new Response(
       JSON.stringify(result),

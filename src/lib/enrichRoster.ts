@@ -19,8 +19,7 @@ export type RosterPlayer = {
 };
 
 /**
- * Enrich a roster array with injury and bye week information from player_valuations.
- * Matches by player_name to bridge ESPN vs Sleeper ID differences.
+ * Enrich a roster array with bye week information using hardcoded bye weeks.
  */
 export async function enrichRosterWithValuations(
   roster: RosterPlayer[] | any,
@@ -29,86 +28,20 @@ export async function enrichRosterWithValuations(
   const rosterArray = Array.isArray(roster) ? roster : [];
   if (rosterArray.length === 0) return rosterArray as RosterPlayer[];
 
-  // Determine defaults dynamically if not provided
-  const now = new Date();
-  const seasonYear = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-  const season = opts?.season ?? seasonYear;
+  // Use hardcoded bye weeks since player_valuations table was removed
+  return enrichWithHardcodedByeWeeks(rosterArray);
+}
 
-  let week = opts?.week;
-  
-  // If week not specified, find the latest week with data in player_valuations
-  if (!week) {
-    const { data: latestWeek } = await supabase
-      .from('player_valuations')
-      .select('week')
-      .eq('season', season)
-      .order('week', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+function enrichWithHardcodedByeWeeks(roster: RosterPlayer[]): RosterPlayer[] {
+  return roster.map(player => {
+    const team = player.team;
+    const isByeWeek = team ? isTeamOnBye(team, 1) : false;
     
-    week = latestWeek?.week ?? 1;
-    console.log(`[enrichRoster] Using latest available week: ${week} for season ${season}`);
-  }
-
-  // Collect names present in roster
-  const names = rosterArray
-    .map((p: RosterPlayer) => p.player_name || p.playerName || p.name)
-    .filter(Boolean) as string[];
-
-  if (names.length === 0) return rosterArray as RosterPlayer[];
-
-  // Fetch valuations for those names
-  const { data: valuations } = await supabase
-    .from('player_valuations')
-    .select('player_name, is_bye_week, injury_status, injury_duration_weeks, ros_projection, ppg_projection, next_3_weeks_projection')
-    .eq('week', week)
-    .eq('season', season)
-    .in('player_name', Array.from(new Set(names)));
-
-  console.log(`[enrichRoster] Fetched ${valuations?.length || 0} valuations for ${names.length} names`);
-  if (valuations && valuations.length > 0) {
-    console.log('[enrichRoster] Sample valuations:', valuations.slice(0, 3).map(v => ({ name: v.player_name, ros: v.ros_projection, ppg: v.ppg_projection })));
-  }
-
-  const valMap = new Map<string, any>((valuations || []).map(v => [v.player_name, v]));
-
-  return rosterArray.map((p: RosterPlayer) => {
-    const key = (p.player_name || p.playerName || p.name) as string | undefined;
-    const v = key ? valMap.get(key) : undefined;
-    const playerTeam = p.team;
-
-    // Debug: Log what data we have for key players
-    if (key && (key.includes('Mahomes') || key.includes('Hurts'))) {
-      console.log(`[enrichRoster] ${key}:`, {
-        key_used: key,
-        has_valuation: !!v,
-        espn_ros: p.ros_projection,
-        espn_ppg: p.ppg_projection,
-        val_ros: v?.ros_projection,
-        val_ppg: v?.ppg_projection,
-      });
-    }
-
-    // Prefer valuations if they are non-zero; otherwise fallback to ESPN roster values
-    const chosenRos = (v?.ros_projection && Number(v.ros_projection) > 0)
-      ? Number(v.ros_projection)
-      : Number(p.ros_projection ?? 0);
-    const chosenPpg = (v?.ppg_projection && Number(v.ppg_projection) > 0)
-      ? Number(v.ppg_projection)
-      : Number(p.ppg_projection ?? 0);
-
-    // Use hardcoded bye week schedule instead of player_valuations
-    const isByeWeek = isTeamOnBye(playerTeam, week);
-
     return {
-      ...p,
-      ros_projection: chosenRos,
-      ppg_projection: chosenPpg,
-      next_3_weeks_projection: v?.next_3_weeks_projection ?? p.next_3_weeks_projection ?? 0,
-      // Use hardcoded schedule for bye weeks
+      ...player,
       is_bye_week: isByeWeek,
-      injury_status: v?.injury_status ?? p.injury_status ?? null,
-      injury_duration_weeks: v?.injury_duration_weeks ?? p.injury_duration_weeks ?? 0,
+      injury_status: player.injury_status || null,
+      injury_duration_weeks: player.injury_duration_weeks || 0,
     };
   });
 }

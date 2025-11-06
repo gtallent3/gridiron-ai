@@ -158,13 +158,11 @@ serve(async (req) => {
       }
     }
 
-    // Fetch top player valuations for current context
+    // Fetch top player trade values for current context
     const { data: topPlayers } = await supabase
-      .from('player_valuations')
-      .select('player_name, position, team, ros_projection, next_3_weeks_projection, injury_status, is_bye_week')
-      .eq('season', currentSeason)
-      .eq('week', currentWeek)
-      .order('ros_projection', { ascending: false })
+      .from('trade_value_weekly')
+      .select('player_name, position, team, trade_value, meta_proj_ros_ppg')
+      .order('trade_value', { ascending: false })
       .limit(100);
 
     // Build enhanced system prompt with real-time context
@@ -241,11 +239,8 @@ Current Week: ${leagueData.current_week || currentWeek}`;
         if (!topByPosition[player.position] || topByPosition[player.position].length < 5) {
           if (!topByPosition[player.position]) topByPosition[player.position] = [];
           
-          const injuryNote = player.injury_status ? ` [${player.injury_status}]` : '';
-          const byeNote = player.is_bye_week ? ' [BYE]' : '';
-          
           topByPosition[player.position].push(
-            `${player.player_name} (${player.team}): ${player.ros_projection.toFixed(1)} ROS, ${player.next_3_weeks_projection.toFixed(1)} next 3wks${injuryNote}${byeNote}`
+            `${player.player_name} (${player.team}): ${player.trade_value?.toFixed(1) || 'N/A'} value, ${player.meta_proj_ros_ppg?.toFixed(1) || 'N/A'} ROS PPG`
           );
         }
       }

@@ -51,7 +51,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
   const hasAutoSetSelectedWeek = useRef(false);
 
-  // Fetch stats with calculated fantasy points from player_stats table
+  // Fetch stats with calculated fantasy points from nfl_fantasy_points table
   const fetchWeeklyStats = async (week: number) => {
     if (!userTeam?.roster || !Array.isArray(userTeam.roster)) return;
     
@@ -65,18 +65,17 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         const starterPlayers: any[] = [];
         const benchPlayers: any[] = [];
         
-        // For historical weeks, fetch from player_stats
+        // For historical weeks, fetch from nfl_fantasy_points
         if (isHistorical) {
           const now = new Date();
           const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
           
-          // Fetch actual stats from player_stats table
+          // Fetch actual stats from nfl_fantasy_points table
           const { data: statsData, error } = await supabase
-            .from('player_stats')
+            .from('nfl_fantasy_points')
             .select('*')
             .eq('week', week)
-            .eq('season', inferredSeason)
-            .eq('source_type', 'actual');
+            .eq('season', inferredSeason);
           
           if (error) {
             console.error('Error fetching player stats:', error);

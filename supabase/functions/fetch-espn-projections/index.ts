@@ -284,28 +284,7 @@ serve(async (req) => {
 
           poolRows.push(poolEntry);
 
-          // Also add to waiver_wire_players table for easy querying
-          waiverRows.push({
-            league_id: league.id,
-            espn_league_id: league.league_id,
-            player_id: normalizedPlayer?.player_id || `espn_${espnId}`,
-            player_name: normalizedPlayer?.player_name || player.fullName || 'Unknown',
-            position: normalizedPlayer?.position || mapPosition(player.defaultPositionId),
-            team: normalizedPlayer?.team || (player.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
-            season: currentSeason,
-            week,
-            waiver_status: waiverStatus,
-            percent_owned: ownership.percentOwned || 0,
-            percent_started: ownership.percentStarted || 0,
-            provider_ids: { espn: espnId },
-            projected_fp: (typeof weekProjection?.appliedTotal === 'number' ? weekProjection.appliedTotal : (weekProjection?.appliedStats ? Object.values(weekProjection.appliedStats).reduce((sum: number, v: any) => sum + (typeof v === 'number' ? v : 0), 0) : 0)),
-            stats: weekProjection?.stats || null,
-            applied_breakdown: weekProjection?.appliedStats || null,
-            confidence: weekProjection ? 0.8 : null,
-            source: weekProjection ? 'espn_projection' : null,
-            last_updated: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
+          // Note: waiver_wire_players table was removed - data stored in projected_player_stats
         }
 
         if (weekProjection?.stats || weekProjection?.appliedStats) {
