@@ -96,6 +96,27 @@ export default function StrengthOfSchedulePage() {
     }
   };
 
+  const computeTeamSos = async () => {
+    setComputing(true);
+    try {
+      toast.info('Computing team SOS rankings...', { duration: 2000 });
+      
+      const { error } = await supabase.functions.invoke('compute-team-sos', {
+        body: { season, currentWeek: 10 },
+      });
+
+      if (error) throw error;
+      
+      toast.success('Team SOS rankings computed successfully');
+      await fetchData();
+    } catch (error) {
+      console.error('Error computing team SOS:', error);
+      toast.error('Failed to compute team SOS rankings');
+    } finally {
+      setComputing(false);
+    }
+  };
+
   const getRankColor = (rank: number | null) => {
     if (!rank) return 'secondary';
     if (rank <= 10) return 'destructive'; // Hard matchup
@@ -113,19 +134,34 @@ export default function StrengthOfSchedulePage() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Strength of Schedule</h1>
-        <Button onClick={computeRankings} disabled={computing}>
-          {computing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Computing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Compute Rankings
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={computeRankings} disabled={computing}>
+            {computing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Computing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Compute Rankings
+              </>
+            )}
+          </Button>
+          <Button onClick={computeTeamSos} disabled={computing} variant="secondary">
+            {computing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Computing...
+              </>
+            ) : (
+              <>
+                <TrendingUp className="mr-2 h-4 w-4" />
+                Compute Team SOS
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
