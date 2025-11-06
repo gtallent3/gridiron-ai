@@ -219,8 +219,8 @@ serve(async (req) => {
     for (const proj of allProjections) {
       const normalizedName = normalizeName(proj.player_name);
       const key = `${normalizedName}:${proj.position}-${proj.week}-${proj.season}`;
-      // Skip if we somehow already have a record
-      if (poolMap.has(key)) continue;
+      // Always set projections for current/future weeks (they should appear even if placeholders exist)
+
 
       const normalizedTeam = normalizeTeam(proj.team);
       let opponent = proj.opponent;
