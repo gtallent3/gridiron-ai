@@ -101,7 +101,29 @@ serve(async (req) => {
       if (projections.length < pageSize) break;
     }
 
-    console.log(`Fetched ${allActuals.length} actual records and ${allProjections.length} projection records`);
+    // Fetch projections for past weeks to fill DNP/bye gaps (fetch all records with range)
+    let allPastProjections: any[] = [];
+    let pastProjPage = 0;
+    while (true) {
+      const { data: pastProjs, error: pastProjError } = await supabase
+        .from('sleeper_projections')
+        .select('*')
+        .eq('season', season)
+        .lt('week', currentWeek)
+        .in('position', ['QB', 'RB', 'WR', 'TE'])
+        .not('team', 'is', null)
+        .range(pastProjPage * pageSize, (pastProjPage + 1) * pageSize - 1);
+
+      if (pastProjError) throw pastProjError;
+      if (!pastProjs || pastProjs.length === 0) break;
+
+      allPastProjections = allPastProjections.concat(pastProjs);
+      pastProjPage++;
+
+      if (pastProjs.length < pageSize) break;
+    }
+
+    console.log(`Fetched ${allActuals.length} actual, ${allPastProjections.length} past-projection (for DNP fill) and ${allProjections.length} future-projection records`);
 
     // Build player pool records using a Map to ensure uniqueness
     // Key format: "player_id-week-season"
@@ -130,6 +152,7 @@ serve(async (req) => {
         season: actual.season,
         points_ppr: actual.fantasy_points_ppr || 0,
         is_actual: true,
+        did_not_play: false,
         passing_yards: actual.passing_yards || 0,
         passing_tds: actual.passing_tds || 0,
         passing_ints: actual.passing_ints || 0,
@@ -143,18 +166,14 @@ serve(async (req) => {
       });
     }
 
-    // Add projections (current and future weeks) - only if not already present from actuals
-    for (const proj of allProjections) {
+    // Add filler projections for PAST weeks (only where there is no actual record)
+    for (const proj of allPastProjections) {
       const key = `${proj.player_id}-${proj.week}-${proj.season}`;
-      
-      // Skip if we already have actual data for this player/week/season
-      if (poolMap.has(key)) {
-        continue;
-      }
-      
+      if (poolMap.has(key)) continue; // already have an actual
+
       const normalizedTeam = normalizeTeam(proj.team);
       let opponent = proj.opponent;
-      
+
       // If opponent is null, check if it's a bye week
       if (!opponent) {
         const hasGame = teamWeeksWithGames.has(`${normalizedTeam}-${proj.week}`);
@@ -162,7 +181,48 @@ serve(async (req) => {
           opponent = 'BYE';
         }
       }
-      
+
+      // Create a DNP row to complete the player's week history
+      poolMap.set(key, {
+        player_id: proj.player_id,
+        player_name: proj.player_name,
+        position: proj.position,
+        team: normalizedTeam,
+        week: proj.week,
+        season: proj.season,
+        points_ppr: 0, // DNP weeks should not add points
+        is_actual: true, // treat as past week placeholder
+        did_not_play: true,
+        passing_yards: 0,
+        passing_tds: 0,
+        passing_ints: 0,
+        rushing_yards: 0,
+        rushing_tds: 0,
+        receptions: 0,
+        receiving_yards: 0,
+        receiving_tds: 0,
+        opponent: opponent,
+        opponent_def_rank: proj.opponent_def_rank ?? null,
+      });
+    }
+
+    // Add projections (CURRENT and FUTURE weeks) - used for ROS calculations only
+    for (const proj of allProjections) {
+      const key = `${proj.player_id}-${proj.week}-${proj.season}`;
+      // Skip if we somehow already have a record
+      if (poolMap.has(key)) continue;
+
+      const normalizedTeam = normalizeTeam(proj.team);
+      let opponent = proj.opponent;
+
+      // If opponent is null, check if it's a bye week
+      if (!opponent) {
+        const hasGame = teamWeeksWithGames.has(`${normalizedTeam}-${proj.week}`);
+        if (!hasGame) {
+          opponent = 'BYE';
+        }
+      }
+
       poolMap.set(key, {
         player_id: proj.player_id,
         player_name: proj.player_name,
@@ -172,6 +232,7 @@ serve(async (req) => {
         season: proj.season,
         points_ppr: proj.pts_ppr || 0,
         is_actual: false,
+        did_not_play: false,
         passing_yards: proj.pass_yd || 0,
         passing_tds: proj.pass_td || 0,
         passing_ints: proj.pass_int || 0,
