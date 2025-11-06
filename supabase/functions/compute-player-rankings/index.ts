@@ -49,7 +49,7 @@ serve(async (req) => {
     // Fetch actual stats for past weeks
     const { data: actuals, error: actualsError } = await supabase
       .from('nfl_fantasy_points')
-      .select('player_id, fantasy_points_ppr, week')
+      .select('player_name, fantasy_points_ppr, week')
       .eq('season', season)
       .lt('week', currentWeek);
 
@@ -98,10 +98,10 @@ serve(async (req) => {
       playerProjections.get(key)!.push(proj);
     }
 
-    // Group actuals by player
+    // Group actuals by player_name (since player_id formats differ between tables)
     const playerActuals = new Map<string, any[]>();
     for (const act of actuals || []) {
-      const key = act.player_id;
+      const key = act.player_name;
       if (!playerActuals.has(key)) {
         playerActuals.set(key, []);
       }
@@ -132,8 +132,8 @@ serve(async (req) => {
       const totalProjPts = projs.reduce((sum, p) => sum + Number(p.pts_ppr || 0), 0);
       const avgProjectedPpgRos = projs.length > 0 ? totalProjPts / projs.length : 0;
 
-      // Calculate average actual PPG from past weeks
-      const acts = playerActuals.get(playerId) || [];
+      // Calculate average actual PPG from past weeks - join by player_name
+      const acts = playerActuals.get(sample.player_name) || [];
       const totalActualPts = acts.reduce((sum, a) => sum + Number(a.fantasy_points_ppr || 0), 0);
       const avgActualPpg = acts.length > 0 ? totalActualPts / acts.length : 0;
 
