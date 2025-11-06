@@ -201,13 +201,13 @@ serve(async (req) => {
     
     for (let i = 0; i < poolRecords.length; i += chunkSize) {
       const chunk = poolRecords.slice(i, i + chunkSize);
-      const { error: upsertError } = await supabase
+      const { error: insertError } = await supabase
         .from('player_pool')
-        .upsert(chunk, { onConflict: 'player_id,week,season', ignoreDuplicates: false });
+        .insert(chunk);
 
-      if (upsertError) {
-        console.error(`Chunk ${Math.floor(i / chunkSize) + 1} error:`, upsertError);
-        throw upsertError;
+      if (insertError) {
+        console.error(`Chunk ${Math.floor(i / chunkSize) + 1} error:`, insertError);
+        throw insertError;
       }
       insertedCount += chunk.length;
       console.log(`Inserted chunk ${Math.floor(i / chunkSize) + 1} (${insertedCount} total)`);
