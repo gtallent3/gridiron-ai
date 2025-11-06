@@ -17,40 +17,10 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Verify admin role
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Check admin role
-    const { data: isAdmin } = await supabase.rpc("has_role", {
-      _user_id: user.id,
-      _role: "admin",
-    });
-
-    if (!isAdmin) {
-      return new Response(JSON.stringify({ error: "Admin access required" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
     // Use current NFL season (2025)
-    const season = 2025;
+    const { season = 2025 } = await req.json().catch(() => ({ season: 2025 }));
+
+    console.log(`Starting fetch for season ${season}`);
 
     // Helpers to coerce numeric types safely for DB columns
     const toNum = (v: unknown) => {

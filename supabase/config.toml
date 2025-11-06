@@ -124,4 +124,10 @@ verify_jwt = false
 verify_jwt = true
 
 [functions.fetch-sleeper-projections]
-verify_jwt = true
+verify_jwt = false
+
+[functions.compute-team-sos]
+verify_jwt = false
+
+[functions.compute-trade-values]
+verify_jwt = false
