@@ -103,10 +103,11 @@ serve(async (req) => {
 
     console.log(`Fetched ${allActuals.length} actual records and ${allProjections.length} projection records`);
 
-    // Build player pool records
-    const poolRecords = [];
+    // Build player pool records using a Map to ensure uniqueness
+    // Key format: "player_id-week-season"
+    const poolMap = new Map<string, any>();
 
-    // Add actual stats (past weeks)
+    // Add actual stats (past weeks) - these take priority
     for (const actual of allActuals) {
       const normalizedTeam = normalizeTeam(actual.team);
       let opponent = actual.opponent;
@@ -119,7 +120,8 @@ serve(async (req) => {
         }
       }
       
-      poolRecords.push({
+      const key = `${actual.player_id}-${actual.week}-${actual.season}`;
+      poolMap.set(key, {
         player_id: actual.player_id,
         player_name: actual.player_name,
         position: actual.position,
@@ -141,8 +143,15 @@ serve(async (req) => {
       });
     }
 
-    // Add projections (current and future weeks)
+    // Add projections (current and future weeks) - only if not already present from actuals
     for (const proj of allProjections) {
+      const key = `${proj.player_id}-${proj.week}-${proj.season}`;
+      
+      // Skip if we already have actual data for this player/week/season
+      if (poolMap.has(key)) {
+        continue;
+      }
+      
       const normalizedTeam = normalizeTeam(proj.team);
       let opponent = proj.opponent;
       
@@ -154,7 +163,7 @@ serve(async (req) => {
         }
       }
       
-      poolRecords.push({
+      poolMap.set(key, {
         player_id: proj.player_id,
         player_name: proj.player_name,
         position: proj.position,
@@ -176,7 +185,9 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Built ${poolRecords.length} player pool records`);
+    // Convert Map to array for insertion
+    const poolRecords = Array.from(poolMap.values());
+    console.log(`Built ${poolRecords.length} unique player pool records`);
 
     // Clear existing data for this season
     await supabase
