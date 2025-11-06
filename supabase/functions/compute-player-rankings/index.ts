@@ -36,6 +36,17 @@ serve(async (req) => {
     
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek}`);
 
+    // Fetch actual stats for past weeks (to get all players who have played)
+    const { data: actuals, error: actualsError } = await supabase
+      .from('nfl_fantasy_points')
+      .select('player_id, player_name, position, team, fantasy_points_ppr, week')
+      .eq('season', season)
+      .lt('week', currentWeek)
+      .in('position', ['QB', 'RB', 'WR', 'TE'])
+      .not('team', 'is', null);
+
+    if (actualsError) throw actualsError;
+
     // Fetch all ROS projections (current week onwards)
     const { data: projections, error: projError } = await supabase
       .from('sleeper_projections')
@@ -46,15 +57,6 @@ serve(async (req) => {
       .not('team', 'is', null);
 
     if (projError) throw projError;
-
-    // Fetch actual stats for past weeks
-    const { data: actuals, error: actualsError } = await supabase
-      .from('nfl_fantasy_points')
-      .select('player_name, fantasy_points_ppr, week')
-      .eq('season', season)
-      .lt('week', currentWeek);
-
-    if (actualsError) throw actualsError;
 
     // Fetch SOS data
     const { data: sosData, error: sosError } = await supabase
@@ -89,17 +91,44 @@ serve(async (req) => {
       }
     }
 
-    // Group projections by player
+    // Build a complete player map from both actuals and projections
+    const allPlayers = new Map<string, { player_id: string, player_name: string, position: string, team: string }>();
+    
+    // Add all players from actuals
+    for (const act of actuals || []) {
+      if (act.team && act.player_name && act.position) {
+        allPlayers.set(act.player_name, {
+          player_id: act.player_id,
+          player_name: act.player_name,
+          position: act.position,
+          team: act.team
+        });
+      }
+    }
+    
+    // Add players from projections (if not already present)
+    for (const proj of projections || []) {
+      if (proj.team && proj.player_name && proj.position && !allPlayers.has(proj.player_name)) {
+        allPlayers.set(proj.player_name, {
+          player_id: proj.player_id,
+          player_name: proj.player_name,
+          position: proj.position,
+          team: proj.team
+        });
+      }
+    }
+
+    // Group projections by player_name
     const playerProjections = new Map<string, any[]>();
     for (const proj of projections || []) {
-      const key = proj.player_id;
+      const key = proj.player_name;
       if (!playerProjections.has(key)) {
         playerProjections.set(key, []);
       }
       playerProjections.get(key)!.push(proj);
     }
 
-    // Group actuals by player_name (since player_id formats differ between tables)
+    // Group actuals by player_name
     const playerActuals = new Map<string, any[]>();
     for (const act of actuals || []) {
       const key = act.player_name;
@@ -109,49 +138,52 @@ serve(async (req) => {
       playerActuals.get(key)!.push(act);
     }
 
-    // Compute rankings
+    // Compute rankings for all players
     const rankings = [];
 
-    for (const [playerId, projs] of playerProjections.entries()) {
-      const sample = projs[0];
-      
-      // Filter out players with no team
-      if (!sample.team) continue;
+    for (const [playerName, playerInfo] of allPlayers.entries()) {
+      // Get projections and actuals for this player
+      const projs = playerProjections.get(playerName) || [];
+      const acts = playerActuals.get(playerName) || [];
+
+      // Skip players with no actual stats AND no projections
+      if (projs.length === 0 && acts.length === 0) continue;
 
       // Filter out players that are out for the season (pts_ppr == 0 for both weeks 17 AND 18)
-      const week17Proj = projs.find(p => p.week === 17);
-      const week18Proj = projs.find(p => p.week === 18);
-      
-      const week17Pts = week17Proj ? Number(week17Proj.pts_ppr || 0) : 1; // default to 1 if no data
-      const week18Pts = week18Proj ? Number(week18Proj.pts_ppr || 0) : 1;
-      
-      if (week17Pts === 0 && week18Pts === 0) {
-        continue; // Player is out for the season
+      if (projs.length > 0) {
+        const week17Proj = projs.find(p => p.week === 17);
+        const week18Proj = projs.find(p => p.week === 18);
+        
+        const week17Pts = week17Proj ? Number(week17Proj.pts_ppr || 0) : 1;
+        const week18Pts = week18Proj ? Number(week18Proj.pts_ppr || 0) : 1;
+        
+        if (week17Pts === 0 && week18Pts === 0) {
+          continue; // Player is out for the season
+        }
       }
 
       // Calculate average projected PPG for ROS
       const totalProjPts = projs.reduce((sum, p) => sum + Number(p.pts_ppr || 0), 0);
       const avgProjectedPpgRos = projs.length > 0 ? totalProjPts / projs.length : 0;
 
-      // Calculate average actual PPG from past weeks - join by player_name
-      const acts = playerActuals.get(sample.player_name) || [];
+      // Calculate average actual PPG from past weeks
       const totalActualPts = acts.reduce((sum, a) => sum + Number(a.fantasy_points_ppr || 0), 0);
       const avgActualPpg = acts.length > 0 ? totalActualPts / acts.length : 0;
 
       // Get SOS rankings
-      const sosKey = `${sample.team}:${sample.position}`;
+      const sosKey = `${playerInfo.team}:${playerInfo.position}`;
       const sos = sosRankMap.get(sosKey);
       const rosSosRank = sos?.ros ?? null;
       const playoffSosRank = sos?.playoff ?? null;
 
       // Get bye week
-      const byeWeek = byeWeekMap.get(sample.team) ?? null;
+      const byeWeek = byeWeekMap.get(playerInfo.team) ?? null;
 
       rankings.push({
-        player_id: playerId,
-        player_name: sample.player_name,
-        position: sample.position,
-        team: sample.team,
+        player_id: playerInfo.player_id,
+        player_name: playerInfo.player_name,
+        position: playerInfo.position,
+        team: playerInfo.team,
         avg_projected_ppg_ros: avgProjectedPpgRos,
         avg_actual_ppg: avgActualPpg,
         bye_week: byeWeek,
