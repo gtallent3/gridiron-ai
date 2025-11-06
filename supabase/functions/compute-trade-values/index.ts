@@ -19,22 +19,23 @@ serve(async (req) => {
 
     console.log('Starting trade value computation...');
 
-    // Determine current week from sleeper_projections
-    const { data: projData } = await supabase
-      .from('sleeper_projections')
+    // Determine current week from actual stats (max week with actuals + 1)
+    const { data: actualsWeek } = await supabase
+      .from('nfl_fantasy_points')
       .select('week')
-      .order('week', { ascending: true })
+      .eq('season', 2025)
+      .order('week', { ascending: false })
       .limit(1);
 
-    if (!projData || projData.length === 0) {
+    if (!actualsWeek || actualsWeek.length === 0) {
       return new Response(
-        JSON.stringify({ error: 'No projection data found' }),
+        JSON.stringify({ error: 'No actual stats found to determine current week' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const currentWeek = projData[0].week;
-    console.log(`Current week: ${currentWeek}`);
+    const currentWeek = actualsWeek[0].week + 1;
+    console.log(`Current week: ${currentWeek} (based on max actual stats week ${actualsWeek[0].week})`);
 
     // Fetch actual fantasy points (weeks < currentWeek)
     const { data: actuals } = await supabase
@@ -47,12 +48,6 @@ serve(async (req) => {
       .from('sleeper_projections')
       .select('player_id, player_name, position, team, week, pts_std, ros_sos_rank, playoff_sos_rank')
       .gte('week', currentWeek);
-
-    // Fetch bye week data
-    const { data: schedules } = await supabase
-      .from('team_schedules')
-      .select('team, week, opponent')
-      .eq('opponent', 'BYE');
 
     // Fetch team-level SOS as fallback
     const { data: teamSOS } = await supabase
@@ -154,16 +149,29 @@ serve(async (req) => {
       console.log(`Sample: ${sp.player_name} - W15 ROS: ${sp.ros_sos_rank_w15}, W15 PO: ${sp.playoff_sos_rank_w15}, All ROS: [${sp.ros_values.slice(0,3).join(',')}], All PO: [${sp.po_values.slice(0,3).join(',')}]`);
     }
 
+    // 2025 NFL Bye Week Schedule (hardcoded since team_schedules doesn't have bye data)
+    const byeWeekSchedule: Record<string, number> = {
+      'ATL': 5, 'CHI': 5, 'GB': 5, 'PIT': 5,
+      'HOU': 6, 'MIN': 6,
+      'BAL': 7, 'BUF': 7,
+      'ARI': 8, 'DET': 8, 'JAX': 8, 'LV': 8, 'LAR': 8, 'SEA': 8,
+      'CLE': 9, 'NYJ': 9, 'PHI': 9, 'TB': 9,
+      'CIN': 10, 'DAL': 10, 'KC': 10, 'TEN': 10,
+      'IND': 11, 'NO': 11,
+      'DEN': 12, 'LAC': 12, 'MIA': 12, 'WAS': 12,
+      'CAR': 14, 'NE': 14, 'NYG': 14, 'SF': 14,
+    };
+
     // Build bye adjustment by team
     const byeAdjByTeam: Record<string, number> = {};
-    for (const s of schedules || []) {
-      if (!s.team) continue;
-      const bye = s.week;
+    for (const [team, byeWeek] of Object.entries(byeWeekSchedule)) {
       let adj = 1.0;
-      if (bye && bye < currentWeek) adj = 1.05;
-      else if (bye && bye >= currentWeek) adj = 0.9;
-      byeAdjByTeam[s.team] = adj;
+      if (byeWeek < currentWeek) adj = 1.05;  // Bye already passed - slight boost
+      else if (byeWeek >= currentWeek) adj = 0.9;  // Bye upcoming - slight penalty
+      byeAdjByTeam[team] = adj;
     }
+    
+    console.log(`Applied bye week adjustments for ${Object.keys(byeAdjByTeam).length} teams (current week: ${currentWeek})`);
 
     // Helper to normalize SoS rank (1-32) to -1 to +1
     const normSoS = (rank: number) => {
