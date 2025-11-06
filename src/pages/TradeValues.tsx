@@ -75,6 +75,60 @@ export default function TradeValues() {
     }
   };
 
+  const computeAllData = async () => {
+    setComputing(true);
+    try {
+      toast({
+        title: "Starting",
+        description: "Step 1/3: Computing team SOS..."
+      });
+
+      // Step 1: Compute Team SOS
+      const { error: sosError } = await supabase.functions.invoke('compute-team-sos', {
+        body: { season: 2025, currentWeek: 1 }
+      });
+      if (sosError) throw new Error(`SOS computation failed: ${sosError.message}`);
+
+      toast({
+        title: "Progress",
+        description: "Step 2/3: Fetching projections..."
+      });
+
+      // Step 2: Fetch Sleeper Projections (pulls in the SOS data)
+      const { error: projError } = await supabase.functions.invoke('fetch-sleeper-projections', {
+        body: { season: 2025 }
+      });
+      if (projError) throw new Error(`Projections fetch failed: ${projError.message}`);
+
+      // Wait for projections to complete
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      toast({
+        title: "Progress",
+        description: "Step 3/3: Computing trade values..."
+      });
+
+      // Step 3: Compute Trade Values
+      const { error: valuesError } = await supabase.functions.invoke('compute-trade-values');
+      if (valuesError) throw new Error(`Trade values computation failed: ${valuesError.message}`);
+
+      toast({
+        title: "Success",
+        description: "All data computed successfully with correct playoff SOS"
+      });
+      
+      await fetchValues();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    } finally {
+      setComputing(false);
+    }
+  };
+
   useEffect(() => {
     fetchValues();
   }, []);
@@ -94,10 +148,16 @@ export default function TradeValues() {
             Auto-computed daily at 3 AM · Last updated: {values[0]?.snapshot_date || 'Never'}
           </p>
         </div>
-        <Button onClick={computeValues} disabled={computing}>
-          {computing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Recompute Now
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={computeAllData} disabled={computing} variant="default">
+            {computing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Full Refresh (SOS + Projections + Values)
+          </Button>
+          <Button onClick={computeValues} disabled={computing} variant="outline">
+            {computing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Quick Recompute
+          </Button>
+        </div>
       </div>
 
       <div className="flex gap-2">
