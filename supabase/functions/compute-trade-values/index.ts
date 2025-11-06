@@ -54,7 +54,7 @@ serve(async (req) => {
 
     console.log(`Fetched ${actuals?.length || 0} actual PPR records, ${projections?.length || 0} projected PPR records`);
 
-    // Build actual points by player
+    // Build actual points by player using name+position as key
     const playerData: Record<string, {
       player_id: string;
       player_name: string;
@@ -68,11 +68,13 @@ serve(async (req) => {
 
     // Process actuals
     for (const a of actuals || []) {
-      if (!a.player_id || !a.player_name || !a.position) continue;
+      if (!a.player_name || !a.position) continue;
       
-      if (!playerData[a.player_id]) {
-        playerData[a.player_id] = {
-          player_id: a.player_id,
+      const key = `${a.player_name}|${a.position}`;
+      
+      if (!playerData[key]) {
+        playerData[key] = {
+          player_id: a.player_id || key,
           player_name: a.player_name,
           position: a.position,
           team: a.team || '',
@@ -84,17 +86,19 @@ serve(async (req) => {
       }
       
       const pts = Number(a.fantasy_points_ppr || 0);
-      playerData[a.player_id].actual_weeks.push(a.week);
-      playerData[a.player_id].actual_total += pts;
+      playerData[key].actual_weeks.push(a.week);
+      playerData[key].actual_total += pts;
     }
 
     // Process projections
     for (const p of projections || []) {
-      if (!p.player_id || !p.player_name || !p.position) continue;
+      if (!p.player_name || !p.position) continue;
       
-      if (!playerData[p.player_id]) {
-        playerData[p.player_id] = {
-          player_id: p.player_id,
+      const key = `${p.player_name}|${p.position}`;
+      
+      if (!playerData[key]) {
+        playerData[key] = {
+          player_id: p.player_id || key,
           player_name: p.player_name,
           position: p.position,
           team: p.team || '',
@@ -106,12 +110,12 @@ serve(async (req) => {
       }
       
       const pts = Number(p.pts_ppr || 0);
-      playerData[p.player_id].projected_weeks.push(p.week);
-      playerData[p.player_id].projected_total += pts;
+      playerData[key].projected_weeks.push(p.week);
+      playerData[key].projected_total += pts;
       
       // Update team if missing from actuals
-      if (!playerData[p.player_id].team && p.team) {
-        playerData[p.player_id].team = p.team;
+      if (!playerData[key].team && p.team) {
+        playerData[key].team = p.team;
       }
     }
 
