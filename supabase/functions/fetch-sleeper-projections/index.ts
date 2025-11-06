@@ -11,6 +11,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  console.log('Fetch sleeper projections called - no auth required');
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
