@@ -22,16 +22,17 @@ serve(async (req) => {
     const season = 2025;
     
     // Get the latest week with actual stats to determine current week
-    const { data: latestActualWeek } = await supabase
+    const { data: latestActualWeeks } = await supabase
       .from('nfl_fantasy_points')
       .select('week')
       .eq('season', season)
       .order('week', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+      .limit(1);
     
     // Current week is one after the latest week with actual stats
-    const currentWeek = latestActualWeek ? latestActualWeek.week + 1 : 1;
+    const currentWeek = latestActualWeeks && latestActualWeeks.length > 0 
+      ? latestActualWeeks[0].week + 1 
+      : 1;
     
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek}`);
 
