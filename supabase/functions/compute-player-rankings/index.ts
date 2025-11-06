@@ -92,12 +92,14 @@ serve(async (req) => {
     }
 
     // Build a complete player map from both actuals and projections
+    // Use composite key: player_name:position to handle players with same name
     const allPlayers = new Map<string, { player_id: string, player_name: string, position: string, team: string }>();
     
     // Add all players from actuals
     for (const act of actuals || []) {
       if (act.team && act.player_name && act.position) {
-        allPlayers.set(act.player_name, {
+        const key = `${act.player_name}:${act.position}`;
+        allPlayers.set(key, {
           player_id: act.player_id,
           player_name: act.player_name,
           position: act.position,
@@ -108,30 +110,33 @@ serve(async (req) => {
     
     // Add players from projections (if not already present)
     for (const proj of projections || []) {
-      if (proj.team && proj.player_name && proj.position && !allPlayers.has(proj.player_name)) {
-        allPlayers.set(proj.player_name, {
-          player_id: proj.player_id,
-          player_name: proj.player_name,
-          position: proj.position,
-          team: proj.team
-        });
+      if (proj.team && proj.player_name && proj.position) {
+        const key = `${proj.player_name}:${proj.position}`;
+        if (!allPlayers.has(key)) {
+          allPlayers.set(key, {
+            player_id: proj.player_id,
+            player_name: proj.player_name,
+            position: proj.position,
+            team: proj.team
+          });
+        }
       }
     }
 
-    // Group projections by player_name
+    // Group projections by player_name:position
     const playerProjections = new Map<string, any[]>();
     for (const proj of projections || []) {
-      const key = proj.player_name;
+      const key = `${proj.player_name}:${proj.position}`;
       if (!playerProjections.has(key)) {
         playerProjections.set(key, []);
       }
       playerProjections.get(key)!.push(proj);
     }
 
-    // Group actuals by player_name
+    // Group actuals by player_name:position
     const playerActuals = new Map<string, any[]>();
     for (const act of actuals || []) {
-      const key = act.player_name;
+      const key = `${act.player_name}:${act.position}`;
       if (!playerActuals.has(key)) {
         playerActuals.set(key, []);
       }
@@ -141,10 +146,10 @@ serve(async (req) => {
     // Compute rankings for all players
     const rankings = [];
 
-    for (const [playerName, playerInfo] of allPlayers.entries()) {
-      // Get projections and actuals for this player
-      const projs = playerProjections.get(playerName) || [];
-      const acts = playerActuals.get(playerName) || [];
+    for (const [playerKey, playerInfo] of allPlayers.entries()) {
+      // Get projections and actuals for this player using composite key
+      const projs = playerProjections.get(playerKey) || [];
+      const acts = playerActuals.get(playerKey) || [];
 
       // Skip players with no actual stats AND no projections
       if (projs.length === 0 && acts.length === 0) continue;
