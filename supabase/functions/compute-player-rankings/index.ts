@@ -91,14 +91,22 @@ serve(async (req) => {
       }
     }
 
+    // Normalize player name by removing suffixes
+    const normalizeName = (name: string): string => {
+      return name
+        .replace(/\s+(Jr\.?|Sr\.?|II|III|IV|V)$/i, '')
+        .trim();
+    };
+
     // Build a complete player map from both actuals and projections
-    // Use composite key: player_name:position to handle players with same name
+    // Use composite key: normalized_name:position to handle players with same name
     const allPlayers = new Map<string, { player_id: string, player_name: string, position: string, team: string }>();
     
     // Add all players from actuals
     for (const act of actuals || []) {
       if (act.team && act.player_name && act.position) {
-        const key = `${act.player_name}:${act.position}`;
+        const normalizedName = normalizeName(act.player_name);
+        const key = `${normalizedName}:${act.position}`;
         allPlayers.set(key, {
           player_id: act.player_id,
           player_name: act.player_name,
@@ -111,7 +119,8 @@ serve(async (req) => {
     // Add players from projections (if not already present)
     for (const proj of projections || []) {
       if (proj.team && proj.player_name && proj.position) {
-        const key = `${proj.player_name}:${proj.position}`;
+        const normalizedName = normalizeName(proj.player_name);
+        const key = `${normalizedName}:${proj.position}`;
         if (!allPlayers.has(key)) {
           allPlayers.set(key, {
             player_id: proj.player_id,
@@ -123,20 +132,22 @@ serve(async (req) => {
       }
     }
 
-    // Group projections by player_name:position
+    // Group projections by normalized_name:position
     const playerProjections = new Map<string, any[]>();
     for (const proj of projections || []) {
-      const key = `${proj.player_name}:${proj.position}`;
+      const normalizedName = normalizeName(proj.player_name);
+      const key = `${normalizedName}:${proj.position}`;
       if (!playerProjections.has(key)) {
         playerProjections.set(key, []);
       }
       playerProjections.get(key)!.push(proj);
     }
 
-    // Group actuals by player_name:position
+    // Group actuals by normalized_name:position
     const playerActuals = new Map<string, any[]>();
     for (const act of actuals || []) {
-      const key = `${act.player_name}:${act.position}`;
+      const normalizedName = normalizeName(act.player_name);
+      const key = `${normalizedName}:${act.position}`;
       if (!playerActuals.has(key)) {
         playerActuals.set(key, []);
       }
