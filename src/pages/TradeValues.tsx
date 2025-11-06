@@ -88,10 +88,15 @@ export default function TradeValues() {
   return (
     <div className="container mx-auto p-6 pt-24 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Trade Value Index</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Trade Value Index</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Auto-computed daily at 3 AM · Last updated: {values[0]?.snapshot_date || 'Never'}
+          </p>
+        </div>
         <Button onClick={computeValues} disabled={computing}>
           {computing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Compute Trade Values
+          Recompute Now
         </Button>
       </div>
 
