@@ -586,6 +586,78 @@ export type Database = {
           },
         ]
       }
+      player_pool: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_actual: boolean
+          opponent: string | null
+          opponent_def_rank: number | null
+          passing_ints: number | null
+          passing_tds: number | null
+          passing_yards: number | null
+          player_id: string
+          player_name: string
+          points_ppr: number
+          position: string
+          receiving_tds: number | null
+          receiving_yards: number | null
+          receptions: number | null
+          rushing_tds: number | null
+          rushing_yards: number | null
+          season: number
+          team: string
+          updated_at: string | null
+          week: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_actual?: boolean
+          opponent?: string | null
+          opponent_def_rank?: number | null
+          passing_ints?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          player_id: string
+          player_name: string
+          points_ppr?: number
+          position: string
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          season?: number
+          team: string
+          updated_at?: string | null
+          week: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_actual?: boolean
+          opponent?: string | null
+          opponent_def_rank?: number | null
+          passing_ints?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          player_id?: string
+          player_name?: string
+          points_ppr?: number
+          position?: string
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          season?: number
+          team?: string
+          updated_at?: string | null
+          week?: number
+        }
+        Relationships: []
+      }
       player_rankings: {
         Row: {
           avg_actual_ppg: number
