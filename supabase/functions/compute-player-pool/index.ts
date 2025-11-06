@@ -40,35 +40,60 @@ serve(async (req) => {
       return team;
     };
 
-    // Fetch actual stats for past weeks
-    const { data: actuals, error: actualsError } = await supabase
-      .from('nfl_fantasy_points')
-      .select('*')
-      .eq('season', season)
-      .lt('week', currentWeek)
-      .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .not('team', 'is', null);
+    // Fetch actual stats for past weeks (fetch all records with range)
+    let allActuals: any[] = [];
+    let actualsPage = 0;
+    const pageSize = 1000;
+    
+    while (true) {
+      const { data: actuals, error: actualsError } = await supabase
+        .from('nfl_fantasy_points')
+        .select('*')
+        .eq('season', season)
+        .lt('week', currentWeek)
+        .in('position', ['QB', 'RB', 'WR', 'TE'])
+        .not('team', 'is', null)
+        .range(actualsPage * pageSize, (actualsPage + 1) * pageSize - 1);
 
-    if (actualsError) throw actualsError;
+      if (actualsError) throw actualsError;
+      if (!actuals || actuals.length === 0) break;
+      
+      allActuals = allActuals.concat(actuals);
+      actualsPage++;
+      
+      if (actuals.length < pageSize) break;
+    }
 
-    // Fetch projections for current and future weeks
-    const { data: projections, error: projError } = await supabase
-      .from('sleeper_projections')
-      .select('*')
-      .eq('season', season)
-      .gte('week', currentWeek)
-      .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .not('team', 'is', null);
+    // Fetch projections for current and future weeks (fetch all records with range)
+    let allProjections: any[] = [];
+    let projectionsPage = 0;
+    
+    while (true) {
+      const { data: projections, error: projError } = await supabase
+        .from('sleeper_projections')
+        .select('*')
+        .eq('season', season)
+        .gte('week', currentWeek)
+        .in('position', ['QB', 'RB', 'WR', 'TE'])
+        .not('team', 'is', null)
+        .range(projectionsPage * pageSize, (projectionsPage + 1) * pageSize - 1);
 
-    if (projError) throw projError;
+      if (projError) throw projError;
+      if (!projections || projections.length === 0) break;
+      
+      allProjections = allProjections.concat(projections);
+      projectionsPage++;
+      
+      if (projections.length < pageSize) break;
+    }
 
-    console.log(`Fetched ${actuals?.length || 0} actual records and ${projections?.length || 0} projection records`);
+    console.log(`Fetched ${allActuals.length} actual records and ${allProjections.length} projection records`);
 
     // Build player pool records
     const poolRecords = [];
 
     // Add actual stats (past weeks)
-    for (const actual of actuals || []) {
+    for (const actual of allActuals) {
       poolRecords.push({
         player_id: actual.player_id,
         player_name: actual.player_name,
@@ -92,7 +117,7 @@ serve(async (req) => {
     }
 
     // Add projections (current and future weeks)
-    for (const proj of projections || []) {
+    for (const proj of allProjections) {
       poolRecords.push({
         player_id: proj.player_id,
         player_name: proj.player_name,
