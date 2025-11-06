@@ -1363,6 +1363,7 @@ export type Database = {
           pass_yd: number | null
           player_id: string
           player_name: string | null
+          playoff_sos_rank: number | null
           position: string | null
           pts_half_ppr: number | null
           pts_ppr: number | null
@@ -1371,6 +1372,7 @@ export type Database = {
           rec: number | null
           rec_td: number | null
           rec_yd: number | null
+          ros_sos_rank: number | null
           rush_td: number | null
           rush_yd: number | null
           season: number
@@ -1388,6 +1390,7 @@ export type Database = {
           pass_yd?: number | null
           player_id: string
           player_name?: string | null
+          playoff_sos_rank?: number | null
           position?: string | null
           pts_half_ppr?: number | null
           pts_ppr?: number | null
@@ -1396,6 +1399,7 @@ export type Database = {
           rec?: number | null
           rec_td?: number | null
           rec_yd?: number | null
+          ros_sos_rank?: number | null
           rush_td?: number | null
           rush_yd?: number | null
           season: number
@@ -1413,6 +1417,7 @@ export type Database = {
           pass_yd?: number | null
           player_id?: string
           player_name?: string | null
+          playoff_sos_rank?: number | null
           position?: string | null
           pts_half_ppr?: number | null
           pts_ppr?: number | null
@@ -1421,6 +1426,7 @@ export type Database = {
           rec?: number | null
           rec_td?: number | null
           rec_yd?: number | null
+          ros_sos_rank?: number | null
           rush_td?: number | null
           rush_yd?: number | null
           season?: number
@@ -1611,6 +1617,45 @@ export type Database = {
           team?: string
           updated_at?: string
           week?: number
+        }
+        Relationships: []
+      }
+      team_sos: {
+        Row: {
+          created_at: string | null
+          id: string
+          playoff_avg_def_rank: number | null
+          playoff_sos_rank: number | null
+          position: string
+          ros_avg_def_rank: number | null
+          ros_sos_rank: number | null
+          season: number
+          team: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          playoff_avg_def_rank?: number | null
+          playoff_sos_rank?: number | null
+          position: string
+          ros_avg_def_rank?: number | null
+          ros_sos_rank?: number | null
+          season?: number
+          team: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          playoff_avg_def_rank?: number | null
+          playoff_sos_rank?: number | null
+          position?: string
+          ros_avg_def_rank?: number | null
+          ros_sos_rank?: number | null
+          season?: number
+          team?: string
+          updated_at?: string | null
         }
         Relationships: []
       }

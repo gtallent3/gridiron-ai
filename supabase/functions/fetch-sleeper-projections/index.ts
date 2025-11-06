@@ -239,6 +239,20 @@ serve(async (req) => {
           if (row.def_rank_te != null) sosRankMap.set(`${row.team}:TE`, row.def_rank_te);
         });
 
+        // Get team SOS rankings
+        const { data: teamSosData } = await supabase
+          .from('team_sos')
+          .select('team, position, ros_sos_rank, playoff_sos_rank')
+          .eq('season', season);
+
+        const teamSosMap = new Map<string, { ros: number, playoff: number }>();
+        (teamSosData || []).forEach((row: any) => {
+          teamSosMap.set(`${row.team}:${row.position}`, {
+            ros: row.ros_sos_rank,
+            playoff: row.playoff_sos_rank
+          });
+        });
+
         // Add opponent and defensive rank to projections
         projections.forEach(proj => {
           if (proj.team) {
@@ -259,6 +273,14 @@ serve(async (req) => {
                       proj.opponent_def_rank = sosRank;
                     }
                   }
+                }
+
+                // Add team SOS rankings
+                const teamSosKey = `${proj.team}:${pos}`;
+                const teamSos = teamSosMap.get(teamSosKey);
+                if (teamSos) {
+                  proj.ros_sos_rank = teamSos.ros;
+                  proj.playoff_sos_rank = teamSos.playoff;
                 }
               }
             }
