@@ -94,6 +94,8 @@ serve(async (req) => {
 
     // Build ROS projection summary by player - only include players with teams
     const byPlayerProj: Record<string, any> = {};
+    let week15Count = 0;
+    let week15WithSOS = 0;
     
     for (const p of projections || []) {
       if (!p.player_id || p.week < currentWeek) continue;
@@ -124,9 +126,23 @@ serve(async (req) => {
 
       // Prefer week 15 SOS values (byes end at week 14)
       if (p.week === 15) {
-        if (p.ros_sos_rank != null) byPlayerProj[p.player_id].ros_sos_rank_w15 = Number(p.ros_sos_rank);
-        if (p.playoff_sos_rank != null) byPlayerProj[p.player_id].playoff_sos_rank_w15 = Number(p.playoff_sos_rank);
+        week15Count++;
+        if (p.ros_sos_rank != null) {
+          byPlayerProj[p.player_id].ros_sos_rank_w15 = Number(p.ros_sos_rank);
+          week15WithSOS++;
+        }
+        if (p.playoff_sos_rank != null) {
+          byPlayerProj[p.player_id].playoff_sos_rank_w15 = Number(p.playoff_sos_rank);
+        }
       }
+    }
+
+    console.log(`Processed ${week15Count} week 15 records, ${week15WithSOS} had SOS data`);
+    
+    // Sample a few players to check SOS values
+    const samplePlayers = Object.values(byPlayerProj).slice(0, 3);
+    for (const sp of samplePlayers) {
+      console.log(`Sample: ${sp.player_name} - W15 ROS: ${sp.ros_sos_rank_w15}, W15 PO: ${sp.playoff_sos_rank_w15}, All ROS: [${sp.ros_values.slice(0,3).join(',')}], All PO: [${sp.po_values.slice(0,3).join(',')}]`);
     }
 
     // Build bye adjustment by team
@@ -160,6 +176,10 @@ serve(async (req) => {
     };
     // Compute raw values per player
     const rows: any[] = [];
+    let defaultedToSixteen = 0;
+    let usedWeek15 = 0;
+    let usedMode = 0;
+    let usedTeamSOS = 0;
 
     for (const [pid, agg] of Object.entries(byPlayerProj)) {
       const { player_name, position, team, projSum, projCount, ros_sos_rank_w15, playoff_sos_rank_w15, ros_values, po_values } = agg;
@@ -175,6 +195,12 @@ serve(async (req) => {
 
       const avgReg = (ros_sos_rank_w15 ?? pickMode(ros_values) ?? teamFallbackReg ?? 16);
       const avgPO = (playoff_sos_rank_w15 ?? pickMode(po_values) ?? teamFallbackPO ?? 16);
+      
+      // Track which source was used
+      if (ros_sos_rank_w15 != null) usedWeek15++;
+      else if (pickMode(ros_values) != null) usedMode++;
+      else if (teamFallbackReg != null) usedTeamSOS++;
+      else defaultedToSixteen++;
       const sosRegNorm = normSoS(avgReg);
       const sosPONorm = normSoS(avgPO);
 
@@ -287,6 +313,7 @@ serve(async (req) => {
     }
 
     console.log('Trade values computed successfully');
+    console.log(`SOS source breakdown: Week15=${usedWeek15}, Mode=${usedMode}, TeamSOS=${usedTeamSOS}, Default16=${defaultedToSixteen}`);
 
     return new Response(
       JSON.stringify({
