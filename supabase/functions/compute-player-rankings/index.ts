@@ -187,9 +187,10 @@ serve(async (req) => {
         }
       }
 
-      // Calculate average projected PPG for ROS
-      const totalProjPts = projs.reduce((sum, p) => sum + Number(p.points_ppr || 0), 0);
-      const avgProjectedPpgRos = projs.length > 0 ? totalProjPts / projs.length : 0;
+      // Calculate average projected PPG for ROS (excluding bye weeks with 0 points)
+      const nonByeProjs = projs.filter(p => Number(p.points_ppr || 0) > 0);
+      const totalProjPts = nonByeProjs.reduce((sum, p) => sum + Number(p.points_ppr || 0), 0);
+      const avgProjectedPpgRos = nonByeProjs.length > 0 ? totalProjPts / nonByeProjs.length : 0;
 
       // Calculate average actual PPG from past weeks
       const totalActualPts = acts.reduce((sum, a) => sum + Number(a.points_ppr || 0), 0);
