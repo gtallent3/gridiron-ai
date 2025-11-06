@@ -141,10 +141,12 @@ serve(async (req) => {
     
     // Filter out players with no SOS data at all
     const validPlayers = Object.entries(byPlayerProj).filter(([pid, agg]) => {
+      // Must have a team AND have SOS data
+      if (!agg.team || agg.team === '') return false;
       return agg.ros_values.length > 0 || agg.po_values.length > 0 || agg.ros_sos_rank_w15 != null || agg.playoff_sos_rank_w15 != null;
     });
     
-    console.log(`Filtered from ${Object.keys(byPlayerProj).length} to ${validPlayers.length} players with SOS data`);
+    console.log(`Filtered from ${Object.keys(byPlayerProj).length} to ${validPlayers.length} players with teams and SOS data`);
     
     // Sample a few players to check SOS values
     const samplePlayers = validPlayers.slice(0, 3).map(([pid, agg]) => agg);
