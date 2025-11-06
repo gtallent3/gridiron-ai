@@ -134,48 +134,42 @@ serve(async (req) => {
 
       const projROSppg = projCount ? projSum / projCount : 0;
       const actual = actualSummary[pid] || { recent: 0, season: 0 };
-      const ppgRecentSeason = (actual.recent * 0.5 + actual.season * 0.5) || actual.season || 0;
-
+      
       const avgReg = sosRanksRegular.length ? sosRanksRegular.reduce((a: number, b: number) => a + b, 0) / sosRanksRegular.length : 16;
       const avgPO = sosRanksPlayoff.length ? sosRanksPlayoff.reduce((a: number, b: number) => a + b, 0) / sosRanksPlayoff.length : 16;
       const sosRegNorm = normSoS(avgReg);
       const sosPONorm = normSoS(avgPO);
 
-      // Position-specific weights
-      let wRecent = 0.5, wSeason = 0.5, wProj = 0.5;
-      let sosMult = 0.1, sosPlayoffMult = 0.1;
+      // Position-specific scarcity multipliers (minimal impact)
       let scarcity = 1.0;
+      let sosMult = 0.03;  // Reduced from 0.1-0.15
+      let sosPlayoffMult = 0.05;  // Reduced from 0.08-0.25
 
       if (position === 'QB') {
-        wRecent = 0.4; wSeason = 0.6; wProj = 0.5;
-        sosMult = 0.15; sosPlayoffMult = 0.25;
-        scarcity = 1.4;
-      } else if (position === 'RB') {
-        wRecent = 0.7; wSeason = 0.3; wProj = 0.3;
-        sosMult = 0.10; sosPlayoffMult = 0.17;
-        scarcity = 1.10;
-      } else if (position === 'WR') {
-        wRecent = 0.6; wSeason = 0.4; wProj = 0.4;
-        sosMult = 0.12; sosPlayoffMult = 0.20;
         scarcity = 1.05;
+      } else if (position === 'RB') {
+        scarcity = 1.03;
+      } else if (position === 'WR') {
+        scarcity = 1.02;
       } else if (position === 'TE') {
-        wRecent = 0.6; wSeason = 0.4; wProj = 0.6;
-        sosMult = 0.05; sosPlayoffMult = 0.08;
-        scarcity = 1.5;
+        scarcity = 1.08;
       } else {
         continue;
       }
 
       const byeAdj = byeAdjByTeam[team] ?? 1.0;
+      // Minimal SoS adjustment (max 8% swing instead of 40%)
       const sosAdj = 1 + (sosRegNorm * sosMult) + (sosPONorm * sosPlayoffMult);
 
-      const baseline = (actual.recent * wRecent) + (actual.season * wSeason);
-      const baseVal = (projROSppg * wProj) + (baseline * (1 - wProj));
+      // Core formula: heavily weight ROS projection and actual season average
+      // 70% ROS projection, 30% actual season average
+      const baseVal = (projROSppg * 0.70) + (actual.season * 0.30);
 
+      // Apply minimal adjustments
       let raw = baseVal * sosAdj * byeAdj * scarcity;
 
-      // Floor for low-PPG players
-      if ((actual.recent || actual.season) && ppgRecentSeason < 8) raw *= 0.25;
+      // Floor for very low performers
+      if (baseVal < 3) raw *= 0.5;
 
       rows.push({
         player_id: pid,
@@ -196,40 +190,47 @@ serve(async (req) => {
     // Sort all rows by raw_value descending for consistent ranking
     rows.sort((a, b) => b.raw_value - a.raw_value);
 
-    // Normalize and scale by position using fixed baselines
-    const byPos: Record<string, any[]> = {};
-    for (const r of rows) {
-      if (!byPos[r.position]) byPos[r.position] = [];
-      byPos[r.position].push(r);
+    // Normalize and scale ALL positions together to 1-100
+    if (rows.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'No players to compute' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
+    // Get the overall top value across all positions
+    const topValue = rows[0].raw_value;
+    if (topValue === 0) {
+      return new Response(
+        JSON.stringify({ error: 'No valid player values' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Apply logarithmic scaling to spread values from 1-100
+    // This ensures top players are near 100 but not all exactly 100
+    // and lower-tier players spread nicely down to 1
     const scaledOut: any[] = [];
-
-    for (const [pos, list] of Object.entries(byPos)) {
-      if (list.length === 0) continue;
-
-      // Sort by raw value for deterministic ordering
-      list.sort((a, b) => b.raw_value - a.raw_value);
-
-      const posMax = (pos === 'QB' || pos === 'TE') ? 50 : 100;
-      const topN = (pos === 'QB' || pos === 'TE') ? 20 : 30;
-      
-      // Use fixed baseline: top player = posMax, scale down from there
-      const topValue = list[0].raw_value;
-      if (topValue === 0) continue;
-
-      // Assign values proportionally to raw_value, with top player = posMax
-      for (let i = 0; i < list.length; i++) {
-        const r = list[i];
-        // Use exponential decay to spread values: top players get high values, bottom gets ~1
+    
+    for (const r of rows) {
+      if (r.raw_value === 0) {
+        r.trade_value = 1;
+      } else {
+        // Calculate ratio relative to top player
         const ratio = r.raw_value / topValue;
-        // Apply power curve to create better separation at top
-        const curved = Math.pow(ratio, 0.7);
-        let tv = 1 + (curved * (posMax - 1));
-        tv = Math.max(1, Math.min(tv, posMax));
-        r.trade_value = Number(tv.toFixed(2));
-        scaledOut.push(r);
+        
+        // Apply power curve for better distribution
+        // Top player: ratio=1.0 → curved ≈ 1.0 → value ≈ 100
+        // 50% of top: ratio=0.5 → curved ≈ 0.7 → value ≈ 70
+        // 25% of top: ratio=0.25 → curved ≈ 0.5 → value ≈ 50
+        const curved = Math.pow(ratio, 0.6);
+        
+        // Scale to 1-100
+        let tv = 1 + (curved * 99);
+        tv = Math.max(1, Math.min(tv, 100));
+        r.trade_value = Number(tv.toFixed(1));
       }
+      scaledOut.push(r);
     }
 
     // Save to trade_value_weekly
