@@ -18,14 +18,14 @@ serve(async (req) => {
     );
 
     // Determine season and current week from database
-    // Use season 2025 as that's what the data is labeled with
     const season = 2025;
     
     // Get the latest week with actual stats to determine current week
     const { data: latestActualWeeks } = await supabase
-      .from('nfl_fantasy_points')
+      .from('player_pool')
       .select('week')
       .eq('season', season)
+      .eq('is_actual', true)
       .order('week', { ascending: false })
       .limit(1);
     
@@ -36,27 +36,19 @@ serve(async (req) => {
     
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek}`);
 
-    // Fetch actual stats for past weeks (to get all players who have played)
-    const { data: actuals, error: actualsError } = await supabase
-      .from('nfl_fantasy_points')
-      .select('player_id, player_name, position, team, fantasy_points_ppr, week')
+    // Fetch all player pool data for the season
+    const { data: poolData, error: poolError } = await supabase
+      .from('player_pool')
+      .select('player_id, player_name, position, team, week, points_ppr, is_actual')
       .eq('season', season)
-      .lt('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
       .not('team', 'is', null);
 
-    if (actualsError) throw actualsError;
+    if (poolError) throw poolError;
 
-    // Fetch all ROS projections (current week onwards)
-    const { data: projections, error: projError } = await supabase
-      .from('sleeper_projections')
-      .select('player_id, player_name, position, team, week, pts_ppr')
-      .eq('season', season)
-      .gte('week', currentWeek)
-      .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .not('team', 'is', null);
-
-    if (projError) throw projError;
+    // Separate actuals (past weeks) from projections (future weeks)
+    const actuals = (poolData || []).filter(p => p.is_actual && p.week < currentWeek);
+    const projections = (poolData || []).filter(p => !p.is_actual && p.week >= currentWeek);
 
     // Fetch SOS data
     const { data: sosData, error: sosError } = await supabase
@@ -182,13 +174,13 @@ serve(async (req) => {
       // Skip players with no actual stats AND no projections
       if (projs.length === 0 && acts.length === 0) continue;
 
-      // Filter out players that are out for the season (pts_ppr == 0 for both weeks 17 AND 18)
+      // Filter out players that are out for the season (points_ppr == 0 for both weeks 17 AND 18)
       if (projs.length > 0) {
         const week17Proj = projs.find(p => p.week === 17);
         const week18Proj = projs.find(p => p.week === 18);
         
-        const week17Pts = week17Proj ? Number(week17Proj.pts_ppr || 0) : 1;
-        const week18Pts = week18Proj ? Number(week18Proj.pts_ppr || 0) : 1;
+        const week17Pts = week17Proj ? Number(week17Proj.points_ppr || 0) : 1;
+        const week18Pts = week18Proj ? Number(week18Proj.points_ppr || 0) : 1;
         
         if (week17Pts === 0 && week18Pts === 0) {
           continue; // Player is out for the season
@@ -196,11 +188,11 @@ serve(async (req) => {
       }
 
       // Calculate average projected PPG for ROS
-      const totalProjPts = projs.reduce((sum, p) => sum + Number(p.pts_ppr || 0), 0);
+      const totalProjPts = projs.reduce((sum, p) => sum + Number(p.points_ppr || 0), 0);
       const avgProjectedPpgRos = projs.length > 0 ? totalProjPts / projs.length : 0;
 
       // Calculate average actual PPG from past weeks
-      const totalActualPts = acts.reduce((sum, a) => sum + Number(a.fantasy_points_ppr || 0), 0);
+      const totalActualPts = acts.reduce((sum, a) => sum + Number(a.points_ppr || 0), 0);
       const avgActualPpg = acts.length > 0 ? totalActualPts / acts.length : 0;
 
       // Get SOS rankings
