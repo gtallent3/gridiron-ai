@@ -408,14 +408,14 @@ serve(async (req) => {
       }
     }
 
-    // Build query for player_pool (contains both actuals and projections)
-    let poolQuery = supabase
-      .from('player_pool')
+    // Build query for actual stats from nfl_fantasy_points
+    let actualsQuery = supabase
+      .from('nfl_fantasy_points')
       .select('*')
       .eq('season', seasonNum);
 
     if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
-      poolQuery = poolQuery.eq('week', weekNum);
+      actualsQuery = actualsQuery.eq('week', weekNum);
     }
 
     if (playerIds && playerIds.length > 0) {
@@ -430,62 +430,129 @@ serve(async (req) => {
         const n = String(id).match(/^\-?\d+$/);
         if (n) variants.add(`espn_${id}`);
       }
-      poolQuery = poolQuery.in('player_id', Array.from(variants));
+      actualsQuery = actualsQuery.in('player_id', Array.from(variants));
     }
 
-    // Fetch from player_pool
-    const { data: poolData, error: poolError } = await poolQuery;
+    // Build query for projections from sleeper_projections
+    let projectionsQuery = supabase
+      .from('sleeper_projections')
+      .select('*')
+      .eq('season', seasonNum);
 
-    if (poolError) {
-      console.error('Error fetching from player_pool:', poolError);
+    if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
+      projectionsQuery = projectionsQuery.eq('week', weekNum);
+    }
+
+    if (playerIds && playerIds.length > 0) {
+      const variants = new Set<string>();
+      for (const id of playerIds) {
+        if (!id) continue;
+        variants.add(String(id));
+        const m = String(id).match(/^espn_(\-?\d+)$/);
+        if (m) variants.add(m[1]);
+        const n = String(id).match(/^\-?\d+$/);
+        if (n) variants.add(`espn_${id}`);
+      }
+      projectionsQuery = projectionsQuery.in('player_id', Array.from(variants));
+    }
+
+    // Fetch both actuals and projections
+    const [{ data: actuals, error: actualsError }, { data: projections, error: projectionsError }] = 
+      await Promise.all([
+        actualsQuery,
+        projectionsQuery
+      ]);
+
+    if (actualsError) {
+      console.error('Error fetching actuals from nfl_fantasy_points:', actualsError);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch player stats' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    if (projectionsError) {
+      console.error('Error fetching projections from sleeper_projections:', projectionsError);
+    }
+
+
     // Implement actuals-first selection logic
     const playerDataMap = new Map<string, any>();
     
-    // Process pool data - actuals have priority over projections
-    if (poolData) {
-      for (const row of poolData) {
-        const key = `${row.player_id}_${row.week}`;
-        const sourceType = row.is_actual ? 'actual' : 'projected';
+    // First, add all projections from sleeper_projections
+    if (projections) {
+      for (const proj of projections) {
+        const key = `${proj.player_id}_${proj.week}`;
         
-        const normalizedStats = {
-          ...row.stats,
-          // Preserve projection helpers for UI/transparency
-          projected_fp: (row as any).projected_fp,
-          __applied_breakdown: (row as any).applied_breakdown ?? (row as any).__applied_breakdown,
-          player_id: row.player_id,
-          player_name: row.player_name,
-          team: row.team,
-          position: row.position,
-          week: row.week,
-          season: row.season,
-          source: row.source,
-          source_type: sourceType,
-          updated_at: row.last_updated,
+        // Map sleeper_projections columns to standard format
+        const normalizedStats: PlayerStats = {
+          passing_yards: Number(proj.pass_yd) || 0,
+          passing_tds: Number(proj.pass_td) || 0,
+          interceptions: Number(proj.pass_int) || 0,
+          rushing_yards: Number(proj.rush_yd) || 0,
+          rushing_tds: Number(proj.rush_td) || 0,
+          receptions: Number(proj.rec) || 0,
+          receiving_yards: Number(proj.rec_yd) || 0,
+          receiving_tds: Number(proj.rec_td) || 0,
         };
         
-        // If we already have an entry and this is actual data, replace it
-        // If we already have actual data, keep it
-        const existing = playerDataMap.get(key);
-        if (!existing || (row.is_actual && existing.source_type !== 'actual')) {
-          playerDataMap.set(key, normalizedStats);
-        }
+        playerDataMap.set(key, {
+          ...normalizedStats,
+          player_id: proj.player_id,
+          player_name: proj.player_name,
+          team: proj.team,
+          position: proj.position,
+          week: proj.week,
+          season: proj.season,
+          opponent: proj.opponent,
+          source: 'sleeper_projection',
+          source_type: 'projected',
+          updated_at: proj.updated_at,
+        });
+      }
+    }
+    
+    // Then, override with actuals from nfl_fantasy_points where available (actuals-first)
+    if (actuals) {
+      for (const actual of actuals) {
+        const key = `${actual.player_id}_${actual.week}`;
+        
+        // Map nfl_fantasy_points columns to standard format
+        const normalizedStats: PlayerStats = {
+          passing_yards: Number(actual.passing_yards) || 0,
+          passing_tds: Number(actual.passing_tds) || 0,
+          interceptions: Number(actual.passing_ints) || 0,
+          rushing_yards: Number(actual.rushing_yards) || 0,
+          rushing_tds: Number(actual.rushing_tds) || 0,
+          receptions: Number(actual.receptions) || 0,
+          receiving_yards: Number(actual.receiving_yards) || 0,
+          receiving_tds: Number(actual.receiving_tds) || 0,
+        };
+        
+        playerDataMap.set(key, {
+          ...normalizedStats,
+          player_id: actual.player_id,
+          player_name: actual.player_name,
+          team: actual.team,
+          position: actual.position,
+          week: actual.week,
+          season: actual.season,
+          opponent: actual.opponent,
+          source: 'nfl_fantasy_points',
+          source_type: 'actual',
+          updated_at: actual.updated_at,
+        });
       }
     }
 
     const stats = Array.from(playerDataMap.values());
 
-    console.log(`Found ${stats?.length || 0} stat records for week ${weekNum}, season ${seasonNum}`);
+    console.log(`Found ${stats?.length || 0} stat records (${actuals?.length || 0} actuals, ${projections?.length || 0} projections) for week ${weekNum}, season ${seasonNum}`);
 
     // Calculate fantasy points for each player
     const playersWithPoints = stats.map(player => {
-      // Handle both old format (columns) and new format (stats jsonb)
-      const playerStats = player.stats || player;
+      // Stats are already normalized in the correct format
+      const playerStats = player as PlayerStats;
       
       // Only apply defensive scoring to DST positions
       const isDST = player.position === 'D/ST' || player.position === 'DEF' || player.position === 'DST' || player.position === '16';
