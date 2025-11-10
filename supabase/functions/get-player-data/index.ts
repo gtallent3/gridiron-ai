@@ -428,50 +428,68 @@ serve(async (req) => {
       }
     }
 
-    // Build query for actual stats from nfl_fantasy_points
-    // Fetch all stats for the week/season, we'll match by name+position
+    // Build queries for multiple sources (actuals + projections)
+    // Actuals: nfl_fantasy_points and player_stats (ESPN)
     let actualsQuery = supabase
       .from('nfl_fantasy_points')
+      .select('*')
+      .eq('season', seasonNum);
+    let espnActualsQuery = supabase
+      .from('player_stats')
       .select('*')
       .eq('season', seasonNum);
 
     if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
       actualsQuery = actualsQuery.eq('week', weekNum);
+      espnActualsQuery = espnActualsQuery.eq('week', weekNum);
     }
 
-    // Build query for projections from sleeper_projections
-    // Fetch all projections for the week/season, we'll match by name+position
+    // Projections: sleeper_projections and projected_player_stats (ESPN)
     let projectionsQuery = supabase
       .from('sleeper_projections')
+      .select('*')
+      .eq('season', seasonNum);
+    let espnProjectionsQuery = supabase
+      .from('projected_player_stats')
       .select('*')
       .eq('season', seasonNum);
 
     if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
       projectionsQuery = projectionsQuery.eq('week', weekNum);
+      espnProjectionsQuery = espnProjectionsQuery.eq('week', weekNum);
     }
 
-    // Fetch both actuals and projections
-    const [{ data: actuals, error: actualsError }, { data: projections, error: projectionsError }] = 
-      await Promise.all([
-        actualsQuery,
-        projectionsQuery
-      ]);
+    // Fetch all sources in parallel
+    const [
+      { data: actuals, error: actualsError },
+      { data: projections, error: projectionsError },
+      { data: espnActuals, error: espnActualsError },
+      { data: espnProjections, error: espnProjectionsError }
+    ] = await Promise.all([
+      actualsQuery,
+      projectionsQuery,
+      espnActualsQuery,
+      espnProjectionsQuery,
+    ]);
 
     if (actualsError) {
       console.error('Error fetching actuals from nfl_fantasy_points:', actualsError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch player stats' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
     }
-
+    if (espnActualsError) {
+      console.error('Error fetching actuals from player_stats:', espnActualsError);
+    }
     if (projectionsError) {
       console.error('Error fetching projections from sleeper_projections:', projectionsError);
+    }
+    if (espnProjectionsError) {
+      console.error('Error fetching projections from projected_player_stats:', espnProjectionsError);
     }
 
     // Filter results to match requested player roster by name+position
     let actualsFinal = actuals || [];
+    let espnActualsFinal = espnActuals || [];
     let projectionsFinal = projections || [];
+    let espnProjectionsFinal = espnProjections || [];
 
     if (playerIds && playerIds.length > 0) {
       // Build a set of normalized name:position keys from the roster
@@ -504,12 +522,20 @@ serve(async (req) => {
 
       // Filter actuals and projections to only include roster players
       if (rosterKeys.size > 0) {
-        actualsFinal = actualsFinal.filter((a: any) => {
+        actualsFinal = (actualsFinal as any[]).filter((a: any) => {
+          const key = `${normalizeName(a.player_name)}:${normalizePosition(a.position)}`;
+          return rosterKeys.has(key);
+        });
+        espnActualsFinal = (espnActualsFinal as any[]).filter((a: any) => {
           const key = `${normalizeName(a.player_name)}:${normalizePosition(a.position)}`;
           return rosterKeys.has(key);
         });
 
-        projectionsFinal = projectionsFinal.filter((p: any) => {
+        projectionsFinal = (projectionsFinal as any[]).filter((p: any) => {
+          const key = `${normalizeName(p.player_name)}:${normalizePosition(p.position)}`;
+          return rosterKeys.has(key);
+        });
+        espnProjectionsFinal = (espnProjectionsFinal as any[]).filter((p: any) => {
           const key = `${normalizeName(p.player_name)}:${normalizePosition(p.position)}`;
           return rosterKeys.has(key);
         });
@@ -559,6 +585,32 @@ serve(async (req) => {
       }
     }
     
+    // Also add ESPN projections from projected_player_stats (don't override Sleeper if present)
+    if (espnProjectionsFinal) {
+      for (const proj of espnProjectionsFinal as any[]) {
+        const normalizedName = normalizeName(proj.player_name);
+        const normalizedPos = normalizePosition(proj.position);
+        const key = `${normalizedName}:${normalizedPos}:${proj.week}`;
+        if (!playerDataMap.has(key)) {
+          const statsObj: PlayerStats = { ...(proj.stats || {}) } as PlayerStats;
+          playerDataMap.set(key, {
+            ...statsObj,
+            player_id: proj.player_id,
+            player_name: proj.player_name,
+            team: proj.team,
+            position: normalizedPos,
+            week: proj.week,
+            season: proj.season,
+            source: 'espn_projection',
+            source_type: 'projected',
+            projected_fp: typeof proj.projected_fp === 'number' ? proj.projected_fp : undefined,
+            __applied_breakdown: proj.applied_breakdown,
+            updated_at: proj.last_updated || proj.updated_at,
+          });
+        }
+      }
+    }
+    
     // Then, override with actuals from nfl_fantasy_points where available (actuals-first)
     if (actualsFinal) {
       for (const actual of actualsFinal as any[]) {
@@ -594,9 +646,31 @@ serve(async (req) => {
       }
     }
 
+    // Finally, override with ESPN actuals from player_stats (highest priority)
+    if (espnActualsFinal) {
+      for (const actual of espnActualsFinal as any[]) {
+        const normalizedName = normalizeName(actual.player_name);
+        const normalizedPos = normalizePosition(actual.position);
+        const key = `${normalizedName}:${normalizedPos}:${actual.week}`;
+        const normalizedStats: PlayerStats = { ...(actual as any) } as PlayerStats;
+        playerDataMap.set(key, {
+          ...normalizedStats,
+          player_id: actual.player_id,
+          player_name: actual.player_name,
+          team: actual.team,
+          position: normalizedPos,
+          week: actual.week,
+          season: actual.season,
+          source: 'espn_actual',
+          source_type: 'actual',
+          updated_at: actual.freshness_ts || actual.updated_at,
+        });
+      }
+    }
+
     const stats: any[] = Array.from(playerDataMap.values());
 
-    console.log(`Found ${stats?.length || 0} stat records (${actualsFinal?.length || 0} actuals, ${projectionsFinal?.length || 0} projections) for week ${weekNum}, season ${seasonNum}`);
+    console.log(`Found ${stats?.length || 0} stat records (${(actualsFinal?.length || 0) + (espnActualsFinal?.length || 0)} actuals, ${(projectionsFinal?.length || 0) + (espnProjectionsFinal?.length || 0)} projections) for week ${weekNum}, season ${seasonNum}`);
 
     // Calculate fantasy points for each player
     const playersWithPoints = stats.map(player => {
