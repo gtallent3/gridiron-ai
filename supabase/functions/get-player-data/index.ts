@@ -408,6 +408,55 @@ serve(async (req) => {
       }
     }
 
+    // Prepare ID mappings using normalized_players so roster ESPN IDs match Sleeper IDs
+    let actualIdList: string[] | undefined;
+    let sleeperIdList: string[] | undefined;
+    let namesList: string[] | undefined;
+
+    if (playerIds && playerIds.length > 0) {
+      const variants = new Set<string>();
+      for (const id of playerIds) {
+        if (!id) continue;
+        variants.add(String(id));
+        const m = String(id).match(/^espn_(\-?\d+)$/);
+        if (m) variants.add(m[1]);
+        const n = String(id).match(/^\-?\d+$/);
+        if (n) variants.add(`espn_${id}`);
+      }
+
+      const idsArr = Array.from(variants);
+      const [npByEspn, npByPid] = await Promise.all([
+        supabase.from('normalized_players').select('player_id, player_name, position, team, espn_id, sleeper_id').in('espn_id', idsArr),
+        supabase.from('normalized_players').select('player_id, player_name, position, team, espn_id, sleeper_id').in('player_id', idsArr),
+      ]);
+
+      const normRows = [
+        ...(npByEspn.data || []),
+        ...(npByPid.data || []),
+      ];
+
+      const actualSet = new Set<string>();
+      const sleeperSet = new Set<string>();
+      const nameSet = new Set<string>();
+
+      for (const r of normRows) {
+        if (r.espn_id) actualSet.add(String(r.espn_id));
+        if (r.player_id) actualSet.add(String(r.player_id));
+        if (r.sleeper_id) sleeperSet.add(String(r.sleeper_id));
+        if (r.player_name) nameSet.add(String(r.player_name));
+      }
+
+      // Fallback: include original variants so we don't over-filter
+      for (const v of idsArr) {
+        actualSet.add(v);
+        sleeperSet.add(v);
+      }
+
+      actualIdList = Array.from(actualSet);
+      sleeperIdList = Array.from(sleeperSet);
+      namesList = Array.from(nameSet);
+    }
+
     // Build query for actual stats from nfl_fantasy_points
     let actualsQuery = supabase
       .from('nfl_fantasy_points')
@@ -418,19 +467,8 @@ serve(async (req) => {
       actualsQuery = actualsQuery.eq('week', weekNum);
     }
 
-    if (playerIds && playerIds.length > 0) {
-      // Normalize ESPN IDs (support both 'espn_1234' and '1234')
-      const variants = new Set<string>();
-      for (const id of playerIds) {
-        if (!id) continue;
-        variants.add(String(id));
-        const m = String(id).match(/^espn_(\-?\d+)$/);
-        if (m) variants.add(m[1]);
-        // Also add espn_ prefix variant if id is numeric
-        const n = String(id).match(/^\-?\d+$/);
-        if (n) variants.add(`espn_${id}`);
-      }
-      actualsQuery = actualsQuery.in('player_id', Array.from(variants));
+    if (actualIdList && actualIdList.length > 0) {
+      actualsQuery = actualsQuery.in('player_id', actualIdList);
     }
 
     // Build query for projections from sleeper_projections
@@ -443,17 +481,8 @@ serve(async (req) => {
       projectionsQuery = projectionsQuery.eq('week', weekNum);
     }
 
-    if (playerIds && playerIds.length > 0) {
-      const variants = new Set<string>();
-      for (const id of playerIds) {
-        if (!id) continue;
-        variants.add(String(id));
-        const m = String(id).match(/^espn_(\-?\d+)$/);
-        if (m) variants.add(m[1]);
-        const n = String(id).match(/^\-?\d+$/);
-        if (n) variants.add(`espn_${id}`);
-      }
-      projectionsQuery = projectionsQuery.in('player_id', Array.from(variants));
+    if (sleeperIdList && sleeperIdList.length > 0) {
+      projectionsQuery = projectionsQuery.in('player_id', sleeperIdList);
     }
 
     // Fetch both actuals and projections
@@ -475,13 +504,47 @@ serve(async (req) => {
       console.error('Error fetching projections from sleeper_projections:', projectionsError);
     }
 
+    // Fallback enrichment by player_name if ID-mapped results look too small
+    let actualsFinal = actuals || [];
+    let projectionsFinal = projections || [];
 
+    if ((projectionsFinal.length < (playerIds?.length || 0)) && namesList && namesList.length > 0) {
+      const { data: projByName } = await supabase
+        .from('sleeper_projections')
+        .select('*')
+        .eq('season', seasonNum)
+        .eq('week', weekNum)
+        .in('player_name', namesList);
+      if (projByName && projByName.length > 0) {
+        const seen = new Set(projectionsFinal.map((p: any) => `${p.player_id}_${p.week}`));
+        for (const p of projByName) {
+          const key = `${p.player_id}_${p.week}`;
+          if (!seen.has(key)) projectionsFinal.push(p);
+        }
+      }
+    }
+
+    if ((actualsFinal.length < (playerIds?.length || 0)) && namesList && namesList.length > 0) {
+      const { data: actByName } = await supabase
+        .from('nfl_fantasy_points')
+        .select('*')
+        .eq('season', seasonNum)
+        .eq('week', weekNum)
+        .in('player_name', namesList);
+      if (actByName && actByName.length > 0) {
+        const seenA = new Set(actualsFinal.map((a: any) => `${a.player_id}_${a.week}`));
+        for (const a of actByName) {
+          const key = `${a.player_id}_${a.week}`;
+          if (!seenA.has(key)) actualsFinal.push(a);
+        }
+      }
+    }
     // Implement actuals-first selection logic
     const playerDataMap = new Map<string, any>();
     
     // First, add all projections from sleeper_projections
-    if (projections) {
-      for (const proj of projections) {
+    if (projectionsFinal) {
+      for (const proj of projectionsFinal as any[]) {
         const key = `${proj.player_id}_${proj.week}`;
         
         // Map sleeper_projections columns to standard format
@@ -496,6 +559,11 @@ serve(async (req) => {
           receiving_tds: Number(proj.rec_td) || 0,
         };
         
+        // Select precomputed projected fantasy points matching league scoring
+        const leagueProjected = (scoringSettings.receptions === 0
+          ? Number(proj.pts_std)
+          : (scoringSettings.receptions === 0.5 ? Number(proj.pts_half_ppr) : Number(proj.pts_ppr)));
+        
         playerDataMap.set(key, {
           ...normalizedStats,
           player_id: proj.player_id,
@@ -507,14 +575,15 @@ serve(async (req) => {
           opponent: proj.opponent,
           source: 'sleeper_projection',
           source_type: 'projected',
+          projected_fp: !Number.isNaN(leagueProjected) ? leagueProjected : undefined,
           updated_at: proj.updated_at,
         });
       }
     }
     
     // Then, override with actuals from nfl_fantasy_points where available (actuals-first)
-    if (actuals) {
-      for (const actual of actuals) {
+    if (actualsFinal) {
+      for (const actual of actualsFinal as any[]) {
         const key = `${actual.player_id}_${actual.week}`;
         
         // Map nfl_fantasy_points columns to standard format
@@ -545,9 +614,9 @@ serve(async (req) => {
       }
     }
 
-    const stats = Array.from(playerDataMap.values());
+    const stats: any[] = Array.from(playerDataMap.values());
 
-    console.log(`Found ${stats?.length || 0} stat records (${actuals?.length || 0} actuals, ${projections?.length || 0} projections) for week ${weekNum}, season ${seasonNum}`);
+    console.log(`Found ${stats?.length || 0} stat records (${actualsFinal?.length || 0} actuals, ${projectionsFinal?.length || 0} projections) for week ${weekNum}, season ${seasonNum}`);
 
     // Calculate fantasy points for each player
     const playersWithPoints = stats.map(player => {
