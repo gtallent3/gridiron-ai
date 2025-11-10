@@ -197,14 +197,18 @@ Deno.serve(async (req) => {
       },
     });
 
-    /** Fetch candidates for a given team+slot, return [{player, projFp, depth}] */
     async function fetchTeamSlotCandidates(proTeamId: number, slotName: SlotName) {
       const slotId = SLOT_NAME_TO_ID[slotName];
       const candidates: Array<{
-        p: any;
+        id: string;
+        name: string;
+        position: string;
+        proTeamId: number;
         proj: number;
         depth: number | null;
-        proTeamId: number;
+        status: string;
+        percentOwned: number;
+        percentStarted: number;
       }> = [];
 
       for (let page = 0; page < MAX_PAGES; page++) {
@@ -228,39 +232,40 @@ Deno.serve(async (req) => {
         for (const p of arr) {
           const stats = Array.isArray(p.stats) ? p.stats : (Array.isArray(p.player?.stats) ? p.player.stats : []);
           if (!stats?.length) continue;
-          // keep only projection entries for target week
           const projEntry = stats.find((s: any) => s.statSourceId === 1 && s.scoringPeriodId === week);
           if (!projEntry) continue;
 
           const applied = projEntry.appliedStats ?? projEntry.stats ?? {};
           const proj = computeAppliedTotal(applied, projEntry.appliedTotal) || 0;
 
-          // Depth if available (not always present)
+          const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
+          const position = getPosition(p.defaultPositionId ?? p.player?.defaultPositionId);
+          const proTid = p.proTeamId ?? p.player?.proTeamId ?? proTeamId;
+          const id = String(p?.id ?? p.player?.id ?? '');
+          const status = (p.player?.status ?? p.status) || '';
+          const percentOwned = p.ownership?.percentOwned ?? 0;
+          const percentStarted = p.ownership?.percentStarted ?? 0;
           const depth = (p.player?.depthChartOrder ?? p.depthChartOrder ?? null);
-          candidates.push({ p, proj, depth: typeof depth === 'number' ? depth : null, proTeamId });
+
+          candidates.push({ id, name, position, proTeamId: proTid, proj, depth: typeof depth === 'number' ? depth : null, status, percentOwned, percentStarted });
         }
 
         // small yield helps GC
         await sleep(0);
 
-        // Heuristic: if we already have a lot and page smaller than PAGE_SIZE, stop
         if (arr.length < PAGE_SIZE) break;
       }
 
       return candidates;
     }
 
-    /** Rank candidates by projection desc; tie-break by smaller depth; then name */
-    function rankAndPick(candidates: ReturnType<typeof Object> extends infer T ? any[] : any[], n: number) {
+    function rankAndPick(candidates: any[], n: number) {
       const picked = [...candidates].sort((a, b) => {
         if (b.proj !== a.proj) return b.proj - a.proj;
         const ad = a.depth ?? 99;
         const bd = b.depth ?? 99;
         if (ad !== bd) return ad - bd;
-        const an = (a.p.fullName ?? a.p.player?.fullName ?? '').localeCompare(
-          (b.p.fullName ?? b.p.player?.fullName ?? '')
-        );
-        return an;
+        return (a.name ?? '').localeCompare(b.name ?? '');
       }).slice(0, n);
       return picked;
     }
@@ -281,30 +286,22 @@ Deno.serve(async (req) => {
 
         const chosen = rankAndPick(cands, want);
 
-        // Prepare ultra-lean rows — store only projection row for this selection
-        const rows = chosen.map((c, idx) => {
-          const p = c.p;
-          const espnId = p?.id?.toString();
-          const name = p.fullName ?? p.player?.fullName ?? 'Unknown';
-          const pos = getPosition(p.defaultPositionId ?? p.player?.defaultPositionId);
-          const proTid = p.proTeamId ?? p.player?.proTeamId ?? teamId;
-
+        const rows = chosen.map((c: any, idx: number) => {
           return {
             league_id: leagueData.id,
             espn_league_id: espnLeagueId,
             season,
             week,
-            player_id: `espn_${espnId}`,
-            player_name: name,
-            position: pos,
-            team: getTeamAbbreviation(proTid),
-            waiver_status: (p.player?.status ?? p.status) === 'FREEAGENT' ? 'FREEAGENT'
-              : (p.player?.status ?? p.status) === 'WAIVERS' ? 'WAIVERS' : 'ROSTERED',
+            player_id: `espn_${c.id}`,
+            player_name: c.name,
+            position: c.position,
+            team: getTeamAbbreviation(c.proTeamId),
+            waiver_status: c.status === 'FREEAGENT' ? 'FREEAGENT' : (c.status === 'WAIVERS' ? 'WAIVERS' : 'ROSTERED'),
             source: 'espn_projection',
             projected_fp: c.proj || 0,
-            percent_owned: p.ownership?.percentOwned ?? 0,
-            percent_started: p.ownership?.percentStarted ?? 0,
-            is_owned: ((p.player?.status ?? p.status) !== 'FREEAGENT' && (p.player?.status ?? p.status) !== 'WAIVERS'),
+            percent_owned: c.percentOwned,
+            percent_started: c.percentStarted,
+            is_owned: (c.status !== 'FREEAGENT' && c.status !== 'WAIVERS'),
             confidence: 0.8,
             selection_rank: idx + 1,
             selection_reason: `top_${want}_by_projection_in_team_${teamAbbrev}_${slot}`,
