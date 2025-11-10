@@ -81,6 +81,7 @@ Deno.serve(async (req) => {
       counts: countsOverride,    // optional: { QB?:number, RB?:number, ... }
       teams: teamIdsOverride,    // optional: number[] of ESPN proTeamIds to restrict
       slots: slotsOverride,      // optional: string[] subset of ["QB","RB","WR","TE","K","DST"]
+      slot: singleSlot,          // NEW: single slot string for processing one position
     }: {
       leagueId: string;
       season: number;
@@ -90,6 +91,7 @@ Deno.serve(async (req) => {
       counts?: CountsOverride;
       teams?: number[];
       slots?: SlotName[];
+      slot?: string;
     } = body ?? {};
 
     const week = Number(rawWeek);
@@ -109,10 +111,15 @@ Deno.serve(async (req) => {
       });
     }
 
-    /** Slots list to process */
-    const SLOTS: SlotName[] = Array.isArray(slotsOverride) && slotsOverride.length
-      ? slotsOverride.filter((s): s is SlotName => s in SLOT_NAME_TO_ID)
-      : (Object.keys(SLOT_NAME_TO_ID) as SlotName[]);
+    /** Slots list to process - prioritize single slot if provided */
+    let SLOTS: SlotName[];
+    if (singleSlot && singleSlot in SLOT_NAME_TO_ID) {
+      SLOTS = [singleSlot as SlotName];
+    } else if (Array.isArray(slotsOverride) && slotsOverride.length) {
+      SLOTS = slotsOverride.filter((s): s is SlotName => s in SLOT_NAME_TO_ID);
+    } else {
+      SLOTS = (Object.keys(SLOT_NAME_TO_ID) as SlotName[]);
+    }
 
     /** Teams list to process */
     const TEAMS = Array.isArray(teamIdsOverride) && teamIdsOverride.length
