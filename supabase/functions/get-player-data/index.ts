@@ -15,10 +15,28 @@ function normalizeName(name: string): string {
 // Helper function to normalize positions
 function normalizePosition(pos: string): string {
   if (!pos) return '';
-  const p = pos.toUpperCase().trim();
-  // Map variations to standard positions
-  if (p === '5') return 'K';
-  if (p === '16' || p === 'DEF' || p === 'DST') return 'D/ST';
+  let p = String(pos).toUpperCase().trim();
+
+  // Handle combined roster slots like "RB/WR" or "WR/RB/TE"
+  if (p.includes('/')) {
+    const parts = p.split('/');
+    const primary = parts.find(part => ['QB','RB','WR','TE','K','DEF','DST','D/ST'].includes(part));
+    if (primary) p = primary;
+  }
+
+  // Map ESPN numeric codes and synonyms to standard positions
+  const codeMap: Record<string, string> = {
+    '1': 'QB',
+    '2': 'RB',
+    '3': 'WR',
+    '4': 'TE',
+    '5': 'K',
+    '16': 'D/ST',
+  };
+
+  if (codeMap[p]) return codeMap[p];
+  if (p === 'DEF' || p === 'DST' || p === 'D/ST') return 'D/ST';
+
   return p;
 }
 
