@@ -408,15 +408,14 @@ serve(async (req) => {
       }
     }
 
-    // Build query for player stats (actuals)
-    let actualsQuery = supabase
-      .from('player_stats')
+    // Build query for player_pool (contains both actuals and projections)
+    let poolQuery = supabase
+      .from('player_pool')
       .select('*')
-      .eq('season', seasonNum)
-      .eq('finalized', true);
+      .eq('season', seasonNum);
 
     if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
-      actualsQuery = actualsQuery.eq('week', weekNum);
+      poolQuery = poolQuery.eq('week', weekNum);
     }
 
     if (playerIds && playerIds.length > 0) {
@@ -431,98 +430,51 @@ serve(async (req) => {
         const n = String(id).match(/^\-?\d+$/);
         if (n) variants.add(`espn_${id}`);
       }
-      actualsQuery = actualsQuery.in('player_id', Array.from(variants));
+      poolQuery = poolQuery.in('player_id', Array.from(variants));
     }
 
-    // Build query for projected stats
-    let projectionsQuery = supabase
-      .from('projected_player_stats')
-      .select('*')
-      .eq('season', seasonNum);
+    // Fetch from player_pool
+    const { data: poolData, error: poolError } = await poolQuery;
 
-    if (typeof weekNum === 'number' && !Number.isNaN(weekNum)) {
-      projectionsQuery = projectionsQuery.eq('week', weekNum);
-    }
-
-    if (playerIds && playerIds.length > 0) {
-      const variants = new Set<string>();
-      for (const id of playerIds) {
-        if (!id) continue;
-        variants.add(String(id));
-        const m = String(id).match(/^espn_(\-?\d+)$/);
-        if (m) variants.add(m[1]);
-        const n = String(id).match(/^\-?\d+$/);
-        if (n) variants.add(`espn_${id}`);
-      }
-      projectionsQuery = projectionsQuery.in('player_id', Array.from(variants));
-    }
-
-    // Fetch both actuals and projections
-    const [{ data: actuals, error: actualsError }, { data: projections, error: projectionsError }] = 
-      await Promise.all([
-        actualsQuery,
-        projectionsQuery
-      ]);
-
-    if (actualsError) {
-      console.error('Error fetching actuals:', actualsError);
+    if (poolError) {
+      console.error('Error fetching from player_pool:', poolError);
       return new Response(
         JSON.stringify({ error: 'Failed to fetch player stats' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    if (projectionsError) {
-      console.error('Error fetching projections:', projectionsError);
-    }
-
     // Implement actuals-first selection logic
     const playerDataMap = new Map<string, any>();
     
-    // First, add all projections
-    if (projections) {
-      for (const proj of projections) {
+    // Process pool data - actuals have priority over projections
+    if (poolData) {
+      for (const row of poolData) {
+        const key = `${row.player_id}_${row.week}`;
+        const sourceType = row.is_actual ? 'actual' : 'projected';
+        
         const normalizedStats = {
-          ...proj.stats,
+          ...row.stats,
           // Preserve projection helpers for UI/transparency
-          projected_fp: (proj as any).projected_fp,
-          __applied_breakdown: (proj as any).applied_breakdown ?? (proj as any).__applied_breakdown,
-          player_id: proj.player_id,
-          player_name: proj.player_name,
-          team: proj.team,
-          position: proj.position,
-          week: proj.week,
-          season: proj.season,
-          source: proj.source,
-          source_type: 'projected',
-          updated_at: proj.last_updated,
+          projected_fp: (row as any).projected_fp,
+          __applied_breakdown: (row as any).applied_breakdown ?? (row as any).__applied_breakdown,
+          player_id: row.player_id,
+          player_name: row.player_name,
+          team: row.team,
+          position: row.position,
+          week: row.week,
+          season: row.season,
+          source: row.source,
+          source_type: sourceType,
+          updated_at: row.last_updated,
         };
-        playerDataMap.set(`${proj.player_id}_${proj.week}`, normalizedStats);
-      }
-    }
-    
-    // Then, override with actuals where available (actuals-first)
-    if (actuals) {
-      for (const actual of actuals) {
-        // Skip placeholder rows (e.g., pre-game) with no meaningful stats
-        const numericFields = [
-          'passing_yards','passing_tds','interceptions','passing_2pt_conversions',
-          'rushing_yards','rushing_tds','rushing_2pt_conversions',
-          'receptions','receiving_yards','receiving_tds','receiving_2pt_conversions',
-          'fg_made','xp_made','sacks','fumbles_recovered','defensive_tds',
-          'interception_tds','fumble_recovery_tds','kick_return_tds','punt_return_tds',
-          'blocked_kicks','safeties','points_allowed','yards_allowed','fumbles_lost'
-        ];
-        const statSum = numericFields.reduce((acc, key) => {
-          const v = Number((actual as any)[key] ?? 0);
-          return acc + (isNaN(v) ? 0 : Math.abs(v));
-        }, 0);
-        if (statSum <= 0) continue;
-
-        playerDataMap.set(`${actual.player_id}_${actual.week}`, {
-          ...actual,
-          source_type: 'actual'
-        });
+        
+        // If we already have an entry and this is actual data, replace it
+        // If we already have actual data, keep it
+        const existing = playerDataMap.get(key);
+        if (!existing || (row.is_actual && existing.source_type !== 'actual')) {
+          playerDataMap.set(key, normalizedStats);
+        }
       }
     }
 
