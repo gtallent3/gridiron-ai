@@ -155,9 +155,13 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error computing defensive rankings:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    const errorMessage = error instanceof Error ? error.message : String(error);
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({ 
+        error: errorMessage,
+        details: error instanceof Error ? error.stack : undefined 
+      }),
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
