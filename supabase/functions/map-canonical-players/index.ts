@@ -23,11 +23,12 @@ serve(async (req) => {
     const normalizeName = (name: string): string => {
       if (!name) return '';
       return name
+        .normalize('NFD') // strip diacritics
+        .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
         .trim()
         .replace(/\./g, '')
-        .replace(/'/g, '')
-        .replace(/'/g, '') // Handle different apostrophe types
+        .replace(/[’']/g, '') // remove different apostrophe types
         .replace(/\s+(jr\.?|sr\.?|ii|iii|iv|v)$/i, '')
         .replace(/\s+/g, ' ');
     };
@@ -38,6 +39,9 @@ serve(async (req) => {
       if (team === 'LAR') return 'LA';
       return team;
     };
+
+    // Only map fantasy-relevant positions to reduce noise and false positives
+    const includedPositions = new Set(['QB', 'RB', 'WR', 'TE', 'K']);
 
     // Fetch distinct players from sleeper_projections
     const { data: sleeperPlayers, error: sleeperError } = await supabase
@@ -62,6 +66,7 @@ serve(async (req) => {
     // Create maps for deduplication
     const sleeperMap = new Map<string, any>();
     for (const player of sleeperPlayers || []) {
+      if (!includedPositions.has(player.position)) continue;
       if (!sleeperMap.has(player.player_id)) {
         sleeperMap.set(player.player_id, player);
       }
@@ -119,19 +124,37 @@ serve(async (req) => {
           }
         }
       }
+
+      // If still no match, try last-name + team fallback
+      if (nflCandidates.length === 0) {
+        const lastName = normalizedName.split(' ').pop();
+        if (lastName) {
+          const lnCandidates: any[] = [];
+          for (const p of nflMap.values()) {
+            const pLast = normalizeName(p.player_name).split(' ').pop();
+            if (pLast === lastName && (!normalizedSleeperTeam || normalizeTeam(p.team) === normalizedSleeperTeam)) {
+              lnCandidates.push(p);
+            }
+          }
+          if (lnCandidates.length > 0) {
+            nflCandidates = lnCandidates;
+            console.log(`Last-name+team fallback used for ${sleeperPlayer.player_name}: candidates=${lnCandidates.length}`);
+          }
+        }
+      }
       
-      let bestMatch = null;
+      let bestMatch = null as any;
       if (nflCandidates.length === 1) {
         bestMatch = nflCandidates[0];
       } else if (nflCandidates.length > 1) {
         // Multiple matches - prefer team match
         const teamMatch = nflCandidates.find(
-          nfl => normalizeTeam(nfl.team) === normalizedSleeperTeam
+          (nfl: any) => normalizeTeam(nfl.team) === normalizedSleeperTeam
         );
         bestMatch = teamMatch || nflCandidates[0];
         
         if (!teamMatch) {
-          console.log(`Multiple NFL matches for ${sleeperPlayer.player_name}, no team match. Sleeper team: ${normalizedSleeperTeam}, NFL teams: ${nflCandidates.map(c => c.team).join(', ')}`);
+          console.log(`Multiple NFL matches for ${sleeperPlayer.player_name}, no team match. Sleeper team: ${normalizedSleeperTeam}, NFL teams: ${nflCandidates.map((c: any) => c.team).join(', ')}`);
         }
       } else {
         console.log(`No NFL match found for Sleeper player: ${sleeperPlayer.player_name} (${sleeperPlayer.position}, ${normalizedSleeperTeam})`);
