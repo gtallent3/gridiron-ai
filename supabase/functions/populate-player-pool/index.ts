@@ -16,6 +16,13 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+    
+    // Normalize team abbreviations (LAR -> LA for consistency)
+    const normalizeTeam = (team: string | null): string | null => {
+      if (!team) return null;
+      if (team === 'LAR') return 'LA';
+      return team;
+    };
 
     const season = 2025;
     console.log(`Populating player pool for season ${season}...`);
@@ -90,7 +97,7 @@ serve(async (req) => {
           source: 'sleeper_projection',
           season: proj.season,
           week: proj.week,
-          team: proj.team,
+          team: normalizeTeam(proj.team),
           position: proj.position,
           projected_fp: proj.pts_ppr,
           passing_yards: proj.pass_yd,
@@ -101,7 +108,7 @@ serve(async (req) => {
           receptions: proj.rec,
           receiving_yards: proj.rec_yd,
           receiving_tds: proj.rec_td,
-          opponent: proj.opponent,
+          opponent: normalizeTeam(proj.opponent),
           opponent_def_rank: proj.opponent_def_rank,
           ros_sos_rank: proj.ros_sos_rank,
           playoff_sos_rank: proj.playoff_sos_rank,
@@ -169,7 +176,7 @@ serve(async (req) => {
           source: 'nfl_actual',
           season: actual.season,
           week: actual.week,
-          team: actual.team,
+          team: normalizeTeam(actual.team),
           position: actual.position,
           actual_fp: actual.fantasy_points_ppr,
           passing_yards: actual.passing_yards,
@@ -180,7 +187,7 @@ serve(async (req) => {
           receptions: actual.receptions,
           receiving_yards: actual.receiving_yards,
           receiving_tds: actual.receiving_tds,
-          opponent: actual.opponent,
+          opponent: normalizeTeam(actual.opponent),
           raw_source_ids: { nfl_id: actual.player_id }
         });
       }

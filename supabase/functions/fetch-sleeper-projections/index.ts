@@ -33,6 +33,13 @@ serve(async (req) => {
       const n = Number(v);
       return Number.isFinite(n) ? Math.round(n) : 0;
     };
+    
+    // Normalize team abbreviations (LAR -> LA for consistency)
+    const normalizeTeam = (team: string | null): string | null => {
+      if (!team) return null;
+      if (team === 'LAR') return 'LA';
+      return team;
+    };
 
     // Define background task function
     async function fetchAllProjections() {
@@ -143,11 +150,11 @@ serve(async (req) => {
           if (lookupError) {
             console.error(`Week ${week}: Player name lookup error (batch ${Math.floor(i/batchSize) + 1}):`, lookupError);
           } else {
-            // Add to map
+            // Add to map with normalized team
             (playerData || []).forEach(p => {
               playerDataMap.set(String(p.sleeper_id), {
                 name: p.player_name,
-                team: p.team,
+                team: normalizeTeam(p.team),
                 position: p.position
               });
             });
@@ -167,8 +174,8 @@ serve(async (req) => {
         const mappedCount = projections.filter(p => p.player_name).length;
         console.log(`Week ${week}: Mapped ${mappedCount}/${projections.length} player names (${playerDataMap.size} players found in DB)`);
 
-        // Lookup opponents from team_schedules
-        const teams = [...new Set(projections.map(p => p.team).filter(Boolean))];
+        // Lookup opponents from team_schedules (normalize teams for lookup)
+        const teams = [...new Set(projections.map(p => normalizeTeam(p.team)).filter(Boolean))];
         const { data: scheduleData } = await supabase
           .from('team_schedules')
           .select('team, opponent')
@@ -178,7 +185,7 @@ serve(async (req) => {
 
         const opponentMap = new Map<string, string>();
         (scheduleData || []).forEach(s => {
-          opponentMap.set(s.team, s.opponent);
+          opponentMap.set(normalizeTeam(s.team) || s.team, normalizeTeam(s.opponent) || s.opponent);
         });
 
         // Lookup defensive rankings for opponents
@@ -219,7 +226,8 @@ serve(async (req) => {
 
         const teamSosMap = new Map<string, { ros: number, playoff: number }>();
         (teamSosData || []).forEach((row: any) => {
-          teamSosMap.set(`${row.team}:${row.position}`, {
+          const normalizedTeam = normalizeTeam(row.team) || row.team;
+          teamSosMap.set(`${normalizedTeam}:${row.position}`, {
             ros: row.ros_sos_rank,
             playoff: row.playoff_sos_rank
           });
@@ -228,7 +236,8 @@ serve(async (req) => {
         // Add opponent and defensive rank to projections
         projections.forEach(proj => {
           if (proj.team) {
-            const opponent = opponentMap.get(proj.team);
+            const normalizedTeam = normalizeTeam(proj.team) || proj.team;
+            const opponent = opponentMap.get(normalizedTeam);
             if (opponent) {
               proj.opponent = opponent;
               if (proj.position) {
@@ -247,8 +256,8 @@ serve(async (req) => {
                   }
                 }
 
-                // Add team SOS rankings
-                const teamSosKey = `${proj.team}:${pos}`;
+                // Add team SOS rankings (use normalized team for lookup)
+                const teamSosKey = `${normalizedTeam}:${pos}`;
                 const teamSos = teamSosMap.get(teamSosKey);
                 if (teamSos) {
                   proj.ros_sos_rank = teamSos.ros;
