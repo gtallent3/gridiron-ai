@@ -44,6 +44,7 @@ serve(async (req) => {
     const { data: sleeperPlayers, error: sleeperError } = await supabase
       .from('sleeper_projections')
       .select('player_id, player_name, position, team')
+      .eq('season', 2025)
       .not('player_id', 'is', null)
       .not('player_name', 'is', null);
 
@@ -53,6 +54,7 @@ serve(async (req) => {
     const { data: nflPlayers, error: nflError } = await supabase
       .from('nfl_fantasy_points')
       .select('player_id, player_name, position, team')
+      .gte('season', 2024)
       .not('player_id', 'is', null)
       .not('player_name', 'is', null);
 
