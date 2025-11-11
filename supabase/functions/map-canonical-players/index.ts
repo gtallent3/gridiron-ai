@@ -40,25 +40,46 @@ serve(async (req) => {
       return team;
     };
 
-    // Fetch distinct players from sleeper_projections
-    const { data: sleeperPlayers, error: sleeperError } = await supabase
-      .from('sleeper_projections')
-      .select('player_id, player_name, position, team')
-      .eq('season', 2025)
-      .not('player_id', 'is', null)
-      .not('player_name', 'is', null);
+    // Pagination helpers to fetch all rows beyond default 1000 limit
+    const PAGE_SIZE = 1000;
+    const fetchAllSleeper = async () => {
+      const results: any[] = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('sleeper_projections')
+          .select('player_id, player_name, position, team')
+          .eq('season', 2025)
+          .not('player_id', 'is', null)
+          .not('player_name', 'is', null)
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        results.push(...data);
+        if (data.length < PAGE_SIZE) break;
+      }
+      return results;
+    };
 
-    if (sleeperError) throw sleeperError;
+    const fetchAllNFL = async () => {
+      const results: any[] = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('nfl_fantasy_points')
+          .select('player_id, player_name, position, team')
+          .gte('season', 2024)
+          .not('player_id', 'is', null)
+          .not('player_name', 'is', null)
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        results.push(...data);
+        if (data.length < PAGE_SIZE) break;
+      }
+      return results;
+    };
 
-    // Fetch distinct players from nfl_fantasy_points
-    const { data: nflPlayers, error: nflError } = await supabase
-      .from('nfl_fantasy_points')
-      .select('player_id, player_name, position, team')
-      .gte('season', 2024)
-      .not('player_id', 'is', null)
-      .not('player_name', 'is', null);
-
-    if (nflError) throw nflError;
+    const sleeperPlayers = await fetchAllSleeper();
+    const nflPlayers = await fetchAllNFL();
 
     console.log(`Found ${sleeperPlayers?.length || 0} Sleeper players, ${nflPlayers?.length || 0} NFL players`);
 
@@ -100,10 +121,23 @@ serve(async (req) => {
       }
     }
 
-    // Fetch all existing canonical players to avoid individual lookups
-    const { data: existingCanonical } = await supabase
-      .from('canonical_players')
-      .select('id, sleeper_id, nfl_id');
+    // Fetch all existing canonical players to avoid individual lookups (paginate beyond 1000 default)
+    const fetchAllCanonical = async () => {
+      const results: any[] = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('canonical_players')
+          .select('id, sleeper_id, nfl_id')
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        results.push(...data);
+        if (data.length < PAGE_SIZE) break;
+      }
+      return results;
+    };
+
+    const existingCanonical = await fetchAllCanonical();
 
     const existingBySleeperIdMap = new Map<string, any>();
     const existingByNflIdMap = new Map<string, any>();
@@ -252,16 +286,39 @@ serve(async (req) => {
       }
     }
 
-    // Batch insert new records (in chunks to avoid payload limits)
+    // Batch upsert new records (split by id presence to avoid unique conflicts)
     const CHUNK_SIZE = 100;
     for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
       const chunk = toInsert.slice(i, i + CHUNK_SIZE);
-      const { error } = await supabase
-        .from('canonical_players')
-        .insert(chunk);
-      
-      if (error) {
-        console.error(`Insert error for chunk ${i}-${i + chunk.length}:`, error);
+      const sleeperOnly = chunk.filter((r: any) => r.sleeper_id && !r.nfl_id);
+      const nflOnly = chunk.filter((r: any) => r.nfl_id && !r.sleeper_id);
+      const bothIds = chunk.filter((r: any) => r.sleeper_id && r.nfl_id);
+
+      if (sleeperOnly.length) {
+        const { error } = await supabase
+          .from('canonical_players')
+          .upsert(sleeperOnly, { onConflict: 'sleeper_id' });
+        if (error) {
+          console.error(`Upsert(sleeper_id) error for chunk ${i}-${i + sleeperOnly.length}:`, error);
+        }
+      }
+
+      if (nflOnly.length) {
+        const { error } = await supabase
+          .from('canonical_players')
+          .upsert(nflOnly, { onConflict: 'nfl_id' });
+        if (error) {
+          console.error(`Upsert(nfl_id) error for chunk ${i}-${i + nflOnly.length}:`, error);
+        }
+      }
+
+      if (bothIds.length) {
+        const { error } = await supabase
+          .from('canonical_players')
+          .upsert(bothIds, { onConflict: 'nfl_id' });
+        if (error) {
+          console.error(`Upsert(both on nfl_id) error for chunk ${i}-${i + bothIds.length}:`, error);
+        }
       }
     }
 
