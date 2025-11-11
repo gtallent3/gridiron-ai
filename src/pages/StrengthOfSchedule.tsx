@@ -16,17 +16,16 @@ interface DefensiveRanking {
 }
 
 interface StrengthOfSchedule {
+  id: string;
+  season: number;
   team: string;
-  week: number;
-  opponent: string;
-  def_rank_qb: number;
-  def_rank_rb: number;
-  def_rank_wr: number;
-  def_rank_te: number;
-  avg_points_allowed_qb: number;
-  avg_points_allowed_rb: number;
-  avg_points_allowed_wr: number;
-  avg_points_allowed_te: number;
+  position: string;
+  ros_sos: number | null;
+  playoff_sos: number | null;
+  ros_weeks: number[];
+  playoff_weeks: number[];
+  created_at: string;
+  updated_at: string;
 }
 
 export default function StrengthOfSchedulePage() {
@@ -58,12 +57,13 @@ export default function StrengthOfSchedulePage() {
       if (defError) throw defError;
       setDefensiveRankings(defData || []);
 
-      // Fetch SOS data
+      // Fetch SOS data (team-level ROS and Playoff SOS)
       const { data: sosData, error: sosError } = await supabase
         .from('strength_of_schedule')
         .select('*')
         .eq('season', season)
-        .order('week', { ascending: true });
+        .eq('position', selectedPosition)
+        .order('team', { ascending: true });
 
       if (sosError) throw sosError;
       setSos(sosData || []);
@@ -117,18 +117,26 @@ export default function StrengthOfSchedulePage() {
     }
   };
 
-  const getRankColor = (rank: number | null) => {
-    if (!rank) return 'secondary';
-    if (rank <= 10) return 'destructive'; // Hard matchup
-    if (rank <= 20) return 'secondary'; // Medium matchup
-    return 'default'; // Easy matchup
+  const getSosColor = (sos: number | null) => {
+    if (!sos) return 'secondary';
+    // Lower SOS = easier schedule (better for offense)
+    if (sos <= 10) return 'default'; // Easy matchups
+    if (sos <= 20) return 'secondary'; // Medium matchups
+    return 'destructive'; // Hard matchups
+  };
+
+  const getSosDifficulty = (sos: number | null) => {
+    if (!sos) return 'N/A';
+    if (sos <= 10) return 'Easy';
+    if (sos <= 20) return 'Medium';
+    return 'Hard';
   };
 
   const teams = [...new Set(sos.map(s => s.team))].sort();
 
   const filteredSos = selectedTeam 
     ? sos.filter(s => s.team === selectedTeam)
-    : sos.slice(0, 50); // Show first 50 if no team selected
+    : sos;
 
   return (
     <div className="container mx-auto p-6 pt-24 space-y-6">
@@ -228,10 +236,10 @@ export default function StrengthOfSchedulePage() {
           </CardContent>
         </Card>
 
-        {/* Upcoming Matchups */}
+        {/* Team SOS Ratings */}
         <Card>
           <CardHeader>
-            <CardTitle>Upcoming Matchups</CardTitle>
+            <CardTitle>Team Schedule Strength</CardTitle>
             <select
               className="mt-2 w-full p-2 border rounded"
               value={selectedTeam}
@@ -253,40 +261,40 @@ export default function StrengthOfSchedulePage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Week</TableHead>
                       <TableHead>Team</TableHead>
-                      <TableHead>vs</TableHead>
-                      <TableHead>QB</TableHead>
-                      <TableHead>RB</TableHead>
-                      <TableHead>WR</TableHead>
-                      <TableHead>TE</TableHead>
+                      <TableHead>ROS SOS</TableHead>
+                      <TableHead>ROS Difficulty</TableHead>
+                      <TableHead>Playoff SOS</TableHead>
+                      <TableHead>Playoff Difficulty</TableHead>
+                      <TableHead>ROS Weeks</TableHead>
+                      <TableHead>Playoff Weeks</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredSos.map((matchup, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell>{matchup.week}</TableCell>
-                        <TableCell className="font-medium">{matchup.team}</TableCell>
-                        <TableCell>{matchup.opponent}</TableCell>
+                    {filteredSos.map((teamSos) => (
+                      <TableRow key={teamSos.id}>
+                        <TableCell className="font-medium">{teamSos.team}</TableCell>
                         <TableCell>
-                          <Badge variant={getRankColor(matchup.def_rank_qb)}>
-                            {matchup.def_rank_qb || '-'}
+                          <Badge variant={getSosColor(teamSos.ros_sos)}>
+                            {teamSos.ros_sos?.toFixed(1) || 'N/A'}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={getRankColor(matchup.def_rank_rb)}>
-                            {matchup.def_rank_rb || '-'}
+                          {getSosDifficulty(teamSos.ros_sos)}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getSosColor(teamSos.playoff_sos)}>
+                            {teamSos.playoff_sos?.toFixed(1) || 'N/A'}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={getRankColor(matchup.def_rank_wr)}>
-                            {matchup.def_rank_wr || '-'}
-                          </Badge>
+                          {getSosDifficulty(teamSos.playoff_sos)}
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={getRankColor(matchup.def_rank_te)}>
-                            {matchup.def_rank_te || '-'}
-                          </Badge>
+                        <TableCell className="text-xs">
+                          {teamSos.ros_weeks.join(', ')}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {teamSos.playoff_weeks.join(', ')}
                         </TableCell>
                       </TableRow>
                     ))}
