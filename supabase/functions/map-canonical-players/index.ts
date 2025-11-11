@@ -137,6 +137,19 @@ serve(async (req) => {
       return results;
     };
 
+    // Clean up existing players with null teams before fetching
+    console.log('Cleaning up players with null teams...');
+    const { error: cleanupError } = await supabase
+      .from('canonical_players')
+      .delete()
+      .is('team', null);
+    
+    if (cleanupError) {
+      console.error('Error cleaning up null teams:', cleanupError);
+    } else {
+      console.log('Cleaned up existing players with null teams');
+    }
+
     const existingCanonical = await fetchAllCanonical();
 
     const existingBySleeperIdMap = new Map<string, any>();
