@@ -127,7 +127,7 @@ serve(async (req) => {
       for (let from = 0; ; from += PAGE_SIZE) {
         const { data, error } = await supabase
           .from('canonical_players')
-          .select('id, sleeper_id, nfl_id')
+          .select('*') // Fetch all fields including name, position, team
           .range(from, from + PAGE_SIZE - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;
@@ -154,10 +154,17 @@ serve(async (req) => {
 
     const existingBySleeperIdMap = new Map<string, any>();
     const existingByNflIdMap = new Map<string, any>();
+    const existingByNamePosTeam = new Map<string, any>(); // Add lookup by name+pos+team
     
     for (const cp of existingCanonical || []) {
       if (cp.sleeper_id) existingBySleeperIdMap.set(cp.sleeper_id, cp);
       if (cp.nfl_id) existingByNflIdMap.set(cp.nfl_id, cp);
+      
+      // Build name+position+team lookup for dedup
+      const normalizedName = normalizeName(cp.player_name);
+      const normalizedTeam = normalizeTeam(cp.team);
+      const key = `${normalizedName}:${cp.position}:${normalizedTeam}`;
+      existingByNamePosTeam.set(key, cp);
     }
 
     let matched = 0;
@@ -329,8 +336,22 @@ serve(async (req) => {
       // Skip if already matched to a Sleeper player or already exists
       if (!existing && !matchedNflIds.has(nflPlayer.player_id)) {
         const normalizedTeam = normalizeTeam(nflPlayer.team);
+        const normalizedName = normalizeName(nflPlayer.player_name);
         
-        if (normalizedTeam) { // Only insert if team is not null
+        // Try to find existing canonical player with matching name+position+team
+        const lookupKey = `${normalizedName}:${nflPlayer.position}:${normalizedTeam}`;
+        const matchingCanonical = existingByNamePosTeam.get(lookupKey);
+        
+        if (matchingCanonical && !matchingCanonical.nfl_id) {
+          // Update existing canonical player with nfl_id
+          toUpdate.push({
+            id: matchingCanonical.id,
+            nfl_id: nflPlayer.player_id
+          });
+          matchedNflIds.add(nflPlayer.player_id);
+          matched++;
+        } else if (normalizedTeam && !matchingCanonical) {
+          // Only insert if team is not null and no matching canonical found
           toInsert.push({
             player_name: nflPlayer.player_name,
             position: nflPlayer.position,
