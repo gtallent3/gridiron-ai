@@ -29,24 +29,30 @@ serve(async (req) => {
       .order('week', { ascending: false })
       .limit(1);
     
-    // Determine current week (prefer player_pool_v2 actuals, fallback to nfl_fantasy_points)
+    // Determine current week (max of latest actuals between player_pool_v2 and nfl_fantasy_points) + 1
     let currentWeek = 1;
+    let latestV2Week = 0;
+    let latestNflWeek = 0;
+
     if (latestActualWeeks && latestActualWeeks.length > 0) {
-      currentWeek = (latestActualWeeks[0] as any).week + 1;
-    } else {
-      const { data: nflLatest, error: nflWeekErr } = await supabase
-        .from('nfl_fantasy_points')
-        .select('week')
-        .eq('season', season)
-        .order('week', { ascending: false })
-        .limit(1);
-      if (nflWeekErr) {
-        console.warn('Fallback currentWeek lookup failed:', nflWeekErr);
-      }
-      if (nflLatest && nflLatest.length > 0) {
-        currentWeek = (nflLatest[0] as any).week + 1;
-      }
+      latestV2Week = (latestActualWeeks[0] as any).week;
     }
+
+    const { data: nflLatest, error: nflWeekErr } = await supabase
+      .from('nfl_fantasy_points')
+      .select('week')
+      .eq('season', season)
+      .order('week', { ascending: false })
+      .limit(1);
+    if (nflWeekErr) {
+      console.warn('Fallback currentWeek lookup failed:', nflWeekErr);
+    }
+    if (nflLatest && nflLatest.length > 0) {
+      latestNflWeek = (nflLatest[0] as any).week;
+    }
+
+    const latestActualWeek = Math.max(latestV2Week || 0, latestNflWeek || 0);
+    currentWeek = (latestActualWeek > 0 ? latestActualWeek : 0) + 1;
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek}`);
 
     // Fetch actuals from player_pool_v2 (actual_fp)
