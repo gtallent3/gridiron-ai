@@ -64,7 +64,9 @@ serve(async (req) => {
       .not('actual_fp', 'is', null)
       .lte('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .not('team', 'is', null);
+      .not('team', 'is', null)
+      .order('canonical_player_id', { ascending: true })
+      .order('week', { ascending: true });
 
     if (actualsError) throw actualsError;
 
@@ -76,7 +78,9 @@ serve(async (req) => {
       .not('projected_fp', 'is', null)
       .gte('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .not('team', 'is', null);
+      .not('team', 'is', null)
+      .order('canonical_player_id', { ascending: true })
+      .order('week', { ascending: true });
 
     if (projectionsError) throw projectionsError;
 
@@ -118,6 +122,8 @@ serve(async (req) => {
           .lte('week', currentWeek)
           .in('position', ['QB','RB','WR','TE'])
           .not('team', 'is', null)
+          .order('canonical_player_id', { ascending: true })
+          .order('week', { ascending: true })
           .range(from, from + pageSize - 1);
         if (moreErr) throw moreErr;
         if (!more || more.length === 0) break;
@@ -140,6 +146,8 @@ serve(async (req) => {
           .gte('week', currentWeek)
           .in('position', ['QB','RB','WR','TE'])
           .not('team', 'is', null)
+          .order('canonical_player_id', { ascending: true })
+          .order('week', { ascending: true })
           .range(from, from + pageSize - 1);
         if (moreErr) throw moreErr;
         if (!more || more.length === 0) break;
@@ -291,6 +299,17 @@ serve(async (req) => {
       if (avgProjectedPpgRos > 0) debugCounts.projectedGt0++;
       if (avgProjectedPpgRos === 0 && validProjs.length > 0 && anomalySamples.length < 5) {
         anomalySamples.push({ player: playerInfo.player_name, position: playerInfo.position, team: playerInfo.team, projs: projs.map(p => ({ week: p.week, pts: Number(p.projected_fp || 0) })) });
+      }
+
+      // Targeted debug for Rashee Rice
+      if (playerInfo.player_name === 'Rashee Rice') {
+        console.log('DEBUG Rashee Rice', JSON.stringify({
+          acts: acts.map((a: any) => ({ week: a.week, actual_fp: Number(a.actual_fp || 0) })),
+          projs: projs.map((p: any) => ({ week: p.week, projected_fp: Number(p.projected_fp || 0) })),
+          avgActualPpg,
+          avgProjectedPpgRos,
+          key: playerKey,
+        }));
       }
 
       // Get SOS rankings
