@@ -218,8 +218,20 @@ serve(async (req) => {
           if (row.def_rank_te != null) sosRankMap.set(`${row.team}:TE`, row.def_rank_te);
         });
 
-        // Team-level SOS ranks are not stored separately; we'll reuse season-to-date def ranks per position
-        // via sosRankMap as a proxy for ROS/Playoff when missing.
+        // Get team SOS rankings from strength_of_schedule table
+        const { data: teamSosData } = await supabase
+          .from('strength_of_schedule')
+          .select('team')
+          .eq('season', season);
+
+        const teamSosMap = new Map<string, { ros: number, playoff: number }>();
+        (teamSosData || []).forEach((row: any) => {
+          const normalizedTeam = normalizeTeam(row.team) || row.team;
+          teamSosMap.set(`${normalizedTeam}:${row.position}`, {
+            ros: row.ros_sos_rank,
+            playoff: row.playoff_sos_rank
+          });
+        });
 
         // Add opponent and defensive rank to projections
         projections.forEach(proj => {
@@ -244,12 +256,12 @@ serve(async (req) => {
                   }
                 }
 
-                // Fallback: use season-to-date positional defensive rank as proxy for ROS/Playoff SOS
+                // Add team SOS rankings (use normalized team for lookup)
                 const teamSosKey = `${normalizedTeam}:${pos}`;
-                const sosRank = sosRankMap.get(teamSosKey);
-                if (sosRank !== undefined) {
-                  if (proj.ros_sos_rank == null) proj.ros_sos_rank = sosRank;
-                  if (proj.playoff_sos_rank == null) proj.playoff_sos_rank = sosRank;
+                const teamSos = teamSosMap.get(teamSosKey);
+                if (teamSos) {
+                  proj.ros_sos_rank = teamSos.ros;
+                  proj.playoff_sos_rank = teamSos.playoff;
                 }
               }
             }
