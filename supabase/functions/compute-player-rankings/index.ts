@@ -272,14 +272,6 @@ serve(async (req) => {
       // Skip players with no actual stats AND no projections
       if (projs.length === 0 && acts.length === 0) continue;
 
-      // Filter out players that have no non-zero projections (truly out for the season)
-      // Only filter if they have projections but ALL are zero
-      if (projs.length > 0) {
-        const hasAnyNonZeroProjection = projs.some(p => Number(p.projected_fp || 0) > 0);
-        if (!hasAnyNonZeroProjection) {
-          continue; // Player has only zero projections across all remaining weeks
-        }
-      }
 
       // Calculate average projected PPG for ROS (only include weeks with projections > 0)
       // Missing weeks are not penalized (injured players)
