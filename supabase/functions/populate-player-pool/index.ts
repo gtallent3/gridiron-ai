@@ -61,6 +61,7 @@ serve(async (req) => {
         .select('*')
         .eq('season', season)
         .not('player_id', 'is', null)
+        .order('id', { ascending: true })
         .range(sleeperPage * pageSize, (sleeperPage + 1) * pageSize - 1);
 
       if (projError) throw projError;
@@ -128,6 +129,7 @@ serve(async (req) => {
         .select('*')
         .eq('season', season)
         .not('player_id', 'is', null)
+        .order('id', { ascending: true })
         .range(nflPage * pageSize, (nflPage + 1) * pageSize - 1);
 
       if (actualsError) throw actualsError;
