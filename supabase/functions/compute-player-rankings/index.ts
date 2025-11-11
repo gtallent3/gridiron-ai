@@ -64,8 +64,7 @@ serve(async (req) => {
       .not('actual_fp', 'is', null)
       .lte('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .not('team', 'is', null)
-      .limit(10000);
+      .not('team', 'is', null);
 
     if (actualsError) throw actualsError;
 
@@ -77,8 +76,7 @@ serve(async (req) => {
       .not('projected_fp', 'is', null)
       .gte('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .not('team', 'is', null)
-      .limit(10000);
+      .not('team', 'is', null);
 
     if (projectionsError) throw projectionsError;
 
@@ -93,6 +91,16 @@ serve(async (req) => {
     const normalizeTeam = (team: string): string => {
       if (team === 'LAR') return 'LA';
       return team;
+    };
+
+    // Make key preferring canonical_player_id, falling back to normalized name:position
+    const makeKey = (row: {
+      canonical_player_id?: string | null;
+      player_name: string;
+      position: string;
+    }) => {
+      if (row.canonical_player_id) return row.canonical_player_id;
+      return `${normalizeName(row.player_name)}:${row.position}`;
     };
 
     // Merge in fallback actuals from nfl_fantasy_points when v2 is missing entries
@@ -159,67 +167,70 @@ serve(async (req) => {
     }
 
     // Build a complete player map from both actuals and projections
-    // Use composite key: normalized_name:position to handle cross-team changes and avoid duplicates
+    // Use canonical_player_id as primary key, fallback to normalized_name:position
     const allPlayers = new Map<string, { player_id: string, player_name: string, position: string, team: string }>();
     
-    // Add all players from actuals (only if not present yet)
+    // Add all players from actuals
     for (const act of actuals || []) {
-      if (act.team && act.player_name && act.position) {
-        const normalizedName = normalizeName(act.player_name);
-        const key = `${normalizedName}:${act.position}`;
-          allPlayers.set(key, {
-            player_id: (act as any).canonical_player_id || key,
-            player_name: act.player_name,
-            position: act.position,
-            team: normalizeTeam(act.team)
-          });
+      if (!act.team || !act.player_name || !act.position) continue;
+
+      const key = makeKey(act);
+      const existing = allPlayers.get(key);
+
+      if (!existing) {
+        allPlayers.set(key, {
+          player_id: act.canonical_player_id || key,
+          player_name: act.player_name,
+          position: act.position,
+          team: normalizeTeam(act.team),
+        });
+      } else {
+        // Prefer non-null team/name from actuals
+        allPlayers.set(key, {
+          ...existing,
+          player_name: existing.player_name || act.player_name,
+          team: existing.team || normalizeTeam(act.team),
+        });
       }
     }
     
-    // Merge players from projections (overwrite to prefer projection ids/teams when available)
+    // Merge players from projections
     for (const proj of projections || []) {
-      if (proj.team && proj.player_name && proj.position) {
-        const normalizedName = normalizeName(proj.player_name);
-        const key = `${normalizedName}:${proj.position}`;
-        const existing = allPlayers.get(key);
-        if (!existing) {
-          allPlayers.set(key, {
-            player_id: proj.canonical_player_id,
-            player_name: proj.player_name,
-            position: proj.position,
-            team: normalizeTeam(proj.team)
-          });
-        } else {
-          // Prefer projection identifiers/team for ROS context
-          allPlayers.set(key, {
-            player_id: proj.canonical_player_id || existing.player_id || key,
-            player_name: existing.player_name || proj.player_name,
-            position: existing.position,
-            team: normalizeTeam(proj.team) || existing.team,
-          });
-        }
+      if (!proj.team || !proj.player_name || !proj.position) continue;
+
+      const key = makeKey(proj);
+      const existing = allPlayers.get(key);
+
+      if (!existing) {
+        allPlayers.set(key, {
+          player_id: proj.canonical_player_id || key,
+          player_name: proj.player_name,
+          position: proj.position,
+          team: normalizeTeam(proj.team),
+        });
+      } else {
+        allPlayers.set(key, {
+          player_id: proj.canonical_player_id || existing.player_id || key,
+          player_name: existing.player_name || proj.player_name,
+          position: existing.position,
+          team: normalizeTeam(proj.team) || existing.team,
+        });
       }
     }
 
-    // Group projections by normalized_name:position
+    // Group projections using same key strategy
     const playerProjections = new Map<string, any[]>();
     for (const proj of projections || []) {
-      const normalizedName = normalizeName(proj.player_name);
-      const key = `${normalizedName}:${proj.position}`;
-      if (!playerProjections.has(key)) {
-        playerProjections.set(key, []);
-      }
+      const key = makeKey(proj);
+      if (!playerProjections.has(key)) playerProjections.set(key, []);
       playerProjections.get(key)!.push(proj);
     }
 
-    // Group actuals by normalized_name:position
+    // Group actuals using same key strategy
     const playerActuals = new Map<string, any[]>();
     for (const act of actuals || []) {
-      const normalizedName = normalizeName(act.player_name);
-      const key = `${normalizedName}:${act.position}`;
-      if (!playerActuals.has(key)) {
-        playerActuals.set(key, []);
-      }
+      const key = makeKey(act);
+      if (!playerActuals.has(key)) playerActuals.set(key, []);
       playerActuals.get(key)!.push(act);
     }
 
@@ -229,7 +240,7 @@ serve(async (req) => {
     const anomalySamples: any[] = [];
 
     for (const [playerKey, playerInfo] of allPlayers.entries()) {
-      // Get projections and actuals for this player using composite key
+      // Get projections and actuals for this player using same key
       const projs = playerProjections.get(playerKey) || [];
       const acts = playerActuals.get(playerKey) || [];
 
