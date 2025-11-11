@@ -36,12 +36,12 @@ serve(async (req) => {
     
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek}`);
 
-    // Fetch actuals and projections separately to avoid pagination issues
+    // Fetch actuals from player_pool_v2 (actual_fp)
     const { data: actualsData, error: actualsError } = await supabase
-      .from('player_pool')
-      .select('player_id, player_name, position, team, week, points_ppr, is_actual, did_not_play')
+      .from('player_pool_v2')
+      .select('canonical_player_id, player_name, position, team, week, actual_fp')
       .eq('season', season)
-      .eq('is_actual', true)
+      .not('actual_fp', 'is', null)
       .lt('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
       .not('team', 'is', null)
@@ -49,11 +49,12 @@ serve(async (req) => {
 
     if (actualsError) throw actualsError;
 
+    // Fetch projections from player_pool_v2 (projected_fp)
     const { data: projectionsData, error: projectionsError } = await supabase
-      .from('player_pool')
-      .select('player_id, player_name, position, team, week, points_ppr, is_actual, did_not_play')
+      .from('player_pool_v2')
+      .select('canonical_player_id, player_name, position, team, week, projected_fp')
       .eq('season', season)
-      .eq('is_actual', false)
+      .not('projected_fp', 'is', null)
       .gte('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
       .not('team', 'is', null)
@@ -66,8 +67,8 @@ serve(async (req) => {
 
     const actualCount = actuals.length;
     const projCount = projections.length;
-    const nonZeroProjCount = projections.filter(p => Number(p.points_ppr || 0) > 0).length;
-    console.log(`Fetched separately - actuals: ${actualCount}, projections: ${projCount}, non-zero projections: ${nonZeroProjCount}`);
+    const nonZeroProjCount = projections.filter(p => Number(p.projected_fp || 0) > 0).length;
+    console.log(`Fetched from player_pool_v2 - actuals: ${actualCount}, projections: ${projCount}, non-zero projections: ${nonZeroProjCount}`);
 
     // Fetch SOS data
     const { data: sosData, error: sosError } = await supabase
@@ -126,7 +127,7 @@ serve(async (req) => {
         const key = `${normalizedName}:${act.position}`;
         if (!allPlayers.has(key)) {
           allPlayers.set(key, {
-            player_id: act.player_id,
+            player_id: act.canonical_player_id,
             player_name: act.player_name,
             position: act.position,
             team: normalizeTeam(act.team)
@@ -143,7 +144,7 @@ serve(async (req) => {
         const existing = allPlayers.get(key);
         if (!existing) {
           allPlayers.set(key, {
-            player_id: proj.player_id,
+            player_id: proj.canonical_player_id,
             player_name: proj.player_name,
             position: proj.position,
             team: normalizeTeam(proj.team)
@@ -151,7 +152,7 @@ serve(async (req) => {
         } else {
           // Prefer projection identifiers/team for ROS context
           allPlayers.set(key, {
-            player_id: proj.player_id || existing.player_id,
+            player_id: proj.canonical_player_id || existing.player_id,
             player_name: existing.player_name || proj.player_name,
             position: existing.position,
             team: normalizeTeam(proj.team) || existing.team,
@@ -195,35 +196,37 @@ serve(async (req) => {
       // Skip players with no actual stats AND no projections
       if (projs.length === 0 && acts.length === 0) continue;
 
-      // Filter out players that are out for the season (points_ppr == 0 for both weeks 17 AND 18)
+      // Filter out players that are out for the season (projected_fp == 0 for both weeks 17 AND 18)
       if (projs.length > 0) {
         const week17Proj = projs.find(p => p.week === 17);
         const week18Proj = projs.find(p => p.week === 18);
         
-        const week17Pts = week17Proj ? Number(week17Proj.points_ppr || 0) : 1;
-        const week18Pts = week18Proj ? Number(week18Proj.points_ppr || 0) : 1;
+        const week17Pts = week17Proj ? Number(week17Proj.projected_fp || 0) : 1;
+        const week18Pts = week18Proj ? Number(week18Proj.projected_fp || 0) : 1;
         
         if (week17Pts === 0 && week18Pts === 0) {
           continue; // Player is out for the season
         }
       }
 
-      // Calculate average projected PPG for ROS (excluding bye weeks with 0 points)
-      const nonByeProjs = projs.filter(p => Number(p.points_ppr || 0) > 0);
-      const totalProjPts = nonByeProjs.reduce((sum, p) => sum + Number(p.points_ppr || 0), 0);
-      const avgProjectedPpgRos = nonByeProjs.length > 0 ? totalProjPts / nonByeProjs.length : 0;
+      // Calculate average projected PPG for ROS (only include weeks with projections > 0)
+      // Missing weeks are not penalized (injured players)
+      const validProjs = projs.filter(p => Number(p.projected_fp || 0) > 0);
+      const totalProjPts = validProjs.reduce((sum, p) => sum + Number(p.projected_fp || 0), 0);
+      const avgProjectedPpgRos = validProjs.length > 0 ? totalProjPts / validProjs.length : 0;
 
-      // Calculate average actual PPG from past weeks (exclude DNP placeholders)
-      const playedActs = acts.filter((a: any) => !a.did_not_play);
-      const totalActualPts = playedActs.reduce((sum, a) => sum + Number(a.points_ppr || 0), 0);
-      const avgActualPpg = playedActs.length > 0 ? totalActualPts / playedActs.length : 0;
+      // Calculate average actual PPG from past weeks (only include weeks with actual data)
+      // Missing weeks are not penalized (injured players)
+      const validActs = acts.filter((a: any) => a.actual_fp != null && Number(a.actual_fp) >= 0);
+      const totalActualPts = validActs.reduce((sum, a) => sum + Number(a.actual_fp || 0), 0);
+      const avgActualPpg = validActs.length > 0 ? totalActualPts / validActs.length : 0;
 
       // Debug counts
       if (projs.length > 0) debugCounts.withProjs++; else debugCounts.noProjs++;
-      if (nonByeProjs.length > 0) debugCounts.withNonZeroProjs++;
+      if (validProjs.length > 0) debugCounts.withNonZeroProjs++;
       if (avgProjectedPpgRos > 0) debugCounts.projectedGt0++;
-      if (avgProjectedPpgRos === 0 && nonByeProjs.length > 0 && anomalySamples.length < 5) {
-        anomalySamples.push({ player: playerInfo.player_name, position: playerInfo.position, team: playerInfo.team, projs: projs.map(p => ({ week: p.week, pts: Number(p.points_ppr || 0) })) });
+      if (avgProjectedPpgRos === 0 && validProjs.length > 0 && anomalySamples.length < 5) {
+        anomalySamples.push({ player: playerInfo.player_name, position: playerInfo.position, team: playerInfo.team, projs: projs.map(p => ({ week: p.week, pts: Number(p.projected_fp || 0) })) });
       }
 
       // Get SOS rankings
