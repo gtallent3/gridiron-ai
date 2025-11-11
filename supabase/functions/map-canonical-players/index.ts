@@ -154,6 +154,7 @@ serve(async (req) => {
     const toInsert: any[] = [];
     const toUpdate: any[] = [];
     const unmatchedRecords: any[] = [];
+    const matchedNflIds = new Set<string>(); // Track NFL IDs that have been matched
 
     // Process Sleeper players in memory first
     for (const sleeperPlayer of sleeperMap.values()) {
@@ -165,6 +166,42 @@ serve(async (req) => {
       const existing = existingBySleeperIdMap.get(sleeperPlayer.player_id);
 
       if (existing) {
+        // If exists but missing nfl_id, try to match and update
+        if (!existing.nfl_id) {
+          // Try to find NFL match (same logic as below)
+          const normalizedName = normalizeName(sleeperPlayer.player_name);
+          const key = `${normalizedName}:${sleeperPlayer.position}`;
+          const normalizedSleeperTeam = normalizeTeam(sleeperPlayer.team);
+          
+          let nflCandidates = nflByNamePos.get(key) || [];
+          if (nflCandidates.length === 0) {
+            for (const [nflKey, candidates] of nflByNamePos.entries()) {
+              if (nflKey.startsWith(normalizedName + ':')) {
+                nflCandidates = candidates;
+                break;
+              }
+            }
+          }
+          
+          let bestMatch = null as any;
+          if (nflCandidates.length === 1) {
+            bestMatch = nflCandidates[0];
+          } else if (nflCandidates.length > 1) {
+            const teamMatch = nflCandidates.find(
+              (nfl: any) => normalizeTeam(nfl.team) === normalizedSleeperTeam
+            );
+            bestMatch = teamMatch || nflCandidates[0];
+          }
+          
+          if (bestMatch && !existingByNflIdMap.has(bestMatch.player_id)) {
+            toUpdate.push({
+              id: existing.id,
+              nfl_id: bestMatch.player_id,
+              team: normalizedSleeperTeam || bestMatch.team
+            });
+            matchedNflIds.add(bestMatch.player_id);
+          }
+        }
         matched++;
         continue;
       }
@@ -227,6 +264,7 @@ serve(async (req) => {
             });
             matched++;
           }
+          matchedNflIds.add(bestMatch.player_id);
         } else {
           // Create new canonical player with both IDs
           toInsert.push({
@@ -236,6 +274,7 @@ serve(async (req) => {
             sleeper_id: sleeperPlayer.player_id,
             nfl_id: bestMatch.player_id
           });
+          matchedNflIds.add(bestMatch.player_id);
           created++;
         }
       } else {
@@ -264,7 +303,8 @@ serve(async (req) => {
     for (const nflPlayer of nflMap.values()) {
       const existing = existingByNflIdMap.get(nflPlayer.player_id);
 
-      if (!existing) {
+      // Skip if already matched to a Sleeper player or already exists
+      if (!existing && !matchedNflIds.has(nflPlayer.player_id)) {
         const normalizedTeam = normalizeTeam(nflPlayer.team);
         
         toInsert.push({
@@ -324,9 +364,13 @@ serve(async (req) => {
 
     // Batch update existing records
     for (const update of toUpdate) {
+      const updateData: any = { team: update.team };
+      if (update.sleeper_id) updateData.sleeper_id = update.sleeper_id;
+      if (update.nfl_id) updateData.nfl_id = update.nfl_id;
+      
       await supabase
         .from('canonical_players')
-        .update({ sleeper_id: update.sleeper_id, team: update.team })
+        .update(updateData)
         .eq('id', update.id);
     }
 
