@@ -712,6 +712,7 @@ export type Database = {
           passing_ints: number | null
           passing_tds: number | null
           passing_yards: number | null
+          player_name: string | null
           position: string
           projected_fp: number | null
           raw_source_ids: Json | null
@@ -737,6 +738,7 @@ export type Database = {
           passing_ints?: number | null
           passing_tds?: number | null
           passing_yards?: number | null
+          player_name?: string | null
           position: string
           projected_fp?: number | null
           raw_source_ids?: Json | null
@@ -762,6 +764,7 @@ export type Database = {
           passing_ints?: number | null
           passing_tds?: number | null
           passing_yards?: number | null
+          player_name?: string | null
           position?: string
           projected_fp?: number | null
           raw_source_ids?: Json | null
