@@ -21,11 +21,13 @@ serve(async (req) => {
 
     // Normalize player name for matching
     const normalizeName = (name: string): string => {
+      if (!name) return '';
       return name
         .toLowerCase()
         .trim()
         .replace(/\./g, '')
         .replace(/'/g, '')
+        .replace(/'/g, '') // Handle different apostrophe types
         .replace(/\s+(jr\.?|sr\.?|ii|iii|iv|v)$/i, '')
         .replace(/\s+/g, ' ');
     };
@@ -105,16 +107,34 @@ serve(async (req) => {
       }
 
       // Try to match with NFL player
-      const nflCandidates = nflByNamePos.get(key) || [];
+      let nflCandidates = nflByNamePos.get(key) || [];
+      
+      // If no exact match, try without position (for players who changed positions)
+      if (nflCandidates.length === 0) {
+        for (const [nflKey, candidates] of nflByNamePos.entries()) {
+          if (nflKey.startsWith(normalizedName + ':')) {
+            nflCandidates = candidates;
+            console.log(`Position mismatch for ${sleeperPlayer.player_name}: Sleeper=${sleeperPlayer.position}, NFL=${candidates[0]?.position}`);
+            break;
+          }
+        }
+      }
       
       let bestMatch = null;
       if (nflCandidates.length === 1) {
         bestMatch = nflCandidates[0];
       } else if (nflCandidates.length > 1) {
         // Multiple matches - prefer team match
-        bestMatch = nflCandidates.find(
+        const teamMatch = nflCandidates.find(
           nfl => normalizeTeam(nfl.team) === normalizedSleeperTeam
-        ) || nflCandidates[0];
+        );
+        bestMatch = teamMatch || nflCandidates[0];
+        
+        if (!teamMatch) {
+          console.log(`Multiple NFL matches for ${sleeperPlayer.player_name}, no team match. Sleeper team: ${normalizedSleeperTeam}, NFL teams: ${nflCandidates.map(c => c.team).join(', ')}`);
+        }
+      } else {
+        console.log(`No NFL match found for Sleeper player: ${sleeperPlayer.player_name} (${sleeperPlayer.position}, ${normalizedSleeperTeam})`);
       }
 
       if (bestMatch) {
