@@ -33,16 +33,16 @@ serve(async (req) => {
 
     if (canonicalError) throw canonicalError;
 
-    // Build lookup maps
-    const sleeperIdMap = new Map<string, string>();
-    const nflIdMap = new Map<string, string>();
+    // Build lookup maps with player names
+    const sleeperIdMap = new Map<string, { id: string, player_name: string }>();
+    const nflIdMap = new Map<string, { id: string, player_name: string }>();
     
     for (const player of canonicalPlayers || []) {
       if (player.sleeper_id) {
-        sleeperIdMap.set(player.sleeper_id, player.id);
+        sleeperIdMap.set(player.sleeper_id, { id: player.id, player_name: player.player_name });
       }
       if (player.nfl_id) {
-        nflIdMap.set(player.nfl_id, player.id);
+        nflIdMap.set(player.nfl_id, { id: player.id, player_name: player.player_name });
       }
     }
 
@@ -69,14 +69,15 @@ serve(async (req) => {
       const poolRecords = [];
       
       for (const proj of projections) {
-        const canonicalId = sleeperIdMap.get(proj.player_id);
-        if (!canonicalId) {
+        const canonical = sleeperIdMap.get(proj.player_id);
+        if (!canonical) {
           console.warn(`No canonical player for Sleeper ID: ${proj.player_id} (${proj.player_name})`);
           continue;
         }
 
         poolRecords.push({
-          canonical_player_id: canonicalId,
+          canonical_player_id: canonical.id,
+          player_name: canonical.player_name,
           source: 'sleeper_projection',
           season: proj.season,
           week: proj.week,
@@ -135,14 +136,15 @@ serve(async (req) => {
       const poolRecords = [];
       
       for (const actual of actuals) {
-        const canonicalId = nflIdMap.get(actual.player_id);
-        if (!canonicalId) {
+        const canonical = nflIdMap.get(actual.player_id);
+        if (!canonical) {
           console.warn(`No canonical player for NFL ID: ${actual.player_id} (${actual.player_name})`);
           continue;
         }
 
         poolRecords.push({
-          canonical_player_id: canonicalId,
+          canonical_player_id: canonical.id,
+          player_name: canonical.player_name,
           source: 'nfl_actual',
           season: actual.season,
           week: actual.week,
