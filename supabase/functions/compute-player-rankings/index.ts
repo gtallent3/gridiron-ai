@@ -73,7 +73,7 @@ serve(async (req) => {
     // Fetch projections from player_pool_v2 (projected_fp)
     const { data: projectionsData, error: projectionsError } = await supabase
       .from('player_pool_v2')
-      .select('canonical_player_id, player_name, position, team, week, projected_fp')
+      .select('canonical_player_id, player_name, position, team, week, projected_fp, ros_sos_rank, playoff_sos_rank')
       .eq('season', season)
       .not('projected_fp', 'is', null)
       .gte('week', currentWeek)
@@ -140,7 +140,7 @@ serve(async (req) => {
       while (true) {
         const { data: more, error: moreErr } = await supabase
           .from('player_pool_v2')
-          .select('canonical_player_id, player_name, position, team, week, projected_fp')
+          .select('canonical_player_id, player_name, position, team, week, projected_fp, ros_sos_rank, playoff_sos_rank')
           .eq('season', season)
           .not('projected_fp', 'is', null)
           .gte('week', currentWeek)
@@ -158,22 +158,6 @@ serve(async (req) => {
     }
 
     console.log(`Fetched ${actuals.length} actuals and ${projections.length} projections from player_pool_v2`);
-    // Fetch SOS data
-    const { data: sosData, error: sosError } = await supabase
-      .from('strength_of_schedule')
-      .select('team, def_rank_qb, def_rank_rb, def_rank_wr, def_rank_te')
-      .eq('season', season);
-
-    if (sosError) throw sosError;
-
-    // Create SOS maps for ROS and playoff
-    const sosRankMap = new Map<string, { ros: number, playoff: number }>();
-    (sosData || []).forEach((row: any) => {
-      if (row.def_rank_qb != null) sosRankMap.set(`${row.team}:QB`, { ros: row.def_rank_qb, playoff: row.def_rank_qb });
-      if (row.def_rank_rb != null) sosRankMap.set(`${row.team}:RB`, { ros: row.def_rank_rb, playoff: row.def_rank_rb });
-      if (row.def_rank_wr != null) sosRankMap.set(`${row.team}:WR`, { ros: row.def_rank_wr, playoff: row.def_rank_wr });
-      if (row.def_rank_te != null) sosRankMap.set(`${row.team}:TE`, { ros: row.def_rank_te, playoff: row.def_rank_te });
-    });
 
     // Fetch bye weeks from team_schedules
     const { data: byeData, error: byeError } = await supabase
@@ -304,11 +288,10 @@ serve(async (req) => {
         }));
       }
 
-      // Get SOS rankings
-      const sosKey = `${playerInfo.team}:${playerInfo.position}`;
-      const sos = sosRankMap.get(sosKey);
-      const rosSosRank = sos?.ros ?? null;
-      const playoffSosRank = sos?.playoff ?? null;
+      // Get SOS rankings from projections (use first available projection with SOS data)
+      const projWithSos = projs.find(p => p.ros_sos_rank != null || p.playoff_sos_rank != null);
+      const rosSosRank = projWithSos?.ros_sos_rank ?? null;
+      const playoffSosRank = projWithSos?.playoff_sos_rank ?? null;
 
       // Get bye week
       const byeWeek = byeWeekMap.get(playerInfo.team) ?? null;

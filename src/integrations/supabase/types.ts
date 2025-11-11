@@ -713,12 +713,14 @@ export type Database = {
           passing_tds: number | null
           passing_yards: number | null
           player_name: string | null
+          playoff_sos_rank: number | null
           position: string
           projected_fp: number | null
           raw_source_ids: Json | null
           receiving_tds: number | null
           receiving_yards: number | null
           receptions: number | null
+          ros_sos_rank: number | null
           rushing_tds: number | null
           rushing_yards: number | null
           season: number
@@ -739,12 +741,14 @@ export type Database = {
           passing_tds?: number | null
           passing_yards?: number | null
           player_name?: string | null
+          playoff_sos_rank?: number | null
           position: string
           projected_fp?: number | null
           raw_source_ids?: Json | null
           receiving_tds?: number | null
           receiving_yards?: number | null
           receptions?: number | null
+          ros_sos_rank?: number | null
           rushing_tds?: number | null
           rushing_yards?: number | null
           season: number
@@ -765,12 +769,14 @@ export type Database = {
           passing_tds?: number | null
           passing_yards?: number | null
           player_name?: string | null
+          playoff_sos_rank?: number | null
           position?: string
           projected_fp?: number | null
           raw_source_ids?: Json | null
           receiving_tds?: number | null
           receiving_yards?: number | null
           receptions?: number | null
+          ros_sos_rank?: number | null
           rushing_tds?: number | null
           rushing_yards?: number | null
           season?: number
