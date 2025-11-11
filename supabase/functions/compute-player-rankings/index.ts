@@ -103,8 +103,52 @@ serve(async (req) => {
       return `${normalizeName(row.player_name)}:${row.position}`;
     };
 
-    const actuals = actualsData || [];
-    const projections = projectionsData || [];
+    const pageSize = 1000;
+
+    // Collect ALL actuals with pagination (default range cap is 1000)
+    let actuals = actualsData || [];
+    if (actuals.length === pageSize) {
+      let from = pageSize;
+      while (true) {
+        const { data: more, error: moreErr } = await supabase
+          .from('player_pool_v2')
+          .select('canonical_player_id, player_name, position, team, week, actual_fp')
+          .eq('season', season)
+          .not('actual_fp', 'is', null)
+          .lte('week', currentWeek)
+          .in('position', ['QB','RB','WR','TE'])
+          .not('team', 'is', null)
+          .range(from, from + pageSize - 1);
+        if (moreErr) throw moreErr;
+        if (!more || more.length === 0) break;
+        actuals = actuals.concat(more as any);
+        if (more.length < pageSize) break;
+        from += pageSize;
+      }
+    }
+
+    // Collect ALL projections with pagination
+    let projections = projectionsData || [];
+    if (projections.length === pageSize) {
+      let from = pageSize;
+      while (true) {
+        const { data: more, error: moreErr } = await supabase
+          .from('player_pool_v2')
+          .select('canonical_player_id, player_name, position, team, week, projected_fp')
+          .eq('season', season)
+          .not('projected_fp', 'is', null)
+          .gte('week', currentWeek)
+          .in('position', ['QB','RB','WR','TE'])
+          .not('team', 'is', null)
+          .range(from, from + pageSize - 1);
+        if (moreErr) throw moreErr;
+        if (!more || more.length === 0) break;
+        projections = projections.concat(more as any);
+        if (more.length < pageSize) break;
+        from += pageSize;
+      }
+    }
+
     console.log(`Fetched ${actuals.length} actuals and ${projections.length} projections from player_pool_v2`);
     // Fetch SOS data
     const { data: sosData, error: sosError } = await supabase
