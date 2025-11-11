@@ -29,11 +29,24 @@ serve(async (req) => {
       .order('week', { ascending: false })
       .limit(1);
     
-    // Current week is one after the latest week with actual stats
-    const currentWeek = latestActualWeeks && latestActualWeeks.length > 0 
-      ? latestActualWeeks[0].week + 1 
-      : 1;
-    
+    // Determine current week (prefer player_pool_v2 actuals, fallback to nfl_fantasy_points)
+    let currentWeek = 1;
+    if (latestActualWeeks && latestActualWeeks.length > 0) {
+      currentWeek = (latestActualWeeks[0] as any).week + 1;
+    } else {
+      const { data: nflLatest, error: nflWeekErr } = await supabase
+        .from('nfl_fantasy_points')
+        .select('week')
+        .eq('season', season)
+        .order('week', { ascending: false })
+        .limit(1);
+      if (nflWeekErr) {
+        console.warn('Fallback currentWeek lookup failed:', nflWeekErr);
+      }
+      if (nflLatest && nflLatest.length > 0) {
+        currentWeek = (nflLatest[0] as any).week + 1;
+      }
+    }
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek}`);
 
     // Fetch actuals from player_pool_v2 (actual_fp)
@@ -63,14 +76,36 @@ serve(async (req) => {
 
     if (projectionsError) throw projectionsError;
 
-    const actuals = actualsData || [];
+    // Merge in fallback actuals from nfl_fantasy_points when v2 is missing entries
+    const baseActuals = actualsData || [];
     const projections = projectionsData || [];
+    const { data: nflActuals, error: nflActualsError } = await supabase
+      .from('nfl_fantasy_points')
+      .select('player_name, position, team, week, fantasy_points_ppr')
+      .eq('season', season)
+      .lte('week', currentWeek)
+      .in('position', ['QB','RB','WR','TE']);
+    if (nflActualsError) {
+      console.warn('NFL fallback actuals query failed', nflActualsError);
+    }
+    // Map NFL actuals to the same shape as v2 actuals
+    const mappedNflActuals = (nflActuals || []).map((r: any) => ({
+      canonical_player_id: null,
+      player_name: r.player_name,
+      position: r.position,
+      team: r.team,
+      week: r.week,
+      actual_fp: r.fantasy_points_ppr,
+    }));
+    // Combine: prefer v2 rows but add nfl rows where we have no v2 actual for that name:position:week
+    const seenKey = new Set(baseActuals.map((a: any) => `${normalizeName(a.player_name)}:${a.position}:${a.week}`));
+    const combinedFallback = mappedNflActuals.filter((r: any) => !seenKey.has(`${normalizeName(r.player_name)}:${r.position}:${r.week}`));
+    const actuals = [...baseActuals, ...combinedFallback];
 
     const actualCount = actuals.length;
     const projCount = projections.length;
     const nonZeroProjCount = projections.filter(p => Number(p.projected_fp || 0) > 0).length;
-    console.log(`Fetched from player_pool_v2 - actuals: ${actualCount}, projections: ${projCount}, non-zero projections: ${nonZeroProjCount}`);
-
+    console.log(`Fetched actuals: v2=${baseActuals.length}, nfl_fallback_added=${combinedFallback.length}, total=${actualCount}; projections=${projCount}, non-zero projections=${nonZeroProjCount}`);
     // Fetch SOS data
     const { data: sosData, error: sosError } = await supabase
       .from('strength_of_schedule')
@@ -126,14 +161,12 @@ serve(async (req) => {
       if (act.team && act.player_name && act.position) {
         const normalizedName = normalizeName(act.player_name);
         const key = `${normalizedName}:${act.position}`;
-        if (!allPlayers.has(key)) {
           allPlayers.set(key, {
-            player_id: act.canonical_player_id,
+            player_id: (act as any).canonical_player_id || key,
             player_name: act.player_name,
             position: act.position,
             team: normalizeTeam(act.team)
           });
-        }
       }
     }
     
@@ -153,7 +186,7 @@ serve(async (req) => {
         } else {
           // Prefer projection identifiers/team for ROS context
           allPlayers.set(key, {
-            player_id: proj.canonical_player_id || existing.player_id,
+            player_id: proj.canonical_player_id || existing.player_id || key,
             player_name: existing.player_name || proj.player_name,
             position: existing.position,
             team: normalizeTeam(proj.team) || existing.team,
