@@ -101,6 +101,8 @@ serve(async (req) => {
             rec: toNum(stats?.rec),
             rec_yd: toNum(stats?.rec_yd),
             rec_td: toInt(stats?.rec_td),
+            ros_sos_rank: stats?.ros_sos_rank ?? null,
+            playoff_sos_rank: stats?.playoff_sos_rank ?? null,
             raw_stats: stats ?? {},
           };
           });
@@ -122,6 +124,8 @@ serve(async (req) => {
             rec: toNum(stats?.rec),
             rec_yd: toNum(stats?.rec_yd),
             rec_td: toInt(stats?.rec_td),
+            ros_sos_rank: stats?.ros_sos_rank ?? null,
+            playoff_sos_rank: stats?.playoff_sos_rank ?? null,
             raw_stats: stats ?? {},
           }));
         }
@@ -218,20 +222,6 @@ serve(async (req) => {
           if (row.def_rank_te != null) sosRankMap.set(`${row.team}:TE`, row.def_rank_te);
         });
 
-        // Get team SOS rankings from strength_of_schedule table
-        const { data: teamSosData } = await supabase
-          .from('strength_of_schedule')
-          .select('team')
-          .eq('season', season);
-
-        const teamSosMap = new Map<string, { ros: number, playoff: number }>();
-        (teamSosData || []).forEach((row: any) => {
-          const normalizedTeam = normalizeTeam(row.team) || row.team;
-          teamSosMap.set(`${normalizedTeam}:${row.position}`, {
-            ros: row.ros_sos_rank,
-            playoff: row.playoff_sos_rank
-          });
-        });
 
         // Add opponent and defensive rank to projections
         projections.forEach(proj => {
@@ -254,14 +244,6 @@ serve(async (req) => {
                       proj.opponent_def_rank = sosRank;
                     }
                   }
-                }
-
-                // Add team SOS rankings (use normalized team for lookup)
-                const teamSosKey = `${normalizedTeam}:${pos}`;
-                const teamSos = teamSosMap.get(teamSosKey);
-                if (teamSos) {
-                  proj.ros_sos_rank = teamSos.ros;
-                  proj.playoff_sos_rank = teamSos.playoff;
                 }
               }
             }
