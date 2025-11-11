@@ -51,18 +51,26 @@ serve(async (req) => {
     let sleeperInserted = 0;
     let nflInserted = 0;
 
-    // Process Sleeper projections in batches
-    let sleeperPage = 0;
+    // Process Sleeper projections in batches (keyset pagination)
+    let lastSleeperId: string | null = null;
     const pageSize = 1000;
     
     while (true) {
-      const { data: projections, error: projError } = await supabase
+      let query = supabase
         .from('sleeper_projections')
         .select('*')
         .eq('season', season)
         .not('player_id', 'is', null)
         .order('id', { ascending: true })
-        .range(sleeperPage * pageSize, (sleeperPage + 1) * pageSize - 1);
+        .limit(pageSize);
+
+      if (lastSleeperId) {
+        // Keyset pagination to avoid skipped/duplicated rows during concurrent writes
+        // @ts-ignore - Supabase JS typing allows filter chaining
+        query = query.gt('id', lastSleeperId);
+      }
+
+      const { data: projections, error: projError } = await query;
 
       if (projError) throw projError;
       if (!projections || projections.length === 0) break;
@@ -114,23 +122,32 @@ serve(async (req) => {
         }
       }
 
-      sleeperPage++;
+      if (projections.length > 0) {
+        lastSleeperId = projections[projections.length - 1].id;
+      }
       if (projections.length < pageSize) break;
     }
 
     console.log(`Inserted ${sleeperInserted} Sleeper projection records`);
 
-    // Process NFL actual stats in batches
-    let nflPage = 0;
+    // Process NFL actual stats in batches (keyset pagination)
+    let lastNflId: string | null = null;
     
     while (true) {
-      const { data: actuals, error: actualsError } = await supabase
+      let nflQuery = supabase
         .from('nfl_fantasy_points')
         .select('*')
         .eq('season', season)
         .not('player_id', 'is', null)
         .order('id', { ascending: true })
-        .range(nflPage * pageSize, (nflPage + 1) * pageSize - 1);
+        .limit(pageSize);
+
+      if (lastNflId) {
+        // @ts-ignore - chaining filter
+        nflQuery = nflQuery.gt('id', lastNflId);
+      }
+
+      const { data: actuals, error: actualsError } = await nflQuery;
 
       if (actualsError) throw actualsError;
       if (!actuals || actuals.length === 0) break;
@@ -181,7 +198,9 @@ serve(async (req) => {
         }
       }
 
-      nflPage++;
+      if (actuals.length > 0) {
+        lastNflId = actuals[actuals.length - 1].id;
+      }
       if (actuals.length < pageSize) break;
     }
 
