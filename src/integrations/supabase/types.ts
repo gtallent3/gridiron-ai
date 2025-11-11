@@ -140,6 +140,45 @@ export type Database = {
         }
         Relationships: []
       }
+      canonical_players: {
+        Row: {
+          created_at: string
+          espn_id: string | null
+          id: string
+          nfl_id: string | null
+          player_name: string
+          position: string
+          sleeper_id: string | null
+          team: string | null
+          updated_at: string
+          yahoo_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          espn_id?: string | null
+          id?: string
+          nfl_id?: string | null
+          player_name: string
+          position: string
+          sleeper_id?: string | null
+          team?: string | null
+          updated_at?: string
+          yahoo_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          espn_id?: string | null
+          id?: string
+          nfl_id?: string | null
+          player_name?: string
+          position?: string
+          sleeper_id?: string | null
+          team?: string | null
+          updated_at?: string
+          yahoo_id?: string | null
+        }
+        Relationships: []
+      }
       connected_leagues: {
         Row: {
           auto_refresh: boolean | null
@@ -589,6 +628,7 @@ export type Database = {
       player_pool: {
         Row: {
           created_at: string | null
+          did_not_play: boolean
           id: string
           is_actual: boolean
           opponent: string | null
@@ -612,6 +652,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          did_not_play?: boolean
           id?: string
           is_actual?: boolean
           opponent?: string | null
@@ -635,6 +676,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          did_not_play?: boolean
           id?: string
           is_actual?: boolean
           opponent?: string | null
@@ -657,6 +699,99 @@ export type Database = {
           week?: number
         }
         Relationships: []
+      }
+      player_pool_v2: {
+        Row: {
+          actual_fp: number | null
+          canonical_player_id: string
+          composite_fp: number | null
+          created_at: string
+          id: string
+          opponent: string | null
+          opponent_def_rank: number | null
+          passing_ints: number | null
+          passing_tds: number | null
+          passing_yards: number | null
+          position: string
+          projected_fp: number | null
+          raw_source_ids: Json | null
+          receiving_tds: number | null
+          receiving_yards: number | null
+          receptions: number | null
+          rushing_tds: number | null
+          rushing_yards: number | null
+          season: number
+          source: string
+          team: string | null
+          updated_at: string
+          week: number
+        }
+        Insert: {
+          actual_fp?: number | null
+          canonical_player_id: string
+          composite_fp?: number | null
+          created_at?: string
+          id?: string
+          opponent?: string | null
+          opponent_def_rank?: number | null
+          passing_ints?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          position: string
+          projected_fp?: number | null
+          raw_source_ids?: Json | null
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          season: number
+          source: string
+          team?: string | null
+          updated_at?: string
+          week: number
+        }
+        Update: {
+          actual_fp?: number | null
+          canonical_player_id?: string
+          composite_fp?: number | null
+          created_at?: string
+          id?: string
+          opponent?: string | null
+          opponent_def_rank?: number | null
+          passing_ints?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          position?: string
+          projected_fp?: number | null
+          raw_source_ids?: Json | null
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          season?: number
+          source?: string
+          team?: string | null
+          updated_at?: string
+          week?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_pool_v2_canonical_player_id_fkey"
+            columns: ["canonical_player_id"]
+            isOneToOne: false
+            referencedRelation: "canonical_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_pool_v2_canonical_player_id_fkey"
+            columns: ["canonical_player_id"]
+            isOneToOne: false
+            referencedRelation: "player_values_view"
+            referencedColumns: ["canonical_player_id"]
+          },
+        ]
       }
       player_rankings: {
         Row: {
@@ -1557,6 +1692,42 @@ export type Database = {
         }
         Relationships: []
       }
+      unmatched_players: {
+        Row: {
+          created_at: string
+          id: string
+          player_name: string
+          position: string
+          possible_matches: Json | null
+          resolved: boolean | null
+          source: string
+          source_player_id: string
+          team: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          player_name: string
+          position: string
+          possible_matches?: Json | null
+          resolved?: boolean | null
+          source: string
+          source_player_id: string
+          team?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          player_name?: string
+          position?: string
+          possible_matches?: Json | null
+          resolved?: boolean | null
+          source?: string
+          source_player_id?: string
+          team?: string | null
+        }
+        Relationships: []
+      }
       user_identities: {
         Row: {
           created_at: string | null
@@ -1779,7 +1950,31 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      player_values_view: {
+        Row: {
+          actual_fp: number | null
+          canonical_player_id: string | null
+          composite_fp: number | null
+          opponent: string | null
+          opponent_def_rank: number | null
+          passing_ints: number | null
+          passing_tds: number | null
+          passing_yards: number | null
+          player_name: string | null
+          position: string | null
+          projected_fp: number | null
+          receiving_tds: number | null
+          receiving_yards: number | null
+          receptions: number | null
+          rushing_tds: number | null
+          rushing_yards: number | null
+          season: number | null
+          source: string | null
+          team: string | null
+          week: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       check_rate_limit: {
