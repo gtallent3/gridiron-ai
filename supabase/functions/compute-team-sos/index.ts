@@ -113,8 +113,30 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Optionally rank teams for each position (1 = harder when lower avg rank)
-    // Not stored; we persist averages only
+    // Rank teams for each position: 1 = hardest (lowest avg rank), 32 = easiest (highest avg rank)
+    for (const position of positions) {
+      const posData = teamSosData.filter(d => d.position === position);
+      
+      // ROS ranking: lower ros_sos = harder = rank 1
+      const rosSorted = [...posData].sort((a, b) => {
+        if (a.ros_sos === null) return 1; // nulls go to end
+        if (b.ros_sos === null) return -1;
+        return a.ros_sos - b.ros_sos;
+      });
+      rosSorted.forEach((team, idx) => {
+        team.ros_sos_rank = team.ros_sos !== null ? idx + 1 : null;
+      });
+      
+      // Playoff ranking: lower playoff_sos = harder = rank 1
+      const playoffSorted = [...posData].sort((a, b) => {
+        if (a.playoff_sos === null) return 1;
+        if (b.playoff_sos === null) return -1;
+        return a.playoff_sos - b.playoff_sos;
+      });
+      playoffSorted.forEach((team, idx) => {
+        team.playoff_sos_rank = team.playoff_sos !== null ? idx + 1 : null;
+      });
+    }
 
     // Persist to strength_of_schedule
     console.log(`Upserting ${teamSosData.length} strength_of_schedule rows for season ${season}`);
@@ -134,6 +156,8 @@ Deno.serve(async (req) => {
       position: d.position,
       ros_sos: d.ros_sos,
       playoff_sos: d.playoff_sos,
+      ros_sos_rank: d.ros_sos_rank,
+      playoff_sos_rank: d.playoff_sos_rank,
       ros_weeks: d.ros_weeks,
       playoff_weeks: d.playoff_weeks,
     }));

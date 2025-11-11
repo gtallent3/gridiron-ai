@@ -16,17 +16,18 @@ interface DefensiveRanking {
 }
 
 interface StrengthOfSchedule {
+  id: string;
   team: string;
-  week: number;
-  opponent: string;
-  def_rank_qb: number;
-  def_rank_rb: number;
-  def_rank_wr: number;
-  def_rank_te: number;
-  avg_points_allowed_qb: number;
-  avg_points_allowed_rb: number;
-  avg_points_allowed_wr: number;
-  avg_points_allowed_te: number;
+  season: number;
+  position: string;
+  ros_sos: number | null;
+  playoff_sos: number | null;
+  ros_sos_rank: number | null;
+  playoff_sos_rank: number | null;
+  ros_weeks: number[];
+  playoff_weeks: number[];
+  created_at: string;
+  updated_at: string;
 }
 
 export default function StrengthOfSchedulePage() {
@@ -58,12 +59,13 @@ export default function StrengthOfSchedulePage() {
       if (defError) throw defError;
       setDefensiveRankings(defData || []);
 
-      // Fetch SOS data
+      // Fetch SOS data for selected position
       const { data: sosData, error: sosError } = await supabase
         .from('strength_of_schedule')
         .select('*')
         .eq('season', season)
-        .order('week', { ascending: true });
+        .eq('position', selectedPosition)
+        .order('ros_sos_rank', { ascending: true, nullsFirst: false });
 
       if (sosError) throw sosError;
       setSos(sosData || []);
@@ -117,18 +119,25 @@ export default function StrengthOfSchedulePage() {
     }
   };
 
-  const getRankColor = (rank: number | null) => {
+  const getSosColor = (rank: number | null) => {
     if (!rank) return 'secondary';
-    if (rank <= 10) return 'destructive'; // Hard matchup
-    if (rank <= 20) return 'secondary'; // Medium matchup
-    return 'default'; // Easy matchup
+    if (rank <= 10) return 'destructive'; // Hardest (1-10)
+    if (rank <= 22) return 'secondary'; // Medium (11-22)
+    return 'default'; // Easiest (23-32)
+  };
+
+  const getSosDifficulty = (rank: number | null) => {
+    if (!rank) return '-';
+    if (rank <= 10) return 'Hardest';
+    if (rank <= 22) return 'Medium';
+    return 'Easiest';
   };
 
   const teams = [...new Set(sos.map(s => s.team))].sort();
 
   const filteredSos = selectedTeam 
-    ? sos.filter(s => s.team === selectedTeam)
-    : sos.slice(0, 50); // Show first 50 if no team selected
+    ? sos.filter(s => s.team === selectedTeam && s.position === selectedPosition)
+    : sos.filter(s => s.position === selectedPosition).slice(0, 32); // Show all 32 teams for selected position
 
   return (
     <div className="container mx-auto p-6 pt-24 space-y-6">
@@ -253,40 +262,34 @@ export default function StrengthOfSchedulePage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Week</TableHead>
                       <TableHead>Team</TableHead>
-                      <TableHead>vs</TableHead>
-                      <TableHead>QB</TableHead>
-                      <TableHead>RB</TableHead>
-                      <TableHead>WR</TableHead>
-                      <TableHead>TE</TableHead>
+                      <TableHead>Position</TableHead>
+                      <TableHead>ROS SOS Rank</TableHead>
+                      <TableHead>ROS SOS Avg</TableHead>
+                      <TableHead>Playoff SOS Rank</TableHead>
+                      <TableHead>Playoff SOS Avg</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredSos.map((matchup, idx) => (
-                      <TableRow key={idx}>
-                        <TableCell>{matchup.week}</TableCell>
-                        <TableCell className="font-medium">{matchup.team}</TableCell>
-                        <TableCell>{matchup.opponent}</TableCell>
+                    {filteredSos.map((record) => (
+                      <TableRow key={`${record.team}-${record.position}-${record.id}`}>
+                        <TableCell className="font-medium">{record.team}</TableCell>
+                        <TableCell>{record.position}</TableCell>
                         <TableCell>
-                          <Badge variant={getRankColor(matchup.def_rank_qb)}>
-                            {matchup.def_rank_qb || '-'}
+                          <Badge variant={getSosColor(record.ros_sos_rank)}>
+                            {record.ros_sos_rank || '-'}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={getRankColor(matchup.def_rank_rb)}>
-                            {matchup.def_rank_rb || '-'}
-                          </Badge>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {record.ros_sos?.toFixed(2) || '-'}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={getRankColor(matchup.def_rank_wr)}>
-                            {matchup.def_rank_wr || '-'}
+                          <Badge variant={getSosColor(record.playoff_sos_rank)}>
+                            {record.playoff_sos_rank || '-'}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          <Badge variant={getRankColor(matchup.def_rank_te)}>
-                            {matchup.def_rank_te || '-'}
-                          </Badge>
+                        <TableCell className="text-sm text-muted-foreground">
+                          {record.playoff_sos?.toFixed(2) || '-'}
                         </TableCell>
                       </TableRow>
                     ))}

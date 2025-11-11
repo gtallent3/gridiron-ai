@@ -1253,55 +1253,46 @@ export type Database = {
       }
       strength_of_schedule: {
         Row: {
-          avg_points_allowed_qb: number | null
-          avg_points_allowed_rb: number | null
-          avg_points_allowed_te: number | null
-          avg_points_allowed_wr: number | null
           created_at: string | null
-          def_rank_qb: number | null
-          def_rank_rb: number | null
-          def_rank_te: number | null
-          def_rank_wr: number | null
           id: string
-          opponent: string | null
+          playoff_sos: number | null
+          playoff_sos_rank: number | null
+          playoff_weeks: number[] | null
+          position: string
+          ros_sos: number | null
+          ros_sos_rank: number | null
+          ros_weeks: number[] | null
           season: number
           team: string
           updated_at: string | null
-          week: number | null
         }
         Insert: {
-          avg_points_allowed_qb?: number | null
-          avg_points_allowed_rb?: number | null
-          avg_points_allowed_te?: number | null
-          avg_points_allowed_wr?: number | null
           created_at?: string | null
-          def_rank_qb?: number | null
-          def_rank_rb?: number | null
-          def_rank_te?: number | null
-          def_rank_wr?: number | null
           id?: string
-          opponent?: string | null
-          season?: number
+          playoff_sos?: number | null
+          playoff_sos_rank?: number | null
+          playoff_weeks?: number[] | null
+          position: string
+          ros_sos?: number | null
+          ros_sos_rank?: number | null
+          ros_weeks?: number[] | null
+          season: number
           team: string
           updated_at?: string | null
-          week?: number | null
         }
         Update: {
-          avg_points_allowed_qb?: number | null
-          avg_points_allowed_rb?: number | null
-          avg_points_allowed_te?: number | null
-          avg_points_allowed_wr?: number | null
           created_at?: string | null
-          def_rank_qb?: number | null
-          def_rank_rb?: number | null
-          def_rank_te?: number | null
-          def_rank_wr?: number | null
           id?: string
-          opponent?: string | null
+          playoff_sos?: number | null
+          playoff_sos_rank?: number | null
+          playoff_weeks?: number[] | null
+          position?: string
+          ros_sos?: number | null
+          ros_sos_rank?: number | null
+          ros_weeks?: number[] | null
           season?: number
           team?: string
           updated_at?: string | null
-          week?: number | null
         }
         Relationships: []
       }
