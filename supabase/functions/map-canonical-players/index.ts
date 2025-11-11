@@ -194,12 +194,15 @@ serve(async (req) => {
           }
           
           if (bestMatch && !existingByNflIdMap.has(bestMatch.player_id)) {
-            toUpdate.push({
-              id: existing.id,
-              nfl_id: bestMatch.player_id,
-              team: normalizedSleeperTeam || bestMatch.team
-            });
-            matchedNflIds.add(bestMatch.player_id);
+            const teamValue = normalizedSleeperTeam || bestMatch.team;
+            if (teamValue) { // Only update if team is not null
+              toUpdate.push({
+                id: existing.id,
+                nfl_id: bestMatch.player_id,
+                team: teamValue
+              });
+              matchedNflIds.add(bestMatch.player_id);
+            }
           }
         }
         matched++;
@@ -266,36 +269,43 @@ serve(async (req) => {
           }
           matchedNflIds.add(bestMatch.player_id);
         } else {
-          // Create new canonical player with both IDs
-          toInsert.push({
-            player_name: sleeperPlayer.player_name,
-            position: sleeperPlayer.position,
-            team: normalizedSleeperTeam || bestMatch.team,
-            sleeper_id: sleeperPlayer.player_id,
-            nfl_id: bestMatch.player_id
-          });
-          matchedNflIds.add(bestMatch.player_id);
-          created++;
+        // Create new canonical player with both IDs
+          const teamValue = normalizedSleeperTeam || bestMatch.team;
+          if (teamValue) { // Only insert if team is not null
+            toInsert.push({
+              player_name: sleeperPlayer.player_name,
+              position: sleeperPlayer.position,
+              team: teamValue,
+              sleeper_id: sleeperPlayer.player_id,
+              nfl_id: bestMatch.player_id
+            });
+            matchedNflIds.add(bestMatch.player_id);
+            created++;
+          }
         }
       } else {
         // No match - create with only sleeper_id
-        toInsert.push({
-          player_name: sleeperPlayer.player_name,
-          position: sleeperPlayer.position,
-          team: normalizedSleeperTeam,
-          sleeper_id: sleeperPlayer.player_id
-        });
+        const normalizedTeam = normalizeTeam(sleeperPlayer.team);
         
-        unmatchedRecords.push({
-          player_name: sleeperPlayer.player_name,
-          position: sleeperPlayer.position,
-          team: normalizedSleeperTeam,
-          source: 'sleeper',
-          source_player_id: sleeperPlayer.player_id,
-          possible_matches: JSON.stringify(nflCandidates)
-        });
-        created++;
-        unmatched++;
+        if (normalizedTeam) { // Only insert if team is not null
+          toInsert.push({
+            player_name: sleeperPlayer.player_name,
+            position: sleeperPlayer.position,
+            team: normalizedTeam,
+            sleeper_id: sleeperPlayer.player_id
+          });
+          
+          unmatchedRecords.push({
+            player_name: sleeperPlayer.player_name,
+            position: sleeperPlayer.position,
+            team: normalizedTeam,
+            source: 'sleeper',
+            source_player_id: sleeperPlayer.player_id,
+            possible_matches: JSON.stringify(nflCandidates)
+          });
+          created++;
+          unmatched++;
+        }
       }
     }
 
@@ -307,22 +317,24 @@ serve(async (req) => {
       if (!existing && !matchedNflIds.has(nflPlayer.player_id)) {
         const normalizedTeam = normalizeTeam(nflPlayer.team);
         
-        toInsert.push({
-          player_name: nflPlayer.player_name,
-          position: nflPlayer.position,
-          team: normalizedTeam,
-          nfl_id: nflPlayer.player_id
-        });
-        
-        unmatchedRecords.push({
-          player_name: nflPlayer.player_name,
-          position: nflPlayer.position,
-          team: normalizedTeam,
-          source: 'nfl',
-          source_player_id: nflPlayer.player_id
-        });
-        created++;
-        unmatched++;
+        if (normalizedTeam) { // Only insert if team is not null
+          toInsert.push({
+            player_name: nflPlayer.player_name,
+            position: nflPlayer.position,
+            team: normalizedTeam,
+            nfl_id: nflPlayer.player_id
+          });
+          
+          unmatchedRecords.push({
+            player_name: nflPlayer.player_name,
+            position: nflPlayer.position,
+            team: normalizedTeam,
+            source: 'nfl',
+            source_player_id: nflPlayer.player_id
+          });
+          created++;
+          unmatched++;
+        }
       }
     }
 
