@@ -5,15 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Configuration
-const PLAYOFF_WEEKS = [14, 15, 16, 17];
-const POSITIONS = ['QB', 'RB', 'WR', 'TE'];
-
-// SOS Rank Direction: Lower number = EASIER schedule for offense (weaker defense)
-// We invert defensive ranks so that rank 1 (best defense) becomes rank 32 (hardest matchup for offense)
-// and rank 32 (worst defense) becomes rank 1 (easiest matchup for offense)
-const invertDefensiveRank = (defRank: number) => 33 - defRank;
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -25,199 +16,120 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get parameters from request body or use defaults
-    let season = 2025;
-    let currentWeek = 1;
-
-    try {
-      const body = await req.json();
-      season = body.season ?? 2025;
-      currentWeek = body.currentWeek;
-    } catch {
-      // If no body, we'll determine current week from data
-    }
-
-    // Determine current week if not provided
-    if (!currentWeek) {
-      console.log('Determining current week from player data...');
-      
-      const { data: weekData } = await supabase
-        .from('nfl_fantasy_points')
-        .select('week')
-        .eq('season', season)
-        .not('fantasy_points_ppr', 'is', null)
-        .order('week', { ascending: false })
-        .limit(1);
-
-      if (weekData && weekData.length > 0) {
-        currentWeek = weekData[0].week + 1;
-      } else {
-        currentWeek = 1;
-      }
-    }
-
+    const { season = 2025, currentWeek = 10 } = await req.json();
+    
     console.log(`Computing team SOS for season ${season}, current week ${currentWeek}`);
 
-    // Fetch team schedules (remaining weeks only)
-    const { data: schedules, error: schedError } = await supabase
-      .from('team_schedules')
-      .select('team, week, opponent')
-      .eq('season', season)
-      .gte('week', currentWeek);
+    // Fetch both queries in parallel to reduce latency
+    const [schedulesResult, sosDataResult] = await Promise.all([
+      supabase
+        .from('team_schedules')
+        .select('team, week, opponent')
+        .eq('season', season)
+        .gte('week', currentWeek),
+      supabase
+        .from('strength_of_schedule')
+        .select('team, def_rank_qb, def_rank_rb, def_rank_wr, def_rank_te')
+        .eq('season', season)
+    ]);
+
+    const { data: schedules, error: schedError } = schedulesResult;
+    const { data: sosData, error: sosError } = sosDataResult;
 
     if (schedError) {
       console.error('Schedule fetch error:', schedError);
       throw new Error(`Failed to fetch schedules: ${schedError.message}`);
+    }
+    if (sosError) {
+      console.error('SOS data fetch error:', sosError);
+      throw new Error(`Failed to fetch SOS data: ${sosError.message}`);
     }
 
     if (!schedules || schedules.length === 0) {
       throw new Error('No schedule data found');
     }
 
-    console.log(`Fetched ${schedules.length} schedule records`);
-
-    // Fetch defensive rankings - we need the most recent week's rankings for each team/position
-    const { data: defRankings, error: defError } = await supabase
-      .from('defensive_rankings')
-      .select('team, position, rank, week')
-      .eq('season', season)
-      .order('week', { ascending: false });
-
-    if (defError) {
-      console.error('Defensive rankings fetch error:', defError);
-      throw new Error(`Failed to fetch defensive rankings: ${defError.message}`);
+    if (!sosData || sosData.length === 0) {
+      throw new Error('No SOS data found');
     }
 
-    if (!defRankings || defRankings.length === 0) {
-      throw new Error('No defensive rankings data found');
-    }
+    console.log(`Fetched ${schedules.length} schedule records, ${sosData.length} SOS records`);
 
-    console.log(`Fetched ${defRankings.length} defensive ranking records`);
-
-    // Build defense rank map - use most recent week's ranking for each team/position
+    // Create defense rank map by team and position
     const defRankMap = new Map<string, number>();
-    const processedKeys = new Set<string>();
-
-    defRankings.forEach((row: any) => {
-      const key = `${row.team}:${row.position}`;
-      if (!processedKeys.has(key) && row.rank != null) {
-        defRankMap.set(key, row.rank);
-        processedKeys.add(key);
-      }
+    sosData.forEach((row: any) => {
+      if (row.def_rank_qb) defRankMap.set(`${row.team}:QB`, row.def_rank_qb);
+      if (row.def_rank_rb) defRankMap.set(`${row.team}:RB`, row.def_rank_rb);
+      if (row.def_rank_wr) defRankMap.set(`${row.team}:WR`, row.def_rank_wr);
+      if (row.def_rank_te) defRankMap.set(`${row.team}:TE`, row.def_rank_te);
     });
 
-    console.log(`Built defense rank map with ${defRankMap.size} entries`);
-
-    // Get all unique teams
+    // Calculate SOS for each team and position
+    const positions = ['QB', 'RB', 'WR', 'TE'];
     const teams = [...new Set(schedules.map(s => s.team))];
     
-    const sosResults: any[] = [];
+    const teamSosData: any[] = [];
 
-    // Calculate SOS for each team and position
     for (const team of teams) {
       const teamSchedule = schedules.filter(s => s.team === team);
+      const rosWeeks = teamSchedule.filter(s => s.week >= currentWeek);
+      const playoffWeeks = teamSchedule.filter(s => s.week >= 15 && s.week <= 17);
 
-      for (const position of POSITIONS) {
-        // ROS weeks: all remaining weeks (current_week to 17) with valid opponent
-        const rosWeeks = teamSchedule
-          .filter(s => s.week >= currentWeek && s.week <= 17 && s.opponent && s.opponent !== 'BYE')
-          .map(s => s.week);
+      for (const position of positions) {
+        // Calculate ROS average
+        const rosRanks = rosWeeks
+          .map(s => defRankMap.get(`${s.opponent}:${position}`))
+          .filter(r => r !== undefined) as number[];
+        
+        const rosAvg = rosRanks.length > 0 
+          ? rosRanks.reduce((a, b) => a + b, 0) / rosRanks.length 
+          : 0;
 
-        // Playoff weeks: intersection of PLAYOFF_WEEKS and remaining schedule
-        const playoffWeeks = teamSchedule
-          .filter(s => 
-            PLAYOFF_WEEKS.includes(s.week) && 
-            s.week >= currentWeek && 
-            s.opponent && 
-            s.opponent !== 'BYE'
-          )
-          .map(s => s.week);
+        // Calculate playoff average
+        const playoffRanks = playoffWeeks
+          .map(s => defRankMap.get(`${s.opponent}:${position}`))
+          .filter(r => r !== undefined) as number[];
+        
+        const playoffAvg = playoffRanks.length > 0 
+          ? playoffRanks.reduce((a, b) => a + b, 0) / playoffRanks.length 
+          : 0;
 
-        // Calculate ROS SOS
-        let rosSos: number | null = null;
-        if (rosWeeks.length > 0) {
-          const rosRanks: number[] = [];
-          
-          for (const week of rosWeeks) {
-            const matchup = teamSchedule.find(s => s.week === week);
-            if (matchup?.opponent) {
-              const defRank = defRankMap.get(`${matchup.opponent}:${position}`);
-              if (defRank != null) {
-                // Invert so lower number = easier matchup for offense
-                rosRanks.push(invertDefensiveRank(defRank));
-              }
-            }
-          }
-
-          if (rosRanks.length > 0) {
-            rosSos = rosRanks.reduce((sum, rank) => sum + rank, 0) / rosRanks.length;
-          }
-        }
-
-        // Calculate Playoff SOS
-        let playoffSos: number | null = null;
-        if (playoffWeeks.length > 0) {
-          const playoffRanks: number[] = [];
-          
-          for (const week of playoffWeeks) {
-            const matchup = teamSchedule.find(s => s.week === week);
-            if (matchup?.opponent) {
-              const defRank = defRankMap.get(`${matchup.opponent}:${position}`);
-              if (defRank != null) {
-                // Invert so lower number = easier matchup for offense
-                playoffRanks.push(invertDefensiveRank(defRank));
-              }
-            }
-          }
-
-          if (playoffRanks.length > 0) {
-            playoffSos = playoffRanks.reduce((sum, rank) => sum + rank, 0) / playoffRanks.length;
-          }
-        }
-
-        sosResults.push({
-          season,
+        teamSosData.push({
           team,
+          season,
           position,
-          ros_sos: rosSos,
-          playoff_sos: playoffSos,
-          ros_weeks: rosWeeks,
-          playoff_weeks: playoffWeeks,
+          ros_avg_def_rank: rosAvg,
+          playoff_avg_def_rank: playoffAvg,
         });
       }
     }
 
-    console.log(`Computed SOS for ${sosResults.length} team-position combinations`);
+    // Rank teams for each position (1 = hardest, 32 = easiest)
+    for (const position of positions) {
+      const positionData = teamSosData.filter(d => d.position === position);
+      
+      // ROS ranking (lower avg rank = harder schedule = rank 1)
+      positionData.sort((a, b) => a.ros_avg_def_rank - b.ros_avg_def_rank);
+      positionData.forEach((d, idx) => {
+        d.ros_sos_rank = d.ros_avg_def_rank > 0 ? idx + 1 : null;
+      });
 
-    // Delete existing data for this season
-    const { error: deleteError } = await supabase
-      .from('strength_of_schedule')
-      .delete()
-      .eq('season', season);
-
-    if (deleteError) {
-      console.error('Error deleting old SOS data:', deleteError);
-      throw new Error(`Failed to delete old SOS data: ${deleteError.message}`);
+      // Playoff ranking
+      positionData.sort((a, b) => a.playoff_avg_def_rank - b.playoff_avg_def_rank);
+      positionData.forEach((d, idx) => {
+        d.playoff_sos_rank = d.playoff_avg_def_rank > 0 ? idx + 1 : null;
+      });
     }
 
-    // Insert new SOS data
-    const { error: insertError } = await supabase
-      .from('strength_of_schedule')
-      .insert(sosResults);
+    // Note: team_sos table was removed - SOS data computed but not stored
+    console.log(`Computed SOS for ${teamSosData.length} team-position combinations`);
 
-    if (insertError) {
-      console.error('Error inserting SOS data:', insertError);
-      throw new Error(`Failed to insert SOS data: ${insertError.message}`);
-    }
-
-    console.log(`Successfully stored ${sosResults.length} SOS records for season ${season}`);
+    console.log(`Successfully computed SOS for ${teamSosData.length} team-position combinations`);
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        records: sosResults.length,
-        season,
-        currentWeek
+        records: teamSosData.length 
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
