@@ -20,49 +20,56 @@ Deno.serve(async (req) => {
     
     console.log(`Computing team SOS for season ${season}, current week ${currentWeek}`);
 
-    // Fetch both queries in parallel to reduce latency
-    const [schedulesResult, sosDataResult] = await Promise.all([
+    // Fetch schedules and defensive rankings (season-to-date) in parallel
+    const [schedulesResult, defRankingsResult] = await Promise.all([
       supabase
         .from('team_schedules')
         .select('team, week, opponent')
         .eq('season', season)
         .gte('week', currentWeek),
       supabase
-        .from('strength_of_schedule')
-        .select('team, def_rank_qb, def_rank_rb, def_rank_wr, def_rank_te')
+        .from('defensive_rankings')
+        .select('team, position, week, rank')
         .eq('season', season)
+        .lt('week', currentWeek)
+        .limit(10000)
     ]);
 
     const { data: schedules, error: schedError } = schedulesResult;
-    const { data: sosData, error: sosError } = sosDataResult;
+    const { data: defRanks, error: defError } = defRankingsResult;
 
     if (schedError) {
       console.error('Schedule fetch error:', schedError);
       throw new Error(`Failed to fetch schedules: ${schedError.message}`);
     }
-    if (sosError) {
-      console.error('SOS data fetch error:', sosError);
-      throw new Error(`Failed to fetch SOS data: ${sosError.message}`);
+    if (defError) {
+      console.error('Defensive rankings fetch error:', defError);
+      throw new Error(`Failed to fetch defensive rankings: ${defError.message}`);
     }
 
     if (!schedules || schedules.length === 0) {
       throw new Error('No schedule data found');
     }
-
-    if (!sosData || sosData.length === 0) {
-      throw new Error('No SOS data found');
+    if (!defRanks || defRanks.length === 0) {
+      throw new Error('No defensive rankings found');
     }
 
-    console.log(`Fetched ${schedules.length} schedule records, ${sosData.length} SOS records`);
+    console.log(`Fetched ${schedules.length} schedule rows, ${defRanks.length} defensive ranking rows`);
 
-    // Create defense rank map by team and position
+    // Build average defensive rank map by team and position (season-to-date)
+    const defAgg = new Map<string, { sum: number; count: number }>();
+    for (const row of defRanks as any[]) {
+      if (row.rank == null || row.position == null || row.team == null) continue;
+      const key = `${row.team}:${row.position}`;
+      const agg = defAgg.get(key) || { sum: 0, count: 0 };
+      agg.sum += row.rank;
+      agg.count += 1;
+      defAgg.set(key, agg);
+    }
     const defRankMap = new Map<string, number>();
-    sosData.forEach((row: any) => {
-      if (row.def_rank_qb) defRankMap.set(`${row.team}:QB`, row.def_rank_qb);
-      if (row.def_rank_rb) defRankMap.set(`${row.team}:RB`, row.def_rank_rb);
-      if (row.def_rank_wr) defRankMap.set(`${row.team}:WR`, row.def_rank_wr);
-      if (row.def_rank_te) defRankMap.set(`${row.team}:TE`, row.def_rank_te);
-    });
+    for (const [key, agg] of defAgg) {
+      if (agg.count > 0) defRankMap.set(key, agg.sum / agg.count);
+    }
 
     // Calculate SOS for each team and position
     const positions = ['QB', 'RB', 'WR', 'TE'];
@@ -98,38 +105,55 @@ Deno.serve(async (req) => {
           team,
           season,
           position,
-          ros_avg_def_rank: rosAvg,
-          playoff_avg_def_rank: playoffAvg,
+          ros_sos: rosRanks.length > 0 ? rosAvg : null,
+          playoff_sos: playoffRanks.length > 0 ? playoffAvg : null,
+          ros_weeks: rosWeeks.map(w => w.week),
+          playoff_weeks: playoffWeeks.map(w => w.week),
         });
       }
     }
 
-    // Rank teams for each position (1 = hardest, 32 = easiest)
-    for (const position of positions) {
-      const positionData = teamSosData.filter(d => d.position === position);
-      
-      // ROS ranking (lower avg rank = harder schedule = rank 1)
-      positionData.sort((a, b) => a.ros_avg_def_rank - b.ros_avg_def_rank);
-      positionData.forEach((d, idx) => {
-        d.ros_sos_rank = d.ros_avg_def_rank > 0 ? idx + 1 : null;
-      });
+    // Optionally rank teams for each position (1 = harder when lower avg rank)
+    // Not stored; we persist averages only
 
-      // Playoff ranking
-      positionData.sort((a, b) => a.playoff_avg_def_rank - b.playoff_avg_def_rank);
-      positionData.forEach((d, idx) => {
-        d.playoff_sos_rank = d.playoff_avg_def_rank > 0 ? idx + 1 : null;
-      });
+    // Persist to strength_of_schedule
+    console.log(`Upserting ${teamSosData.length} strength_of_schedule rows for season ${season}`);
+
+    const { error: delErr } = await supabase
+      .from('strength_of_schedule')
+      .delete()
+      .eq('season', season);
+    if (delErr) {
+      console.error('Failed deleting existing strength_of_schedule rows:', delErr);
+      throw new Error(`Failed to clear strength_of_schedule: ${delErr.message}`);
     }
 
-    // Note: team_sos table was removed - SOS data computed but not stored
-    console.log(`Computed SOS for ${teamSosData.length} team-position combinations`);
+    const insertPayload = teamSosData.map(d => ({
+      team: d.team,
+      season: d.season,
+      position: d.position,
+      ros_sos: d.ros_sos,
+      playoff_sos: d.playoff_sos,
+      ros_weeks: d.ros_weeks,
+      playoff_weeks: d.playoff_weeks,
+    }));
 
-    console.log(`Successfully computed SOS for ${teamSosData.length} team-position combinations`);
+    const { error: insErr } = await supabase
+      .from('strength_of_schedule')
+      .insert(insertPayload);
+    if (insErr) {
+      console.error('Insert strength_of_schedule error:', insErr);
+      throw new Error(`Failed to insert strength_of_schedule: ${insErr.message}`);
+    }
+
+    console.log('Successfully wrote strength_of_schedule');
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        records: teamSosData.length 
+      JSON.stringify({
+        success: true,
+        season,
+        currentWeek,
+        written: insertPayload.length
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
