@@ -103,36 +103,9 @@ serve(async (req) => {
       return `${normalizeName(row.player_name)}:${row.position}`;
     };
 
-    // Merge in fallback actuals from nfl_fantasy_points when v2 is missing entries
-    const baseActuals = actualsData || [];
+    const actuals = actualsData || [];
     const projections = projectionsData || [];
-    const { data: nflActuals, error: nflActualsError } = await supabase
-      .from('nfl_fantasy_points')
-      .select('player_name, position, team, week, fantasy_points_ppr')
-      .eq('season', season)
-      .lte('week', currentWeek)
-      .in('position', ['QB','RB','WR','TE']);
-    if (nflActualsError) {
-      console.warn('NFL fallback actuals query failed', nflActualsError);
-    }
-    // Map NFL actuals to the same shape as v2 actuals
-    const mappedNflActuals = (nflActuals || []).map((r: any) => ({
-      canonical_player_id: null,
-      player_name: r.player_name,
-      position: r.position,
-      team: r.team,
-      week: r.week,
-      actual_fp: r.fantasy_points_ppr,
-    }));
-    // Combine: prefer v2 rows but add nfl rows where we have no v2 actual for that name:position:week
-    const seenKey = new Set(baseActuals.map((a: any) => `${normalizeName(a.player_name)}:${a.position}:${a.week}`));
-    const combinedFallback = mappedNflActuals.filter((r: any) => !seenKey.has(`${normalizeName(r.player_name)}:${r.position}:${r.week}`));
-    const actuals = [...baseActuals, ...combinedFallback];
-
-    const actualCount = actuals.length;
-    const projCount = projections.length;
-    const nonZeroProjCount = projections.filter(p => Number(p.projected_fp || 0) > 0).length;
-    console.log(`Fetched actuals: v2=${baseActuals.length}, nfl_fallback_added=${combinedFallback.length}, total=${actualCount}; projections=${projCount}, non-zero projections=${nonZeroProjCount}`);
+    console.log(`Fetched ${actuals.length} actuals and ${projections.length} projections from player_pool_v2`);
     // Fetch SOS data
     const { data: sosData, error: sosError } = await supabase
       .from('strength_of_schedule')
