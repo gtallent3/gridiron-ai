@@ -89,22 +89,35 @@ serve(async (req) => {
       nflByNamePos.get(key)!.push(player);
     }
 
+    // Fetch all existing canonical players to avoid individual lookups
+    const { data: existingCanonical } = await supabase
+      .from('canonical_players')
+      .select('id, sleeper_id, nfl_id');
+
+    const existingBySleeperIdMap = new Map<string, any>();
+    const existingByNflIdMap = new Map<string, any>();
+    
+    for (const cp of existingCanonical || []) {
+      if (cp.sleeper_id) existingBySleeperIdMap.set(cp.sleeper_id, cp);
+      if (cp.nfl_id) existingByNflIdMap.set(cp.nfl_id, cp);
+    }
+
     let matched = 0;
     let created = 0;
     let unmatched = 0;
+    
+    const toInsert: any[] = [];
+    const toUpdate: any[] = [];
+    const unmatchedRecords: any[] = [];
 
-    // Process Sleeper players
+    // Process Sleeper players in memory first
     for (const sleeperPlayer of sleeperMap.values()) {
       const normalizedName = normalizeName(sleeperPlayer.player_name);
       const key = `${normalizedName}:${sleeperPlayer.position}`;
       const normalizedSleeperTeam = normalizeTeam(sleeperPlayer.team);
 
       // Check if already exists by sleeper_id
-      const { data: existing } = await supabase
-        .from('canonical_players')
-        .select('id')
-        .eq('sleeper_id', sleeperPlayer.player_id)
-        .single();
+      const existing = existingBySleeperIdMap.get(sleeperPlayer.player_id);
 
       if (existing) {
         matched++;
@@ -162,108 +175,104 @@ serve(async (req) => {
 
       if (bestMatch) {
         // Check if NFL player already mapped
-        const { data: nflExisting } = await supabase
-          .from('canonical_players')
-          .select('id, sleeper_id')
-          .eq('nfl_id', bestMatch.player_id)
-          .single();
+        const nflExisting = existingByNflIdMap.get(bestMatch.player_id);
 
         if (nflExisting) {
           // Update with sleeper_id if missing
           if (!nflExisting.sleeper_id) {
-            await supabase
-              .from('canonical_players')
-              .update({ 
-                sleeper_id: sleeperPlayer.player_id,
-                team: normalizedSleeperTeam || bestMatch.team 
-              })
-              .eq('id', nflExisting.id);
+            toUpdate.push({
+              id: nflExisting.id,
+              sleeper_id: sleeperPlayer.player_id,
+              team: normalizedSleeperTeam || bestMatch.team
+            });
             matched++;
           }
         } else {
           // Create new canonical player with both IDs
-          const { error: insertError } = await supabase
-            .from('canonical_players')
-            .insert({
-              player_name: sleeperPlayer.player_name,
-              position: sleeperPlayer.position,
-              team: normalizedSleeperTeam || bestMatch.team,
-              sleeper_id: sleeperPlayer.player_id,
-              nfl_id: bestMatch.player_id
-            });
-
-          if (!insertError) {
-            created++;
-          } else {
-            console.error('Insert error:', insertError);
-          }
+          toInsert.push({
+            player_name: sleeperPlayer.player_name,
+            position: sleeperPlayer.position,
+            team: normalizedSleeperTeam || bestMatch.team,
+            sleeper_id: sleeperPlayer.player_id,
+            nfl_id: bestMatch.player_id
+          });
+          created++;
         }
       } else {
         // No match - create with only sleeper_id
-        const { error: insertError } = await supabase
-          .from('canonical_players')
-          .insert({
-            player_name: sleeperPlayer.player_name,
-            position: sleeperPlayer.position,
-            team: normalizedSleeperTeam,
-            sleeper_id: sleeperPlayer.player_id
-          });
-
-        if (!insertError) {
-          created++;
-          
-          // Log as unmatched for manual review
-          await supabase
-            .from('unmatched_players')
-            .insert({
-              player_name: sleeperPlayer.player_name,
-              position: sleeperPlayer.position,
-              team: normalizedSleeperTeam,
-              source: 'sleeper',
-              source_player_id: sleeperPlayer.player_id,
-              possible_matches: JSON.stringify(nflCandidates)
-            });
-          unmatched++;
-        }
+        toInsert.push({
+          player_name: sleeperPlayer.player_name,
+          position: sleeperPlayer.position,
+          team: normalizedSleeperTeam,
+          sleeper_id: sleeperPlayer.player_id
+        });
+        
+        unmatchedRecords.push({
+          player_name: sleeperPlayer.player_name,
+          position: sleeperPlayer.position,
+          team: normalizedSleeperTeam,
+          source: 'sleeper',
+          source_player_id: sleeperPlayer.player_id,
+          possible_matches: JSON.stringify(nflCandidates)
+        });
+        created++;
+        unmatched++;
       }
     }
 
     // Process NFL players that weren't matched
     for (const nflPlayer of nflMap.values()) {
-      const { data: existing } = await supabase
-        .from('canonical_players')
-        .select('id')
-        .eq('nfl_id', nflPlayer.player_id)
-        .single();
+      const existing = existingByNflIdMap.get(nflPlayer.player_id);
 
       if (!existing) {
         const normalizedTeam = normalizeTeam(nflPlayer.team);
         
-        const { error: insertError } = await supabase
-          .from('canonical_players')
-          .insert({
-            player_name: nflPlayer.player_name,
-            position: nflPlayer.position,
-            team: normalizedTeam,
-            nfl_id: nflPlayer.player_id
-          });
-
-        if (!insertError) {
-          created++;
-          
-          // Log as unmatched
-          await supabase
-            .from('unmatched_players')
-            .insert({
-              player_name: nflPlayer.player_name,
-              position: nflPlayer.position,
-              team: normalizedTeam,
-              source: 'nfl',
-              source_player_id: nflPlayer.player_id
-            });
-          unmatched++;
-        }
+        toInsert.push({
+          player_name: nflPlayer.player_name,
+          position: nflPlayer.position,
+          team: normalizedTeam,
+          nfl_id: nflPlayer.player_id
+        });
+        
+        unmatchedRecords.push({
+          player_name: nflPlayer.player_name,
+          position: nflPlayer.position,
+          team: normalizedTeam,
+          source: 'nfl',
+          source_player_id: nflPlayer.player_id
+        });
+        created++;
+        unmatched++;
       }
+    }
+
+    // Batch insert new records (in chunks to avoid payload limits)
+    const CHUNK_SIZE = 100;
+    for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
+      const chunk = toInsert.slice(i, i + CHUNK_SIZE);
+      const { error } = await supabase
+        .from('canonical_players')
+        .insert(chunk);
+      
+      if (error) {
+        console.error(`Insert error for chunk ${i}-${i + chunk.length}:`, error);
+      }
+    }
+
+    // Batch update existing records
+    for (const update of toUpdate) {
+      await supabase
+        .from('canonical_players')
+        .update({ sleeper_id: update.sleeper_id, team: update.team })
+        .eq('id', update.id);
+    }
+
+    // Batch insert unmatched records
+    for (let i = 0; i < unmatchedRecords.length; i += CHUNK_SIZE) {
+      const chunk = unmatchedRecords.slice(i, i + CHUNK_SIZE);
+      await supabase
+        .from('unmatched_players')
+        .upsert(chunk, { onConflict: 'source,source_player_id' });
     }
 
     console.log(`Mapping complete: ${matched} matched, ${created} created, ${unmatched} unmatched`);
