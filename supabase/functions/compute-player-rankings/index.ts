@@ -76,6 +76,19 @@ serve(async (req) => {
 
     if (projectionsError) throw projectionsError;
 
+    // Normalize player name by removing suffixes
+    const normalizeName = (name: string): string => {
+      return name
+        .replace(/\s+(Jr\.?|Sr\.?|II|III|IV|V)$/i, '')
+        .trim();
+    };
+
+    // Normalize team abbreviations
+    const normalizeTeam = (team: string): string => {
+      if (team === 'LAR') return 'LA';
+      return team;
+    };
+
     // Merge in fallback actuals from nfl_fantasy_points when v2 is missing entries
     const baseActuals = actualsData || [];
     const projections = projectionsData || [];
@@ -138,19 +151,6 @@ serve(async (req) => {
         byeWeekMap.set(sched.team, sched.week);
       }
     }
-
-    // Normalize player name by removing suffixes
-    const normalizeName = (name: string): string => {
-      return name
-        .replace(/\s+(Jr\.?|Sr\.?|II|III|IV|V)$/i, '')
-        .trim();
-    };
-
-    // Normalize team abbreviations
-    const normalizeTeam = (team: string): string => {
-      if (team === 'LAR') return 'LA';
-      return team;
-    };
 
     // Build a complete player map from both actuals and projections
     // Use composite key: normalized_name:position to handle cross-team changes and avoid duplicates
