@@ -20,12 +20,12 @@ serve(async (req) => {
     // Determine season and current week from database
     const season = 2025;
     
-    // Get the latest week with actual stats to determine current week
+    // Get the latest week with actual stats from player_pool_v2 to determine current week
     const { data: latestActualWeeks } = await supabase
-      .from('player_pool')
+      .from('player_pool_v2')
       .select('week')
       .eq('season', season)
-      .eq('is_actual', true)
+      .not('actual_fp', 'is', null)
       .order('week', { ascending: false })
       .limit(1);
     
@@ -37,12 +37,13 @@ serve(async (req) => {
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek}`);
 
     // Fetch actuals from player_pool_v2 (actual_fp)
+    // Use lte to include the current week if it has actual data
     const { data: actualsData, error: actualsError } = await supabase
       .from('player_pool_v2')
       .select('canonical_player_id, player_name, position, team, week, actual_fp')
       .eq('season', season)
       .not('actual_fp', 'is', null)
-      .lt('week', currentWeek)
+      .lte('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
       .not('team', 'is', null)
       .limit(10000);
