@@ -214,10 +214,10 @@ serve(async (req) => {
         // Get team SOS rankings from strength_of_schedule table
         const { data: teamSosData } = await supabase
           .from('strength_of_schedule')
-          .select('team')
+          .select('team, position, ros_sos_rank, playoff_sos_rank')
           .eq('season', season);
 
-        const teamSosMap = new Map<string, { ros: number, playoff: number }>();
+        const teamSosMap = new Map<string, { ros: number | null, playoff: number | null }>();
         (teamSosData || []).forEach((row: any) => {
           teamSosMap.set(`${row.team}:${row.position}`, {
             ros: row.ros_sos_rank,
