@@ -78,9 +78,9 @@ serve(async (req) => {
       if (actuals.length < pageSize) break;
     }
 
-    // Fetch projections for current and future weeks (fetch all records with range)
-    let allProjections: any[] = [];
-    let projectionsPage = 0;
+    // Fetch Sleeper projections for current and future weeks
+    let allSleeperProjections: any[] = [];
+    let sleeperProjPage = 0;
     
     while (true) {
       const { data: projections, error: projError } = await supabase
@@ -90,20 +90,43 @@ serve(async (req) => {
         .gte('week', currentWeek)
         .in('position', ['QB', 'RB', 'WR', 'TE'])
         .not('team', 'is', null)
-        .range(projectionsPage * pageSize, (projectionsPage + 1) * pageSize - 1);
+        .range(sleeperProjPage * pageSize, (sleeperProjPage + 1) * pageSize - 1);
 
       if (projError) throw projError;
       if (!projections || projections.length === 0) break;
       
-      allProjections = allProjections.concat(projections);
-      projectionsPage++;
+      allSleeperProjections = allSleeperProjections.concat(projections);
+      sleeperProjPage++;
       
       if (projections.length < pageSize) break;
     }
 
-    // Fetch projections for past weeks to fill DNP/bye gaps (fetch all records with range)
-    let allPastProjections: any[] = [];
-    let pastProjPage = 0;
+    // Fetch ESPN projections for current and future weeks
+    let allEspnProjections: any[] = [];
+    let espnProjPage = 0;
+    
+    while (true) {
+      const { data: espnProj, error: espnError } = await supabase
+        .from('projected_player_stats')
+        .select('*')
+        .eq('season', season)
+        .gte('week', currentWeek)
+        .in('position', ['QB', 'RB', 'WR', 'TE'])
+        .not('team', 'is', null)
+        .range(espnProjPage * pageSize, (espnProjPage + 1) * pageSize - 1);
+
+      if (espnError) throw espnError;
+      if (!espnProj || espnProj.length === 0) break;
+      
+      allEspnProjections = allEspnProjections.concat(espnProj);
+      espnProjPage++;
+      
+      if (espnProj.length < pageSize) break;
+    }
+
+    // Fetch Sleeper projections for past weeks to fill DNP/bye gaps
+    let allPastSleeperProjections: any[] = [];
+    let pastSleeperPage = 0;
     while (true) {
       const { data: pastProjs, error: pastProjError } = await supabase
         .from('sleeper_projections')
@@ -112,18 +135,40 @@ serve(async (req) => {
         .lt('week', currentWeek)
         .in('position', ['QB', 'RB', 'WR', 'TE'])
         .not('team', 'is', null)
-        .range(pastProjPage * pageSize, (pastProjPage + 1) * pageSize - 1);
+        .range(pastSleeperPage * pageSize, (pastSleeperPage + 1) * pageSize - 1);
 
       if (pastProjError) throw pastProjError;
       if (!pastProjs || pastProjs.length === 0) break;
 
-      allPastProjections = allPastProjections.concat(pastProjs);
-      pastProjPage++;
+      allPastSleeperProjections = allPastSleeperProjections.concat(pastProjs);
+      pastSleeperPage++;
 
       if (pastProjs.length < pageSize) break;
     }
 
-    console.log(`Fetched ${allActuals.length} actual, ${allPastProjections.length} past-projection (for DNP fill) and ${allProjections.length} future-projection records`);
+    // Fetch ESPN projections for past weeks to fill DNP/bye gaps
+    let allPastEspnProjections: any[] = [];
+    let pastEspnPage = 0;
+    while (true) {
+      const { data: pastEspn, error: pastEspnError } = await supabase
+        .from('projected_player_stats')
+        .select('*')
+        .eq('season', season)
+        .lt('week', currentWeek)
+        .in('position', ['QB', 'RB', 'WR', 'TE'])
+        .not('team', 'is', null)
+        .range(pastEspnPage * pageSize, (pastEspnPage + 1) * pageSize - 1);
+
+      if (pastEspnError) throw pastEspnError;
+      if (!pastEspn || pastEspn.length === 0) break;
+
+      allPastEspnProjections = allPastEspnProjections.concat(pastEspn);
+      pastEspnPage++;
+
+      if (pastEspn.length < pageSize) break;
+    }
+
+    console.log(`Fetched ${allActuals.length} actual, ${allPastSleeperProjections.length} past Sleeper, ${allPastEspnProjections.length} past ESPN, ${allSleeperProjections.length} future Sleeper, and ${allEspnProjections.length} future ESPN projection records`);
 
     // Normalize player name by removing suffixes
     const normalizeName = (name: string): string => {
@@ -175,9 +220,21 @@ serve(async (req) => {
     }
 
     // Add filler projections for PAST weeks (only where there is no actual record)
+    // Prefer Sleeper, fall back to ESPN
+    const allPastProjections = [...allPastSleeperProjections, ...allPastEspnProjections];
+    const pastProjByKey = new Map<string, any>();
+    
     for (const proj of allPastProjections) {
       const normalizedName = normalizeName(proj.player_name);
       const key = `${normalizedName}:${proj.position}-${proj.week}-${proj.season}`;
+      
+      // Prefer Sleeper projections (they come first in the array)
+      if (!pastProjByKey.has(key)) {
+        pastProjByKey.set(key, proj);
+      }
+    }
+
+    for (const [key, proj] of pastProjByKey.entries()) {
       if (poolMap.has(key)) continue; // already have an actual
 
       const normalizedTeam = normalizeTeam(proj.team);
@@ -216,12 +273,21 @@ serve(async (req) => {
     }
 
     // Add projections (CURRENT and FUTURE weeks) - used for ROS calculations only
-    for (const proj of allProjections) {
+    // Merge Sleeper and ESPN projections, preferring Sleeper when both exist
+    const allFutureProjections = [...allSleeperProjections, ...allEspnProjections];
+    const futureProjByKey = new Map<string, any>();
+    
+    for (const proj of allFutureProjections) {
       const normalizedName = normalizeName(proj.player_name);
       const key = `${normalizedName}:${proj.position}-${proj.week}-${proj.season}`;
-      // Always set projections for current/future weeks (they should appear even if placeholders exist)
+      
+      // Prefer Sleeper projections (they come first in the array)
+      if (!futureProjByKey.has(key)) {
+        futureProjByKey.set(key, proj);
+      }
+    }
 
-
+    for (const [key, proj] of futureProjByKey.entries()) {
       const normalizedTeam = normalizeTeam(proj.team);
       let opponent = proj.opponent;
 
@@ -233,6 +299,44 @@ serve(async (req) => {
         }
       }
 
+      // Handle both Sleeper and ESPN projection formats
+      const isSleeper = 'pts_ppr' in proj;
+      const isEspn = 'stats' in proj;
+
+      let points_ppr = 0;
+      let passing_yards = 0;
+      let passing_tds = 0;
+      let passing_ints = 0;
+      let rushing_yards = 0;
+      let rushing_tds = 0;
+      let receptions = 0;
+      let receiving_yards = 0;
+      let receiving_tds = 0;
+
+      if (isSleeper) {
+        points_ppr = proj.pts_ppr || 0;
+        passing_yards = proj.pass_yd || 0;
+        passing_tds = proj.pass_td || 0;
+        passing_ints = proj.pass_int || 0;
+        rushing_yards = proj.rush_yd || 0;
+        rushing_tds = proj.rush_td || 0;
+        receptions = proj.rec || 0;
+        receiving_yards = proj.rec_yd || 0;
+        receiving_tds = proj.rec_td || 0;
+      } else if (isEspn) {
+        // ESPN stores stats in a jsonb object
+        const stats = proj.stats || {};
+        points_ppr = proj.projected_fp || 0;
+        passing_yards = stats.passing_yards || 0;
+        passing_tds = stats.passing_tds || 0;
+        passing_ints = stats.passing_ints || 0;
+        rushing_yards = stats.rushing_yards || 0;
+        rushing_tds = stats.rushing_tds || 0;
+        receptions = stats.receptions || 0;
+        receiving_yards = stats.receiving_yards || 0;
+        receiving_tds = stats.receiving_tds || 0;
+      }
+
       poolMap.set(key, {
         player_id: proj.player_id,
         player_name: proj.player_name,
@@ -240,19 +344,19 @@ serve(async (req) => {
         team: normalizedTeam,
         week: proj.week,
         season: proj.season,
-        points_ppr: proj.pts_ppr || 0,
+        points_ppr,
         is_actual: false,
         did_not_play: false,
-        passing_yards: proj.pass_yd || 0,
-        passing_tds: proj.pass_td || 0,
-        passing_ints: proj.pass_int || 0,
-        rushing_yards: proj.rush_yd || 0,
-        rushing_tds: proj.rush_td || 0,
-        receptions: proj.rec || 0,
-        receiving_yards: proj.rec_yd || 0,
-        receiving_tds: proj.rec_td || 0,
+        passing_yards,
+        passing_tds,
+        passing_ints,
+        rushing_yards,
+        rushing_tds,
+        receptions,
+        receiving_yards,
+        receiving_tds,
         opponent: opponent,
-        opponent_def_rank: proj.opponent_def_rank,
+        opponent_def_rank: proj.opponent_def_rank || null,
       });
     }
 
