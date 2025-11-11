@@ -264,16 +264,12 @@ serve(async (req) => {
       // Skip players with no actual stats AND no projections
       if (projs.length === 0 && acts.length === 0) continue;
 
-      // Filter out players that are out for the season (projected_fp == 0 for both weeks 17 AND 18)
+      // Filter out players that have no non-zero projections (truly out for the season)
+      // Only filter if they have projections but ALL are zero
       if (projs.length > 0) {
-        const week17Proj = projs.find(p => p.week === 17);
-        const week18Proj = projs.find(p => p.week === 18);
-        
-        const week17Pts = week17Proj ? Number(week17Proj.projected_fp || 0) : 1;
-        const week18Pts = week18Proj ? Number(week18Proj.projected_fp || 0) : 1;
-        
-        if (week17Pts === 0 && week18Pts === 0) {
-          continue; // Player is out for the season
+        const hasAnyNonZeroProjection = projs.some(p => Number(p.projected_fp || 0) > 0);
+        if (!hasAnyNonZeroProjection) {
+          continue; // Player has only zero projections across all remaining weeks
         }
       }
 
