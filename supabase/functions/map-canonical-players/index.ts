@@ -204,7 +204,8 @@ serve(async (req) => {
           }
           
           if (bestMatch && !existingByNflIdMap.has(bestMatch.player_id)) {
-            const teamValue = normalizedSleeperTeam || bestMatch.team;
+            // Prefer NFL team as it's more current
+            const teamValue = normalizeTeam(bestMatch.team) || normalizedSleeperTeam;
             if (teamValue) { // Only update if team is not null
               toUpdate.push({
                 id: existing.id,
@@ -219,10 +220,10 @@ serve(async (req) => {
         continue;
       }
 
-      // Try to match with NFL player - multiple strategies
+      // Try to match with NFL player by name+position (ignoring team to handle mid-season trades)
       let nflCandidates = nflByNamePos.get(key) || [];
       
-      // Strategy 1: If no exact match, try without position constraint
+      // If no exact match, try without position constraint
       if (nflCandidates.length === 0) {
         for (const [nflKey, candidates] of nflByNamePos.entries()) {
           if (nflKey.startsWith(normalizedName + ':')) {
@@ -232,18 +233,18 @@ serve(async (req) => {
         }
       }
 
-      // Removed last-name-only fallback strategies to prevent incorrect matches
-      // between players with same last names (e.g., Dalvin Cook vs James Cook)
-      
+      // Match on name+position only, team differences don't prevent matching (handles trades)
       let bestMatch = null as any;
-      if (nflCandidates.length === 1) {
-        bestMatch = nflCandidates[0];
-      } else if (nflCandidates.length > 1) {
-        // Multiple matches - prefer team match, then most similar name
-        const teamMatch = nflCandidates.find(
-          (nfl: any) => normalizeTeam(nfl.team) === normalizedSleeperTeam
-        );
-        bestMatch = teamMatch || nflCandidates[0];
+      if (nflCandidates.length >= 1) {
+        // If multiple matches with same name+position (rare), prefer team match as tiebreaker
+        if (nflCandidates.length > 1 && normalizedSleeperTeam) {
+          const teamMatch = nflCandidates.find(
+            (nfl: any) => normalizeTeam(nfl.team) === normalizedSleeperTeam
+          );
+          bestMatch = teamMatch || nflCandidates[0];
+        } else {
+          bestMatch = nflCandidates[0];
+        }
       }
 
       if (bestMatch) {
@@ -253,17 +254,20 @@ serve(async (req) => {
         if (nflExisting) {
           // Update with sleeper_id if missing
           if (!nflExisting.sleeper_id) {
+            // Prefer NFL team as it's more current
+            const teamValue = normalizeTeam(bestMatch.team) || normalizedSleeperTeam;
             toUpdate.push({
               id: nflExisting.id,
               sleeper_id: sleeperPlayer.player_id,
-              team: normalizedSleeperTeam || bestMatch.team
+              team: teamValue
             });
             matched++;
           }
           matchedNflIds.add(bestMatch.player_id);
         } else {
         // Create new canonical player with both IDs
-          const teamValue = normalizedSleeperTeam || bestMatch.team;
+          // Prefer NFL team as it's typically more current (handles mid-season trades)
+          const teamValue = normalizeTeam(bestMatch.team) || normalizedSleeperTeam;
           if (teamValue) { // Only insert if team is not null
             toInsert.push({
               player_name: sleeperPlayer.player_name,
