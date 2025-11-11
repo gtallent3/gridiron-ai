@@ -98,9 +98,8 @@ serve(async (req) => {
       }
     }
 
-    // Build normalized name lookup for NFL players (with fuzzy matching support)
+    // Build normalized name lookup for NFL players
     const nflByNamePos = new Map<string, any[]>();
-    const nflByLastName = new Map<string, any[]>();
     
     for (const player of nflMap.values()) {
       const normalizedFull = normalizeName(player.player_name);
@@ -110,15 +109,6 @@ serve(async (req) => {
         nflByNamePos.set(key, []);
       }
       nflByNamePos.get(key)!.push(player);
-      
-      // Also index by last name for fallback matching
-      const lastName = normalizedFull.split(' ').pop();
-      if (lastName) {
-        if (!nflByLastName.has(lastName)) {
-          nflByLastName.set(lastName, []);
-        }
-        nflByLastName.get(lastName)!.push(player);
-      }
     }
 
     // Fetch all existing canonical players to avoid individual lookups (paginate beyond 1000 default)
@@ -242,25 +232,8 @@ serve(async (req) => {
         }
       }
 
-      // Strategy 2: If still no match, try last name + team + position
-      if (nflCandidates.length === 0 && normalizedSleeperTeam) {
-        const lastName = normalizedName.split(' ').pop();
-        if (lastName) {
-          const lastNameMatches = nflByLastName.get(lastName) || [];
-          nflCandidates = lastNameMatches.filter(
-            (p: any) => p.position === sleeperPlayer.position && normalizeTeam(p.team) === normalizedSleeperTeam
-          );
-        }
-      }
-
-      // Strategy 3: If still no match, try just last name + position (no team requirement)
-      if (nflCandidates.length === 0) {
-        const lastName = normalizedName.split(' ').pop();
-        if (lastName) {
-          const lastNameMatches = nflByLastName.get(lastName) || [];
-          nflCandidates = lastNameMatches.filter((p: any) => p.position === sleeperPlayer.position);
-        }
-      }
+      // Removed last-name-only fallback strategies to prevent incorrect matches
+      // between players with same last names (e.g., Dalvin Cook vs James Cook)
       
       let bestMatch = null as any;
       if (nflCandidates.length === 1) {
