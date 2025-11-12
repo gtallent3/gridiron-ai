@@ -99,56 +99,68 @@ serve(async (req) => {
     while (nextSleeperIndex < sleeperIds.length && sleeperChunksProcessed < maxBatches) {
       const idsChunk = sleeperIds.slice(nextSleeperIndex, nextSleeperIndex + chunkSize);
 
-      const { data: projections, error: projError } = await supabase
-        .from('sleeper_projections')
-        .select('*')
-        .eq('season', season)
-        .in('player_id', idsChunk);
+      // Paginate through projections to avoid the 1000-row default limit
+      let pageFrom = 0;
+      const pageSize = 1000;
+      let totalUpsertedForChunk = 0;
+      while (true) {
+        const { data: projections, error: projError } = await supabase
+          .from('sleeper_projections')
+          .select('*')
+          .eq('season', season)
+          .in('player_id', idsChunk)
+          .range(pageFrom, pageFrom + pageSize - 1);
 
-      if (projError) throw projError;
+        if (projError) throw projError;
+        if (!projections || projections.length === 0) break;
 
-      const poolRecords: any[] = [];
-      for (const proj of projections || []) {
-        const canonical = sleeperIdMap.get(proj.player_id);
-        if (!canonical) continue;
-        poolRecords.push({
-          canonical_player_id: canonical.id,
-          player_name: canonical.player_name,
-          source: 'sleeper_projection',
-          season: proj.season,
-          week: proj.week,
-          team: proj.team,
-          position: proj.position,
-          projected_fp: proj.pts_ppr,
-          passing_yards: proj.pass_yd,
-          passing_tds: proj.pass_td,
-          passing_ints: proj.pass_int,
-          rushing_yards: proj.rush_yd,
-          rushing_tds: proj.rush_td,
-          receptions: proj.rec,
-          receiving_yards: proj.rec_yd,
-          receiving_tds: proj.rec_td,
-          opponent: proj.opponent,
-          opponent_def_rank: proj.opponent_def_rank,
-          ros_sos_rank: proj.ros_sos_rank,
-          playoff_sos_rank: proj.playoff_sos_rank,
-          bye_week: proj.bye_week || false,
-          raw_source_ids: { sleeper_id: proj.player_id }
-        });
-      }
-
-      if (poolRecords.length > 0) {
-        const { error: insertError } = await supabase
-          .from('player_pool_v2')
-          .upsert(poolRecords, {
-            onConflict: 'canonical_player_id,season,week,source',
-            ignoreDuplicates: false,
+        const poolRecords: any[] = [];
+        for (const proj of projections) {
+          const canonical = sleeperIdMap.get(proj.player_id);
+          if (!canonical) continue;
+          poolRecords.push({
+            canonical_player_id: canonical.id,
+            player_name: canonical.player_name,
+            source: 'sleeper_projection',
+            season: proj.season,
+            week: proj.week,
+            team: proj.team,
+            position: proj.position,
+            projected_fp: proj.pts_ppr,
+            passing_yards: proj.pass_yd,
+            passing_tds: proj.pass_td,
+            passing_ints: proj.pass_int,
+            rushing_yards: proj.rush_yd,
+            rushing_tds: proj.rush_td,
+            receptions: proj.rec,
+            receiving_yards: proj.rec_yd,
+            receiving_tds: proj.rec_td,
+            opponent: proj.opponent,
+            opponent_def_rank: proj.opponent_def_rank,
+            ros_sos_rank: proj.ros_sos_rank,
+            playoff_sos_rank: proj.playoff_sos_rank,
+            bye_week: proj.bye_week || false,
+            raw_source_ids: { sleeper_id: proj.player_id }
           });
-        if (insertError) throw insertError;
-        sleeperInserted += poolRecords.length;
+        }
+
+        if (poolRecords.length > 0) {
+          const { error: insertError } = await supabase
+            .from('player_pool_v2')
+            .upsert(poolRecords, {
+              onConflict: 'canonical_player_id,season,week,source',
+              ignoreDuplicates: false,
+            });
+          if (insertError) throw insertError;
+          sleeperInserted += poolRecords.length;
+          totalUpsertedForChunk += poolRecords.length;
+        }
+
+        pageFrom += projections.length;
+        if (projections.length < pageSize) break; // last page reached for this idsChunk
       }
 
-      console.log(`Sleeper chunk index ${nextSleeperIndex}-${nextSleeperIndex + idsChunk.length - 1}: upserted ${poolRecords.length}`);
+      console.log(`Sleeper chunk index ${nextSleeperIndex}-${nextSleeperIndex + idsChunk.length - 1}: upserted ${totalUpsertedForChunk}`);
 
       nextSleeperIndex += idsChunk.length;
       sleeperChunksProcessed += 1;
@@ -164,52 +176,64 @@ serve(async (req) => {
     while (nextNflIndex < nflIds.length && nflChunksProcessed < maxBatches) {
       const idsChunk = nflIds.slice(nextNflIndex, nextNflIndex + chunkSize);
 
-      const { data: actuals, error: actualsError } = await supabase
-        .from('nfl_fantasy_points')
-        .select('*')
-        .eq('season', season)
-        .in('player_id', idsChunk);
+      // Paginate through actuals to avoid the 1000-row default limit
+      let pageFrom = 0;
+      const pageSize = 1000;
+      let totalUpsertedForChunk = 0;
+      while (true) {
+        const { data: actuals, error: actualsError } = await supabase
+          .from('nfl_fantasy_points')
+          .select('*')
+          .eq('season', season)
+          .in('player_id', idsChunk)
+          .range(pageFrom, pageFrom + pageSize - 1);
 
-      if (actualsError) throw actualsError;
+        if (actualsError) throw actualsError;
+        if (!actuals || actuals.length === 0) break;
 
-      const poolRecords: any[] = [];
-      for (const actual of (actuals || [])) {
-        const canonical = nflIdMap.get(actual.player_id);
-        if (!canonical) continue;
-        poolRecords.push({
-          canonical_player_id: canonical.id,
-          player_name: canonical.player_name,
-          source: 'nfl_actual',
-          season: actual.season,
-          week: actual.week,
-          team: actual.team,
-          position: actual.position,
-          actual_fp: actual.fantasy_points_ppr,
-          passing_yards: actual.passing_yards,
-          passing_tds: actual.passing_tds,
-          passing_ints: actual.passing_ints,
-          rushing_yards: actual.rushing_yards,
-          rushing_tds: actual.rushing_tds,
-          receptions: actual.receptions,
-          receiving_yards: actual.receiving_yards,
-          receiving_tds: actual.receiving_tds,
-          opponent: actual.opponent,
-          raw_source_ids: { nfl_id: actual.player_id }
-        });
-      }
-
-      if (poolRecords.length > 0) {
-        const { error: insertError } = await supabase
-          .from('player_pool_v2')
-          .upsert(poolRecords, {
-            onConflict: 'canonical_player_id,season,week,source',
-            ignoreDuplicates: false,
+        const poolRecords: any[] = [];
+        for (const actual of actuals) {
+          const canonical = nflIdMap.get(actual.player_id);
+          if (!canonical) continue;
+          poolRecords.push({
+            canonical_player_id: canonical.id,
+            player_name: canonical.player_name,
+            source: 'nfl_actual',
+            season: actual.season,
+            week: actual.week,
+            team: actual.team,
+            position: actual.position,
+            actual_fp: actual.fantasy_points_ppr,
+            passing_yards: actual.passing_yards,
+            passing_tds: actual.passing_tds,
+            passing_ints: actual.passing_ints,
+            rushing_yards: actual.rushing_yards,
+            rushing_tds: actual.rushing_tds,
+            receptions: actual.receptions,
+            receiving_yards: actual.receiving_yards,
+            receiving_tds: actual.receiving_tds,
+            opponent: actual.opponent,
+            raw_source_ids: { nfl_id: actual.player_id }
           });
-        if (insertError) throw insertError;
-        nflInserted += poolRecords.length;
+        }
+
+        if (poolRecords.length > 0) {
+          const { error: insertError } = await supabase
+            .from('player_pool_v2')
+            .upsert(poolRecords, {
+              onConflict: 'canonical_player_id,season,week,source',
+              ignoreDuplicates: false,
+            });
+          if (insertError) throw insertError;
+          nflInserted += poolRecords.length;
+          totalUpsertedForChunk += poolRecords.length;
+        }
+
+        pageFrom += actuals.length;
+        if (actuals.length < pageSize) break; // last page reached for this idsChunk
       }
 
-      console.log(`NFL chunk index ${nextNflIndex}-${nextNflIndex + idsChunk.length - 1}: upserted ${poolRecords.length}`);
+      console.log(`NFL chunk index ${nextNflIndex}-${nextNflIndex + idsChunk.length - 1}: upserted ${totalUpsertedForChunk}`);
 
       nextNflIndex += idsChunk.length;
       nflChunksProcessed += 1;
