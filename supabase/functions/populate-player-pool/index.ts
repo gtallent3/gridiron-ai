@@ -120,14 +120,14 @@ serve(async (req) => {
 
         if (insertError) {
           console.error('Sleeper insert error:', insertError);
-        } else {
-          sleeperInserted += poolRecords.length;
+          throw insertError; // Stop if there's an error
         }
+        sleeperInserted += poolRecords.length;
       }
 
       lastSleeperId = projections[projections.length - 1].id;
       
-      console.log(`Processed batch: ${poolRecords.length} records, last ID: ${lastSleeperId}`);
+      console.log(`Processed batch: fetched ${projections.length} projections, matched ${poolRecords.length} records, inserted ${sleeperInserted} total, last ID: ${lastSleeperId}`);
       
       if (projections.length < pageSize) break;
     }
@@ -197,14 +197,14 @@ serve(async (req) => {
 
         if (insertError) {
           console.error('NFL insert error:', insertError);
-        } else {
-          nflInserted += poolRecords.length;
+          throw insertError; // Stop if there's an error
         }
+        nflInserted += poolRecords.length;
       }
 
       lastNflId = actuals[actuals.length - 1].id;
       
-      console.log(`Processed NFL batch: ${poolRecords.length} records, last ID: ${lastNflId}`);
+      console.log(`Processed NFL batch: fetched ${actuals.length} actuals, matched ${poolRecords.length} records, inserted ${nflInserted} total, last ID: ${lastNflId}`);
       
       if (actuals.length < pageSize) break;
     }
