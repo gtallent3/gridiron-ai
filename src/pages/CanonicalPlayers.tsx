@@ -65,12 +65,10 @@ export default function CanonicalPlayers() {
         iteration++;
         setPopulateProgress(`Batch ${iteration}: Processing...`);
 
-        const body: any = {};
-        if (iteration === 1 && resetPool) {
-          body.reset = true;
-        }
-        if (nextSleeperId) body.startSleeperId = nextSleeperId;
-        if (nextNflId) body.startNflId = nextNflId;
+        const body: any = { maxBatches: 50 };
+        if (iteration === 1 && resetPool) body.reset = true;
+        if (typeof nextSleeperId === 'number') body.startSleeperIndex = nextSleeperId;
+        if (typeof nextNflId === 'number') body.startNflIndex = nextNflId;
 
         const { data, error } = await supabase.functions.invoke('populate-player-pool', {
           body
@@ -78,19 +76,18 @@ export default function CanonicalPlayers() {
         
         if (error) throw error;
 
-        totalSleeperInserted += data.sleeperInserted || 0;
-        totalNflInserted += data.nflInserted || 0;
-        nextSleeperId = data.nextSleeperId;
-        nextNflId = data.nextNflId;
-        hasMoreSleeper = data.hasMoreSleeper || false;
-        hasMoreNfl = data.hasMoreNfl || false;
+        totalSleeperInserted += data.sleeperInserted ?? 0;
+        totalNflInserted += data.nflInserted ?? 0;
+        nextSleeperId = data.nextSleeperIndex ?? nextSleeperId;
+        nextNflId = data.nextNflIndex ?? nextNflId;
+        hasMoreSleeper = data.hasMoreSleeper ?? false;
+        hasMoreNfl = data.hasMoreNfl ?? false;
 
         setPopulateProgress(
-          `Batch ${iteration}: +${data.sleeperInserted} projections, +${data.nflInserted} actuals (Total: ${totalSleeperInserted} projections, ${totalNflInserted} actuals)`
+          `Batch ${iteration}: +${data.sleeperInserted || 0} projections, +${data.nflInserted || 0} actuals (Total: ${totalSleeperInserted} projections, ${totalNflInserted} actuals)`
         );
 
-        // Small delay to avoid overwhelming the server
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
 
       toast({
