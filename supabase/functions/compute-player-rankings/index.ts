@@ -159,20 +159,27 @@ serve(async (req) => {
 
     console.log(`Fetched ${actuals.length} actuals and ${projections.length} projections from player_pool_v2`);
 
-    // Fetch bye weeks from player_pool_v2 (where bye_week=true)
-    const { data: byeData, error: byeError } = await supabase
-      .from('player_pool_v2')
-      .select('canonical_player_id, week')
-      .eq('season', season)
-      .eq('bye_week', true);
-
-    if (byeError) throw byeError;
-
-    // Build bye week map (canonical_player_id -> bye week number)
+    // Fetch bye weeks from player_pool_v2 (where bye_week=true), with pagination and only relevant positions
     const byeWeekMap = new Map<string, number>();
-    for (const bye of byeData || []) {
-      if (bye.canonical_player_id) {
-        byeWeekMap.set(bye.canonical_player_id, bye.week);
+    {
+      let from = 0;
+      while (true) {
+        const { data: byeBatch, error: byeError } = await supabase
+          .from('player_pool_v2')
+          .select('canonical_player_id, week')
+          .eq('season', season)
+          .eq('bye_week', true)
+          .in('position', ['QB', 'RB', 'WR', 'TE'])
+          .range(from, from + pageSize - 1);
+        if (byeError) throw byeError;
+        if (!byeBatch || byeBatch.length === 0) break;
+        for (const bye of byeBatch) {
+          if (bye.canonical_player_id) {
+            byeWeekMap.set(bye.canonical_player_id, bye.week);
+          }
+        }
+        if (byeBatch.length < pageSize) break;
+        from += pageSize;
       }
     }
 
