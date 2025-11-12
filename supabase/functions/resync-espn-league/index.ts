@@ -388,17 +388,29 @@ serve(async (req) => {
       console.log(`Inserted ${inserted?.length || 0} new canonical players`);
     }
     
-    // Rebuild canonical IDs list and fetch stats from player_pool_v2
+    // Rebuild canonical IDs list and fetch PROJECTION stats from player_pool_v2
     const finalCanonicalIds = Array.from(new Set(Array.from(canonicalMap.values()).map(p => p.id)));
     
-    const { data: playerPoolStats } = await supabase
+    // Fetch only projection rows (not actuals) to avoid Map key collisions
+    const { data: projectionStats } = await supabase
       .from('player_pool_v2')
-      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds, projected_fp, actual_fp')
+      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds, projected_fp')
       .in('canonical_player_id', finalCanonicalIds)
-      .eq('season', currentYear);
+      .eq('season', currentYear)
+      .not('projected_fp', 'is', null);
     
-    const playerPoolMap = new Map((playerPoolStats || []).map(p => [`${p.canonical_player_id}_${p.week}`, p]));
-    console.log(`Loaded stats for ${playerPoolStats?.length || 0} player-week combinations from player_pool_v2`);
+    // Fetch only actual rows (not projections) to avoid Map key collisions  
+    const { data: actualStatsData } = await supabase
+      .from('player_pool_v2')
+      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds, actual_fp')
+      .in('canonical_player_id', finalCanonicalIds)
+      .eq('season', currentYear)
+      .not('actual_fp', 'is', null);
+    
+    // Build separate maps
+    const projectionMap = new Map((projectionStats || []).map(p => [`${p.canonical_player_id}_${p.week}`, p]));
+    const actualMap = new Map((actualStatsData || []).map(p => [`${p.canonical_player_id}_${p.week}`, p]));
+    console.log(`Loaded ${projectionStats?.length || 0} projections and ${actualStatsData?.length || 0} actuals from player_pool_v2`);
     
     
     // Convert league scoring settings to simplified format for calculator
@@ -422,14 +434,14 @@ serve(async (req) => {
         const espnId = entry.playerId?.toString();
         const canonical = espnId ? canonicalMap.get(espnId) : null;
         
-        // Calculate projected and actual points using league scoring from player_pool_v2
+        // Calculate projected and actual points using league-specific scoring
         let projected = 0;
         let actual = 0;
         
         if (canonical) {
-          // Get current week projection
+          // Get current week projection - calculate using league scoring
           const projKey = `${canonical.id}_${currentWeek}`;
-          const projStats = playerPoolMap.get(projKey);
+          const projStats = projectionMap.get(projKey);
           if (projStats) {
             projected = calculateFantasyPoints({
               passing_yards: projStats.passing_yards,
@@ -443,10 +455,10 @@ serve(async (req) => {
             }, scoringSettings);
           }
           
-          // Get last week's actual
+          // Get last week's actual - calculate using league scoring
           if (currentWeek > 1) {
             const actualKey = `${canonical.id}_${currentWeek - 1}`;
-            const actualStats = playerPoolMap.get(actualKey);
+            const actualStats = actualMap.get(actualKey);
             if (actualStats) {
               actual = calculateFantasyPoints({
                 passing_yards: actualStats.passing_yards,
