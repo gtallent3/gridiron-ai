@@ -4,10 +4,14 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Users, Database, Link as LinkIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 export default function CanonicalPlayers() {
   const [mapping, setMapping] = useState(false);
   const [populating, setPopulating] = useState(false);
+  const [resetPool, setResetPool] = useState(false);
+  const [populateProgress, setPopulateProgress] = useState<string>("");
   const { toast } = useToast();
 
   const runMapping = async () => {
@@ -39,28 +43,71 @@ export default function CanonicalPlayers() {
 
   const runPopulation = async () => {
     setPopulating(true);
+    setPopulateProgress("");
+    
+    let totalSleeperInserted = 0;
+    let totalNflInserted = 0;
+    let iteration = 0;
+    let nextSleeperId: string | null = null;
+    let nextNflId: string | null = null;
+    let hasMoreSleeper = true;
+    let hasMoreNfl = true;
+
     try {
       toast({
-        title: "Starting Pool Population",
-        description: "Filling player pool from data sources..."
+        title: "Starting Auto-Resume Population",
+        description: resetPool 
+          ? "Resetting and filling player pool..." 
+          : "Resuming player pool population..."
       });
 
-      const { data, error } = await supabase.functions.invoke('populate-player-pool');
-      
-      if (error) throw error;
+      while (hasMoreSleeper || hasMoreNfl) {
+        iteration++;
+        setPopulateProgress(`Batch ${iteration}: Processing...`);
+
+        const body: any = {};
+        if (iteration === 1 && resetPool) {
+          body.reset = true;
+        }
+        if (nextSleeperId) body.startSleeperId = nextSleeperId;
+        if (nextNflId) body.startNflId = nextNflId;
+
+        const { data, error } = await supabase.functions.invoke('populate-player-pool', {
+          body
+        });
+        
+        if (error) throw error;
+
+        totalSleeperInserted += data.sleeperInserted || 0;
+        totalNflInserted += data.nflInserted || 0;
+        nextSleeperId = data.nextSleeperId;
+        nextNflId = data.nextNflId;
+        hasMoreSleeper = data.hasMoreSleeper || false;
+        hasMoreNfl = data.hasMoreNfl || false;
+
+        setPopulateProgress(
+          `Batch ${iteration}: +${data.sleeperInserted} projections, +${data.nflInserted} actuals (Total: ${totalSleeperInserted} projections, ${totalNflInserted} actuals)`
+        );
+
+        // Small delay to avoid overwhelming the server
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
 
       toast({
-        title: "Population Complete",
-        description: `${data.sleeperInserted} projections, ${data.nflInserted} actuals inserted`
+        title: "Population Complete ✅",
+        description: `Total: ${totalSleeperInserted} projections, ${totalNflInserted} actuals inserted across ${iteration} batches`
       });
+      setPopulateProgress(`Complete: ${totalSleeperInserted} projections, ${totalNflInserted} actuals`);
     } catch (error: any) {
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive"
       });
+      setPopulateProgress(`Error after batch ${iteration}`);
     } finally {
       setPopulating(false);
+      if (resetPool) setResetPool(false);
     }
   };
 
@@ -109,17 +156,34 @@ export default function CanonicalPlayers() {
               Step 2: Populate Pool
             </CardTitle>
             <CardDescription>
-              Fill player_pool_v2 with unified data
+              Auto-resume until all data is processed (~155k rows)
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="reset" 
+                checked={resetPool}
+                onCheckedChange={(checked) => setResetPool(checked as boolean)}
+                disabled={populating}
+              />
+              <Label 
+                htmlFor="reset" 
+                className="text-sm font-normal cursor-pointer"
+              >
+                Reset pool before populating (clears existing data)
+              </Label>
+            </div>
+            {populateProgress && (
+              <p className="text-xs text-muted-foreground">{populateProgress}</p>
+            )}
             <Button 
               onClick={runPopulation} 
               disabled={populating}
               className="w-full"
             >
               {populating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Populate Pool
+              {populating ? "Auto-Resuming..." : "Auto-Resume Populate"}
             </Button>
           </CardContent>
         </Card>
