@@ -281,29 +281,18 @@ serve(async (req) => {
       }
     }
     
-    // Get all sleeper_ids and nfl_ids for bulk stats fetch
-    const sleeperIds = Array.from(new Set(Array.from(canonicalMap.values()).map(p => p.sleeper_id).filter(Boolean)));
-    const nflIds = Array.from(new Set(Array.from(canonicalMap.values()).map(p => p.nfl_id).filter(Boolean)));
+    // Get all canonical player IDs for bulk stats fetch from player_pool_v2
+    const canonicalIds = Array.from(new Set(Array.from(canonicalMap.values()).map(p => p.id)));
     
-    // Fetch projections from sleeper_projections
-    const { data: sleeperProj } = await supabase
-      .from('sleeper_projections')
-      .select('player_id, week, season, pass_yd, pass_td, pass_int, rush_yd, rush_td, rec, rec_yd, rec_td')
-      .in('player_id', sleeperIds)
-      .eq('season', currentYear)
-      .gte('week', currentWeek);
+    // Fetch all stats from player_pool_v2 (unified source for projections and actuals)
+    const { data: playerPoolStats } = await supabase
+      .from('player_pool_v2')
+      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds, projected_fp, actual_fp')
+      .in('canonical_player_id', canonicalIds)
+      .eq('season', currentYear);
     
-    const sleeperProjMap = new Map((sleeperProj || []).map(p => [`${p.player_id}_${p.week}`, p]));
-    
-    // Fetch actuals from nfl_fantasy_points
-    const { data: nflActuals } = await supabase
-      .from('nfl_fantasy_points')
-      .select('player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds')
-      .in('player_id', nflIds)
-      .eq('season', currentYear)
-      .lt('week', currentWeek);
-    
-    const nflActualsMap = new Map((nflActuals || []).map(p => [`${p.player_id}_${p.week}`, p]));
+    // Build maps for quick lookup: key = "canonical_id_week"
+    const playerPoolMap = new Map((playerPoolStats || []).map(p => [`${p.canonical_player_id}_${p.week}`, p]));
 
     // Create missing canonical player entries
     const playersToInsert = [];
@@ -372,33 +361,31 @@ serve(async (req) => {
         const espnId = entry.playerId?.toString();
         const canonical = espnId ? canonicalMap.get(espnId) : null;
         
-        // Calculate projected and actual points using league scoring
+        // Calculate projected and actual points using league scoring from player_pool_v2
         let projected = 0;
         let actual = 0;
         
         if (canonical) {
           // Get current week projection
-          if (canonical.sleeper_id) {
-            const projKey = `${canonical.sleeper_id}_${currentWeek}`;
-            const projStats = sleeperProjMap.get(projKey);
-            if (projStats) {
-              projected = calculateFantasyPoints({
-                passing_yards: projStats.pass_yd,
-                passing_tds: projStats.pass_td,
-                passing_ints: projStats.pass_int,
-                rushing_yards: projStats.rush_yd,
-                rushing_tds: projStats.rush_td,
-                receptions: projStats.rec,
-                receiving_yards: projStats.rec_yd,
-                receiving_tds: projStats.rec_td,
-              }, scoringSettings);
-            }
+          const projKey = `${canonical.id}_${currentWeek}`;
+          const projStats = playerPoolMap.get(projKey);
+          if (projStats) {
+            projected = calculateFantasyPoints({
+              passing_yards: projStats.passing_yards,
+              passing_tds: projStats.passing_tds,
+              passing_ints: projStats.passing_ints,
+              rushing_yards: projStats.rushing_yards,
+              rushing_tds: projStats.rushing_tds,
+              receptions: projStats.receptions,
+              receiving_yards: projStats.receiving_yards,
+              receiving_tds: projStats.receiving_tds,
+            }, scoringSettings);
           }
           
           // Get last week's actual
-          if (canonical.nfl_id && currentWeek > 1) {
-            const actualKey = `${canonical.nfl_id}_${currentWeek - 1}`;
-            const actualStats = nflActualsMap.get(actualKey);
+          if (currentWeek > 1) {
+            const actualKey = `${canonical.id}_${currentWeek - 1}`;
+            const actualStats = playerPoolMap.get(actualKey);
             if (actualStats) {
               actual = calculateFantasyPoints({
                 passing_yards: actualStats.passing_yards,
