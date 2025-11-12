@@ -235,20 +235,20 @@ serve(async (req) => {
       }
     }
 
-    // Build normalized player map
-    const normalizedMap = new Map<string, { player_id: string; player_name: string; position: string; team: string }>();
+    // Build canonical player map using ESPN IDs
+    const canonicalMap = new Map<string, { id: string; player_name: string; position: string; team: string }>();
     
     if (allEspnPlayerIds.size > 0) {
-      const { data: normPlayers } = await supabase
-        .from('normalized_players')
-        .select('espn_id, player_id, player_name, position, team')
+      const { data: canonicalPlayers } = await supabase
+        .from('canonical_players')
+        .select('id, espn_id, player_name, position, team')
         .in('espn_id', Array.from(allEspnPlayerIds));
       
-      if (normPlayers && normPlayers.length > 0) {
-        for (const p of normPlayers) {
+      if (canonicalPlayers && canonicalPlayers.length > 0) {
+        for (const p of canonicalPlayers) {
           if (p.espn_id) {
-            normalizedMap.set(p.espn_id, {
-              player_id: p.player_id,
+            canonicalMap.set(p.espn_id, {
+              id: p.id,
               player_name: p.player_name,
               position: p.position,
               team: p.team,
@@ -258,28 +258,18 @@ serve(async (req) => {
       }
     }
 
-    // Create missing player entries
+    // Create missing canonical player entries
     const playersToInsert = [];
     for (const team of espnLeagueData.teams || []) {
       for (const entry of team.roster?.entries || []) {
         const espnId = entry.playerId?.toString();
-        if (espnId && !normalizedMap.has(espnId)) {
+        if (espnId && !canonicalMap.has(espnId)) {
           const player = entry.playerPoolEntry?.player;
           const playerName = player?.fullName || 'Unknown Player';
           const position = player?.defaultPositionId?.toString() || 'FLEX';
           const teamAbbr = player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA';
           
-          const normalizedPlayerId = `espn_${espnId}`;
-          
-          normalizedMap.set(espnId, {
-            player_id: normalizedPlayerId,
-            player_name: playerName,
-            position: position,
-            team: teamAbbr,
-          });
-          
           playersToInsert.push({
-            player_id: normalizedPlayerId,
             espn_id: espnId,
             player_name: playerName,
             position: position,
@@ -290,188 +280,46 @@ serve(async (req) => {
     }
 
     if (playersToInsert.length > 0) {
-      await supabase
-        .from('normalized_players')
-        .upsert(playersToInsert, { onConflict: 'espn_id', ignoreDuplicates: true });
+      const { data: inserted } = await supabase
+        .from('canonical_players')
+        .upsert(playersToInsert, { onConflict: 'espn_id' })
+        .select('id, espn_id, player_name, position, team');
+      
+      // Update map with newly inserted players
+      if (inserted) {
+        for (const p of inserted) {
+          if (p.espn_id) {
+            canonicalMap.set(p.espn_id, {
+              id: p.id,
+              player_name: p.player_name,
+              position: p.position,
+              team: p.team,
+            });
+          }
+        }
+      }
     }
-
-    // Collect player stats for player_stats table
-    const playerStatsToInsert: any[] = [];
 
     // Sync all teams
     for (const team of espnLeagueData.teams || []) {
       const roster = (team.roster?.entries || []).map((entry: any) => {
         const player = entry.playerPoolEntry?.player;
         const espnId = entry.playerId?.toString();
-        const normalizedPlayer = espnId ? normalizedMap.get(espnId) : null;
+        const canonical = espnId ? canonicalMap.get(espnId) : null;
         
-        // Get current week projection and calculate ROS from ESPN's weekly projections
-        let projected = 0;
-        let rosProjection = 0;
-        let ppgProjection = 0;
-        
-        if (player?.stats) {
-          // Current week projection
-          const currentWeekStat = player.stats.find((stat: any) => 
-            stat.statSourceId === 1 && stat.scoringPeriodId === espnLeagueData.scoringPeriodId
-          );
-          projected = currentWeekStat?.appliedTotal || 0;
-
-          // Current week actual stats -> push to player_stats
-          const currentWeekActual = player.stats.find((stat: any) => 
-            stat.statSourceId === 0 && stat.scoringPeriodId === currentWeek
-          );
-          if (currentWeekActual?.stats) {
-            const rawStats = currentWeekActual.stats;
-            playerStatsToInsert.push({
-              player_id: normalizedPlayer?.player_id || espnId || 'unknown',
-              player_name: normalizedPlayer?.player_name || player?.fullName || 'Unknown',
-              team: normalizedPlayer?.team || (player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
-              position: normalizedPlayer?.position || player?.defaultPositionId?.toString() || 'FLEX',
-              week: currentWeek,
-              season: currentYear,
-              passing_yards: Math.round(parseFloat(rawStats['5']) || 0),
-              passing_tds: parseInt(rawStats['4']) || 0,
-              interceptions: parseInt(rawStats['20']) || 0,
-              passing_completions: parseInt(rawStats['3']) || 0,
-              passing_attempts: parseInt(rawStats['0']) || 0,
-              rushing_yards: Math.round(parseFloat(rawStats['24']) || 0),
-              rushing_tds: parseInt(rawStats['25']) || 0,
-              rushing_attempts: parseInt(rawStats['23']) || 0,
-              receiving_yards: Math.round(parseFloat(rawStats['42']) || 0),
-              receiving_tds: parseInt(rawStats['43']) || 0,
-              receptions: parseInt(rawStats['53']) || 0,
-              receiving_targets: parseInt(rawStats['58']) || 0,
-              fumbles_lost: parseInt(rawStats['72']) || 0,
-              passing_2pt_conversions: parseInt(rawStats['19']) || 0,
-              rushing_2pt_conversions: parseInt(rawStats['29']) || 0,
-              receiving_2pt_conversions: parseInt(rawStats['44']) || 0,
-              source: 'espn',
-              source_type: 'actual',
-              confidence: 0.95,
-              freshness_ts: new Date().toISOString(),
-              finalized: false,
-              raw_data: currentWeekActual,
-            });
-          } else {
-            // Fallback: use current week projection stats if actuals are unavailable
-            const projWeek = player.stats.find((stat: any) => 
-              stat.statSourceId === 1 && stat.scoringPeriodId === currentWeek
-            );
-            const projStats = projWeek?.appliedStats || projWeek?.stats;
-            if (projStats) {
-              playerStatsToInsert.push({
-                player_id: normalizedPlayer?.player_id || espnId || 'unknown',
-                player_name: normalizedPlayer?.player_name || player?.fullName || 'Unknown',
-                team: normalizedPlayer?.team || (player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
-                position: normalizedPlayer?.position || player?.defaultPositionId?.toString() || 'FLEX',
-                week: currentWeek,
-                season: currentYear,
-                passing_yards: Math.round(parseFloat(projStats['5']) || 0),
-                passing_tds: parseInt(projStats['4']) || 0,
-                interceptions: parseInt(projStats['20']) || 0,
-                passing_completions: parseInt(projStats['3']) || 0,
-                passing_attempts: parseInt(projStats['0']) || 0,
-                rushing_yards: Math.round(parseFloat(projStats['24']) || 0),
-                rushing_tds: parseInt(projStats['25']) || 0,
-                rushing_attempts: parseInt(projStats['23']) || 0,
-                receiving_yards: Math.round(parseFloat(projStats['42']) || 0),
-                receiving_tds: parseInt(projStats['43']) || 0,
-                receptions: parseInt(projStats['53']) || 0,
-                receiving_targets: parseInt(projStats['58']) || 0,
-                fumbles_lost: parseInt(projStats['72']) || 0,
-                passing_2pt_conversions: parseInt(projStats['19']) || 0,
-                rushing_2pt_conversions: parseInt(projStats['29']) || 0,
-                receiving_2pt_conversions: parseInt(projStats['44']) || 0,
-                source: 'espn_projection',
-                source_type: 'projection',
-                confidence: 0.70,
-                freshness_ts: new Date().toISOString(),
-                finalized: false,
-                raw_data: projWeek,
-              });
-            }
-          }
-          
-          // Remaining-week projections available from ESPN (often just current week)
-          const weeksRemaining = Math.max(18 - currentWeek, 1);
-          const remainingWeekProjections = player.stats
-            .filter((stat: any) => 
-              stat.statSourceId === 1 && 
-              stat.scoringPeriodId >= currentWeek && 
-              stat.scoringPeriodId <= 18
-            )
-            .map((stat: any) => stat.appliedTotal || 0);
-          
-          const availableWeeks = remainingWeekProjections.length;
-          if (availableWeeks > 1) {
-            rosProjection = remainingWeekProjections.reduce((sum: number, pts: number) => sum + pts, 0);
-            ppgProjection = rosProjection / availableWeeks;
-          } else if (availableWeeks === 1) {
-            const w = remainingWeekProjections[0] || projected || 0;
-            ppgProjection = w;
-            rosProjection = w * weeksRemaining;
-          } else if (projected > 0) {
-            ppgProjection = projected;
-            rosProjection = projected * weeksRemaining;
-          }
-        }
-
         return {
-          player_id: normalizedPlayer?.player_id || espnId || 'unknown',
+          player_id: espnId || 'unknown',
+          canonical_player_id: canonical?.id || null,
           espn_id: espnId,
-          player_name: normalizedPlayer?.player_name || player?.fullName,
-          position: normalizedPlayer?.position || player?.defaultPositionId,
-          team: normalizedPlayer?.team || (player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
-          projected,
-          ros_projection: rosProjection,
-          ppg_projection: ppgProjection,
+          player_name: canonical?.player_name || player?.fullName,
+          position: canonical?.position || player?.defaultPositionId,
+          team: canonical?.team || (player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
           slot: entry.lineupSlotId,
         };
       });
 
-      // Enrich roster with valuations (schedule, injuries, form) when available
-      const names = roster.map((p: any) => p.player_name).filter(Boolean);
-      // Determine latest available valuations week for this season
-      let latestWeek = currentWeek;
-      const { data: latestWeekRow } = await supabase
-        .from('player_valuations')
-        .select('week')
-        .eq('season', currentYear)
-        .order('week', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (latestWeekRow?.week) latestWeek = latestWeekRow.week;
-
-      const { data: vals } = await supabase
-        .from('player_valuations')
-        .select('player_name, ppg_projection, ros_projection, is_bye_week, injury_status, injury_duration_weeks, next_3_weeks_projection, schedule_difficulty')
-        .eq('season', currentYear)
-        .eq('week', latestWeek)
-        .in('player_name', names);
-      const vMap = new Map((vals || []).map(v => [v.player_name, v]));
-
-      const enrichedRoster = roster.map((p: any) => {
-        const v = vMap.get(p.player_name);
-        const ros = v && Number(v.ros_projection) > 0 ? Number(v.ros_projection) : p.ros_projection;
-        const ppg = v && Number(v.ppg_projection) > 0 ? Number(v.ppg_projection) : p.ppg_projection;
-        return {
-          ...p,
-          ros_projection: ros,
-          ppg_projection: ppg,
-          is_bye_week: v?.is_bye_week ?? p.is_bye_week,
-          injury_status: v?.injury_status ?? p.injury_status,
-          injury_duration_weeks: v?.injury_duration_weeks ?? p.injury_duration_weeks,
-          schedule_difficulty: v?.schedule_difficulty ?? p.schedule_difficulty,
-          next_3_weeks_projection: v?.next_3_weeks_projection ?? p.next_3_weeks_projection,
-        };
-      });
-
+      // Upsert roster to user_teams
       const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
-      const totalProjected = enrichedRoster
-        .filter((p: any) => STARTER_SLOTS.includes(p.slot))
-        .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
-
       const record = team.record?.overall || { wins: 0, losses: 0, ties: 0 };
 
       await supabase
@@ -480,22 +328,13 @@ serve(async (req) => {
           league_id: updatedLeague.id,
           team_id: team.id.toString(),
           team_name: team.name || `${team.location} ${team.nickname}`,
-          roster: enrichedRoster,
+          roster: roster,
           wins: record.wins || 0,
           losses: record.losses || 0,
           ties: record.ties || 0,
-          total_projected: totalProjected,
         }, {
           onConflict: 'league_id,team_id',
         });
-    }
-
-    // Batch insert all player stats collected
-    if (playerStatsToInsert.length > 0) {
-      console.log(`Resync: inserting ${playerStatsToInsert.length} player stats for week ${currentWeek}`);
-      await supabase
-        .from('player_stats')
-        .upsert(playerStatsToInsert, { onConflict: 'player_id,week,season,source', ignoreDuplicates: false });
     }
 
     // Fetch projections for remaining weeks
@@ -564,19 +403,35 @@ serve(async (req) => {
         const player = playerData.player;
         const espnId = player?.id?.toString();
         if (!espnId) continue;
-        let normalizedPlayer = normalizedMap.get(espnId) || null;
-        if (!normalizedPlayer) {
+        
+        let canonical = canonicalMap.get(espnId) || null;
+        if (!canonical) {
+          // Create missing canonical player
           const newPlayer = {
-            player_id: `espn_${espnId}`,
             espn_id: espnId,
             player_name: player?.fullName || 'Unknown',
             position: player?.defaultPositionId?.toString() || 'FLEX',
             team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA',
           };
-          await supabase.from('normalized_players').upsert([newPlayer], { onConflict: 'espn_id', ignoreDuplicates: true });
-          normalizedPlayer = newPlayer;
-          normalizedMap.set(espnId, newPlayer);
+          const { data: inserted } = await supabase
+            .from('canonical_players')
+            .upsert([newPlayer], { onConflict: 'espn_id' })
+            .select('id, espn_id, player_name, position, team')
+            .single();
+          
+          if (inserted) {
+            canonical = {
+              id: inserted.id,
+              player_name: inserted.player_name,
+              position: inserted.position,
+              team: inserted.team,
+            };
+            canonicalMap.set(espnId, canonical);
+          }
         }
+        
+        if (!canonical) continue;
+        
         const ownership = playerData.ownership || {};
         const waiverStatus = playerData.status === 'FREEAGENT' ? 'FREEAGENT' : 'WAIVERS';
         
@@ -600,10 +455,10 @@ serve(async (req) => {
         const waiverRow: any = {
           league_id: updatedLeague.id,
           espn_league_id: leagueData.league_id,
-          player_id: normalizedPlayer.player_id,
-          player_name: normalizedPlayer.player_name,
-          position: normalizedPlayer.position,
-          team: normalizedPlayer.team,
+          player_id: canonical.id,
+          player_name: canonical.player_name,
+          position: canonical.position,
+          team: canonical.team,
           season: currentYear,
           week: currentWeek,
           waiver_status: waiverStatus,
@@ -625,7 +480,7 @@ serve(async (req) => {
               (sum: number, val: any) => sum + (typeof val === 'number' ? val : parseFloat(val || '0') || 0),
               0
             );
-            console.log(`Calculated projected_fp from appliedStats for ${normalizedPlayer.player_name}: ${projected_fp}`);
+            console.log(`Calculated projected_fp from appliedStats for ${canonical.player_name}: ${projected_fp}`);
           }
           
           waiverRow.projected_fp = projected_fp || 0;
@@ -633,7 +488,7 @@ serve(async (req) => {
           waiverRow.source = weekProjection.statSourceId === 1 ? 'espn_projection' : 'espn_actual';
           waiverRow.last_updated = new Date().toISOString();
         } else {
-          console.log(`No stats available for waiver player: ${normalizedPlayer.player_name} (ESPN ID: ${espnId})`);
+          console.log(`No stats available for waiver player: ${canonical.player_name} (ESPN ID: ${espnId})`);
         }
         
         waiverRows.push(waiverRow);

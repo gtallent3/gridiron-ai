@@ -111,6 +111,90 @@ serve(async (req) => {
 
     const teamsData = await teamsResponse.json();
     const teams = teamsData.fantasy_content?.league?.[1]?.teams || {};
+    
+    // Collect all Yahoo player IDs to fetch canonical mappings
+    const allYahooPlayerIds = new Set<string>();
+    for (const [teamKey, teamValue] of Object.entries(teams)) {
+      if (teamKey === 'count') continue;
+      const team = (teamValue as any)?.team;
+      if (!Array.isArray(team) || team.length === 0) continue;
+      
+      // Need to fetch roster first to get player IDs
+      const teamData: Record<string, any> = {};
+      for (const item of team[0]) {
+        if (item && typeof item === 'object' && !Array.isArray(item)) {
+          const [k, v] = Object.entries(item)[0] || [];
+          if (k) teamData[k] = v;
+        }
+      }
+      const numericTeamId = (teamData.team_id ?? (teamData.team_key?.split('.t.')[1]))?.toString();
+      const rawTeamKey: string | undefined = teamData.team_key;
+      const teamKeyFull = rawTeamKey || (numericTeamId ? `${yahooLeagueKey}.t.${numericTeamId}` : null);
+      if (!teamKeyFull) continue;
+      
+      const weekParam = typeof league.current_week === 'number'
+        ? `;type=week;week=${league.current_week}`
+        : '';
+      
+      const rosterResponse = await fetch(
+        `https://fantasysports.yahooapis.com/fantasy/v2/team/${teamKeyFull}/roster/players${weekParam}?format=json`,
+        {
+          headers: {
+            Authorization: `Bearer ${tokenData.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      if (rosterResponse.ok) {
+        const rosterData = await rosterResponse.json();
+        const rosterPlayers = rosterData.fantasy_content?.team?.[1]?.roster?.['0']?.players || {};
+        for (const [playerKey, playerValue] of Object.entries(rosterPlayers)) {
+          if (playerKey === 'count') continue;
+          const playerWrapper = (playerValue as any)?.player;
+          if (!Array.isArray(playerWrapper) || playerWrapper.length === 0) continue;
+          const core: Record<string, any> = {};
+          for (const block of playerWrapper) {
+            if (Array.isArray(block)) {
+              for (const item of block) {
+                if (item && typeof item === 'object' && !Array.isArray(item)) {
+                  const [k, v] = Object.entries(item)[0] || [];
+                  if (k) core[k] = v;
+                }
+              }
+            } else if (block && typeof block === 'object') {
+              Object.assign(core, block);
+            }
+          }
+          if (core.player_id) {
+            allYahooPlayerIds.add(String(core.player_id));
+          }
+        }
+      }
+    }
+    
+    // Build canonical player map using Yahoo IDs
+    const canonicalMap = new Map<string, { id: string; player_name: string; position: string; team: string }>();
+    if (allYahooPlayerIds.size > 0) {
+      const { data: canonicalPlayers } = await supabaseAdmin
+        .from('canonical_players')
+        .select('id, yahoo_id, player_name, position, team')
+        .in('yahoo_id', Array.from(allYahooPlayerIds));
+      
+      if (canonicalPlayers && canonicalPlayers.length > 0) {
+        for (const p of canonicalPlayers) {
+          if (p.yahoo_id) {
+            canonicalMap.set(p.yahoo_id, {
+              id: p.id,
+              player_name: p.player_name,
+              position: p.position,
+              team: p.team,
+            });
+          }
+        }
+      }
+    }
+    
     let syncedCount = 0;
 
     // Sync each team's roster
@@ -202,7 +286,7 @@ serve(async (req) => {
         return null;
       }
 
-      // Convert Yahoo roster to standard format
+      // Convert Yahoo roster to standard format with canonical player IDs
       const roster: any[] = [];
       for (const [playerKey, playerValue] of Object.entries(rosterPlayers)) {
         if (playerKey === 'count') continue;
@@ -224,6 +308,33 @@ serve(async (req) => {
           }
         }
 
+        const yahooId = String(core.player_id || '');
+        const canonical = yahooId ? canonicalMap.get(yahooId) : null;
+        
+        // If no canonical player found, create one
+        if (yahooId && !canonical) {
+          const newPlayer = {
+            yahoo_id: yahooId,
+            player_name: core.name?.full || core.name || '',
+            position: core.primary_position || core.display_position || '',
+            team: core.editorial_team_abbr || '',
+          };
+          const { data: inserted } = await supabaseAdmin
+            .from('canonical_players')
+            .upsert([newPlayer], { onConflict: 'yahoo_id' })
+            .select('id, yahoo_id, player_name, position, team')
+            .single();
+          
+          if (inserted) {
+            canonicalMap.set(yahooId, {
+              id: inserted.id,
+              player_name: inserted.player_name,
+              position: inserted.position,
+              team: inserted.team,
+            });
+          }
+        }
+
         // Debug: Log the raw player wrapper structure
         console.log(`\n=== Player: ${core.name?.full || core.name} ===`);
         console.log('Raw playerWrapper:', JSON.stringify(playerWrapper, null, 2));
@@ -238,11 +349,15 @@ serve(async (req) => {
           console.log(`Fallback selected_position: ${selectedPosition}`);
         }
         
+        const updatedCanonical = yahooId ? canonicalMap.get(yahooId) : null;
+        
         roster.push({
-          player_id: core.player_id || '',
-          player_name: core.name?.full || core.name || '',
-          position: core.primary_position || core.display_position || '',
-          team: core.editorial_team_abbr || '',
+          player_id: yahooId,
+          canonical_player_id: updatedCanonical?.id || null,
+          yahoo_id: yahooId,
+          player_name: updatedCanonical?.player_name || core.name?.full || core.name || '',
+          position: updatedCanonical?.position || core.primary_position || core.display_position || '',
+          team: updatedCanonical?.team || core.editorial_team_abbr || '',
           selected_position: selectedPosition,
         });
       }
