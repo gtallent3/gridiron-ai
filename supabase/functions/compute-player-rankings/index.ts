@@ -294,8 +294,11 @@ serve(async (req) => {
       const rosSosRank = projWithSos?.ros_sos_rank ?? null;
       const playoffSosRank = projWithSos?.playoff_sos_rank ?? null;
 
-      // Get bye week from player_pool_v2 data using the playerKey (which is canonical_player_id when available)
-      const byeWeek = byeWeekMap.get(playerKey) ?? null;
+      // Get bye week from player_pool_v2 data using canonical_player_id directly
+      // Only look up if playerInfo.player_id is a UUID (canonical_player_id), not a fallback key
+      const byeWeek = (playerInfo.player_id && playerInfo.player_id.includes('-')) 
+        ? byeWeekMap.get(playerInfo.player_id) ?? null 
+        : null;
 
       rankings.push({
         player_id: playerInfo.player_id,
