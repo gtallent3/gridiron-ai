@@ -96,7 +96,10 @@ serve(async (req) => {
       const { data: projections, error: projError } = await query;
 
       if (projError) throw projError;
-      if (!projections || projections.length === 0) break;
+      if (!projections || projections.length === 0) { 
+        sleeperEndReached = true;
+        break; 
+      }
 
       const poolRecords: any[] = [];
       
@@ -188,7 +191,10 @@ serve(async (req) => {
       const { data: actuals, error: actualsError } = await nflQuery;
 
       if (actualsError) throw actualsError;
-      if (!actuals || actuals.length === 0) break;
+      if (!actuals || actuals.length === 0) { 
+        nflEndReached = true;
+        break; 
+      }
 
       const poolRecords = [];
       
