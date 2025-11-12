@@ -76,6 +76,7 @@ serve(async (req) => {
     let lastSleeperId: string | null = startSleeperId;
     const pageSize = 1000;
     let sleeperBatches = 0;
+    let sleeperEndReached = false;
     
     while (true) {
       let query = supabase
@@ -151,13 +152,16 @@ serve(async (req) => {
       
       console.log(`Processed batch: fetched ${projections.length} projections, matched ${poolRecords.length} records, inserted ${sleeperInserted} total, last ID: ${lastSleeperId}`);
       
+      if (projections.length < pageSize) { 
+        sleeperEndReached = true; 
+        break; 
+      }
+      
       sleeperBatches++;
       if (sleeperBatches >= maxBatches) {
         console.log(`Reached maxBatches (${maxBatches}) for sleeper_projections; nextSleeperId=${lastSleeperId}`);
         break;
       }
-      
-      if (projections.length < pageSize) break;
     }
 
     console.log(`Inserted ${sleeperInserted} Sleeper projection records`);
@@ -165,6 +169,7 @@ serve(async (req) => {
     // Process NFL actual stats in batches (keyset pagination)
     let lastNflId: string | null = startNflId;
     let nflBatches = 0;
+    let nflEndReached = false;
     
     while (true) {
       let nflQuery = supabase
@@ -235,13 +240,16 @@ serve(async (req) => {
       
       console.log(`Processed NFL batch: fetched ${actuals.length} actuals, matched ${poolRecords.length} records, inserted ${nflInserted} total, last ID: ${lastNflId}`);
       
+      if (actuals.length < pageSize) {
+        nflEndReached = true;
+        break;
+      }
+
       nflBatches++;
       if (nflBatches >= maxBatches) {
         console.log(`Reached maxBatches (${maxBatches}) for nfl_actual; nextNflId=${lastNflId}`);
         break;
       }
-      
-      if (actuals.length < pageSize) break;
     }
 
     console.log(`Inserted ${nflInserted} NFL actual records`);
@@ -255,8 +263,8 @@ serve(async (req) => {
         nextNflId: lastNflId,
         sleeperBatches,
         nflBatches,
-        hasMoreSleeper: sleeperInserted > 0 && sleeperBatches >= maxBatches,
-        hasMoreNfl: nflInserted > 0 && nflBatches >= maxBatches,
+        hasMoreSleeper: !sleeperEndReached,
+        hasMoreNfl: !nflEndReached,
         message: 'Player pool populated successfully (resumable)'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
