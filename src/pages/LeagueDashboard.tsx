@@ -25,6 +25,7 @@ type League = {
   league_size: number;
   scoring_type: string;
   league_id: string;
+  current_week: number;
 };
 
 type Team = {
