@@ -819,6 +819,7 @@ export type Database = {
           ros_sos_rank: number | null
           season: number
           team: string
+          trade_value: number | null
           updated_at: string
         }
         Insert: {
@@ -834,6 +835,7 @@ export type Database = {
           ros_sos_rank?: number | null
           season?: number
           team: string
+          trade_value?: number | null
           updated_at?: string
         }
         Update: {
@@ -849,6 +851,7 @@ export type Database = {
           ros_sos_rank?: number | null
           season?: number
           team?: string
+          trade_value?: number | null
           updated_at?: string
         }
         Relationships: []
