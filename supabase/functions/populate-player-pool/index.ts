@@ -125,9 +125,10 @@ serve(async (req) => {
         }
       }
 
-      if (projections.length > 0) {
-        lastSleeperId = projections[projections.length - 1].id;
-      }
+      lastSleeperId = projections[projections.length - 1].id;
+      
+      console.log(`Processed batch: ${poolRecords.length} records, last ID: ${lastSleeperId}`);
+      
       if (projections.length < pageSize) break;
     }
 
@@ -201,9 +202,10 @@ serve(async (req) => {
         }
       }
 
-      if (actuals.length > 0) {
-        lastNflId = actuals[actuals.length - 1].id;
-      }
+      lastNflId = actuals[actuals.length - 1].id;
+      
+      console.log(`Processed NFL batch: ${poolRecords.length} records, last ID: ${lastNflId}`);
+      
       if (actuals.length < pageSize) break;
     }
 
