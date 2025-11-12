@@ -1169,6 +1169,7 @@ export type Database = {
       }
       sleeper_projections: {
         Row: {
+          bye_week: boolean
           created_at: string | null
           id: string
           opponent: string | null
@@ -1196,6 +1197,7 @@ export type Database = {
           week: number
         }
         Insert: {
+          bye_week?: boolean
           created_at?: string | null
           id?: string
           opponent?: string | null
@@ -1223,6 +1225,7 @@ export type Database = {
           week: number
         }
         Update: {
+          bye_week?: boolean
           created_at?: string | null
           id?: string
           opponent?: string | null

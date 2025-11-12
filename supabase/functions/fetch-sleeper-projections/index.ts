@@ -240,6 +240,7 @@ serve(async (req) => {
             const opponent = opponentMap.get(proj.team);
             if (opponent) {
               proj.opponent = opponent;
+              proj.bye_week = false; // Has an opponent, not a bye week
               if (proj.position) {
                 const pos = String(proj.position).toUpperCase();
                 const rankKey = `${opponent}:${pos}`;
@@ -265,6 +266,10 @@ serve(async (req) => {
                   proj.playoff_sos_rank = teamSos.playoff;
                 }
               }
+            } else {
+              // No opponent found - this is a bye week
+              proj.opponent = null;
+              proj.bye_week = true;
             }
           }
         });
