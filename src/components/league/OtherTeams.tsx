@@ -62,84 +62,78 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
 
       if (error) throw error;
       
-      // Enrich teams with weekly stats
+      // Enrich teams with weekly stats from player_pool_v2
       const currentWeek = league.current_week || getCurrentNFLWeek().week;
       const now = new Date();
       const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
       const isHistorical = currentWeek < (league.current_week || getCurrentNFLWeek().week);
 
-      // Fetch stats for the current week
-      let statsData: any[] = [];
-      if (isHistorical) {
-        const { data: actuals } = await supabase
-          .from('nfl_fantasy_points')
-          .select('*')
-          .eq('week', currentWeek)
-          .eq('season', inferredSeason);
-        statsData = actuals || [];
-      } else {
-        const { data: projections } = await supabase
-          .from('projected_player_stats')
-          .select('*')
-          .eq('week', currentWeek)
-          .eq('season', inferredSeason);
-        statsData = projections || [];
+      // Get platform ID field
+      const platformIdField = league.platform === 'espn' ? 'espn_id' : 'yahoo_id';
+      
+      // Collect all player IDs from all teams
+      const allPlayerIds = new Set<string>();
+      for (const team of data || []) {
+        const roster = Array.isArray(team.roster) ? team.roster : [];
+        for (const player of roster) {
+          const playerObj = player as any;
+          const playerId = String(playerObj.player_id ?? playerObj.playerId ?? playerObj.id ?? '');
+          if (playerId) allPlayerIds.add(playerId);
+        }
       }
 
-      // Create map by normalized name
-      const statsByName = new Map<string, any>();
-      for (const stat of statsData) {
-        const normalizedName = stat.player_name.toLowerCase().replace(/[^a-z]/g, '');
-        statsByName.set(normalizedName, stat);
+      // Look up canonical players
+      const { data: canonicalData } = await supabase
+        .from('canonical_players')
+        .select('id, player_name, position, team, espn_id, yahoo_id')
+        .in(platformIdField, Array.from(allPlayerIds));
+
+      const canonicalMap = new Map<string, any>();
+      if (canonicalData) {
+        for (const cp of canonicalData) {
+          const platformId = league.platform === 'espn' ? cp.espn_id : cp.yahoo_id;
+          if (platformId) {
+            canonicalMap.set(String(platformId), cp);
+          }
+        }
       }
 
-      // Get scoring settings
-      const { data: leagueData } = await supabase
-        .from('connected_leagues')
-        .select('scoring_settings, scoring_type')
-        .eq('id', league.id)
-        .maybeSingle();
+      const canonicalIds = Array.from(canonicalMap.values()).map(cp => cp.id);
 
-      let scoringSettings: any = {
-        passing_yards: 0.04, passing_tds: 4, interceptions: -2,
-        rushing_yards: 0.1, rushing_tds: 6,
-        receptions: 1, receiving_yards: 0.1, receiving_tds: 6,
-        fumbles_lost: -2,
-      };
+      // Fetch from player_pool_v2
+      const { data: poolData } = await supabase
+        .from('player_pool_v2')
+        .select('*')
+        .eq('week', currentWeek)
+        .eq('season', inferredSeason)
+        .in('canonical_player_id', canonicalIds);
 
-      if (leagueData?.scoring_settings) {
-        scoringSettings = { ...scoringSettings, ...(leagueData.scoring_settings as Record<string, any>) };
-      } else if (leagueData?.scoring_type === 'standard') {
-        scoringSettings.receptions = 0;
-      } else if (leagueData?.scoring_type === 'half_ppr') {
-        scoringSettings.receptions = 0.5;
+      const poolMap = new Map<string, any>();
+      if (poolData) {
+        for (const pool of poolData) {
+          poolMap.set(pool.canonical_player_id, pool);
+        }
       }
 
       const enrichedTeams = (data || []).map((team: any) => {
         const roster = Array.isArray(team.roster) ? team.roster : [];
         const enrichedRoster = roster.map((player: any) => {
-          const playerName = player.player_name || 'Unknown Player';
-          const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
-          const stats = statsByName.get(normalizedName);
+          const playerId = String(player.player_id ?? player.playerId ?? player.id ?? '');
+          const canonical = canonicalMap.get(playerId);
+          const poolEntry = canonical ? poolMap.get(canonical.id) : null;
 
           let points = 0;
-          if (isHistorical && stats) {
-            // Calculate actual points
-            points += (stats.passing_yards || 0) * scoringSettings.passing_yards;
-            points += (stats.passing_tds || 0) * scoringSettings.passing_tds;
-            points += (stats.interceptions || 0) * scoringSettings.interceptions;
-            points += (stats.rushing_yards || 0) * scoringSettings.rushing_yards;
-            points += (stats.rushing_tds || 0) * scoringSettings.rushing_tds;
-            points += (stats.receptions || 0) * scoringSettings.receptions;
-            points += (stats.receiving_yards || 0) * scoringSettings.receiving_yards;
-            points += (stats.receiving_tds || 0) * scoringSettings.receiving_tds;
-            points += (stats.fumbles_lost || 0) * scoringSettings.fumbles_lost;
-          } else if (!isHistorical && stats) {
-            // Use projected points
-            points = stats.projected_fp || 0;
+          if (poolEntry) {
+            if (isHistorical && poolEntry.actual_fp) {
+              points = poolEntry.actual_fp;
+            } else if (!isHistorical && poolEntry.projected_fp) {
+              points = poolEntry.projected_fp;
+            } else if (poolEntry.composite_fp) {
+              points = poolEntry.composite_fp;
+            }
           }
 
-          const playerTeam = stats?.team || player.team || 'NFL';
+          const playerTeam = poolEntry?.team || canonical?.team || player.team || 'NFL';
           const isByeWeek = isTeamOnBye(playerTeam, currentWeek);
 
           return {

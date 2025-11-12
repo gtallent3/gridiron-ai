@@ -60,8 +60,140 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
       const leagueCurrentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
       const isHistorical = week < leagueCurrentWeek;
       
-      // For Sleeper and Yahoo, fetch actuals for past weeks, use projections for current/future
-      if (league.platform === 'sleeper' || league.platform === 'yahoo') {
+      // For ESPN and Yahoo, use player_pool_v2 via canonical_players
+      if (league.platform === 'espn' || league.platform === 'yahoo') {
+        const starterPlayers: any[] = [];
+        const benchPlayers: any[] = [];
+        
+        const now = new Date();
+        const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+        
+        // Step 1: Get player IDs from roster
+        const platformIdField = league.platform === 'espn' ? 'espn_id' : 'yahoo_id';
+        const rosterPlayerIds = userTeam.roster
+          .map((p: any) => String(p.player_id ?? p.playerId ?? p.id ?? ''))
+          .filter(Boolean);
+        
+        // Step 2: Look up canonical_player_ids
+        const { data: canonicalData } = await supabase
+          .from('canonical_players')
+          .select('id, player_name, position, team, espn_id, yahoo_id')
+          .in(platformIdField, rosterPlayerIds);
+        
+        const canonicalMap = new Map<string, any>();
+        if (canonicalData) {
+          for (const cp of canonicalData) {
+            const platformId = league.platform === 'espn' ? cp.espn_id : cp.yahoo_id;
+            if (platformId) {
+              canonicalMap.set(String(platformId), cp);
+            }
+          }
+        }
+        
+        const canonicalIds = Array.from(canonicalMap.values()).map(cp => cp.id);
+        
+        // Step 3: Fetch from player_pool_v2
+        const { data: poolData } = await supabase
+          .from('player_pool_v2')
+          .select('*')
+          .eq('week', week)
+          .eq('season', inferredSeason)
+          .in('canonical_player_id', canonicalIds);
+        
+        const poolMap = new Map<string, any>();
+        if (poolData) {
+          for (const pool of poolData) {
+            poolMap.set(pool.canonical_player_id, pool);
+          }
+        }
+        
+        // Step 4: Get scoring settings
+        const { data: leagueData } = await supabase
+          .from('connected_leagues')
+          .select('scoring_settings, scoring_type')
+          .eq('id', league.id)
+          .maybeSingle();
+        
+        let scoringSettings: any = {
+          passing_yards: 0.04, passing_tds: 4, interceptions: -2,
+          rushing_yards: 0.1, rushing_tds: 6,
+          receptions: 1, receiving_yards: 0.1, receiving_tds: 6,
+          fumbles_lost: -2,
+        };
+        
+        if (leagueData?.scoring_settings) {
+          scoringSettings = { ...scoringSettings, ...(leagueData.scoring_settings as Record<string, any>) };
+        } else if (leagueData?.scoring_type === 'standard') {
+          scoringSettings.receptions = 0;
+        } else if (leagueData?.scoring_type === 'half_ppr') {
+          scoringSettings.receptions = 0.5;
+        }
+        
+        // Step 5: Build roster with stats
+        userTeam.roster.forEach((player: any) => {
+          const playerId = String(player.player_id ?? player.playerId ?? player.id ?? '');
+          const playerName = player.player_name || player.playerName || player.name || 'Unknown Player';
+          const positionName = league.platform === 'espn' 
+            ? (POSITION_MAP[player.position] || 'FLEX')
+            : (player.position || 'FLEX');
+          
+          let isStarter = false;
+          if (league.platform === 'espn') {
+            isStarter = STARTER_SLOTS.includes(player.slot);
+          } else if (league.platform === 'yahoo') {
+            const sp = String(player.selected_position ?? '').toUpperCase();
+            isStarter = sp !== '' && !['BN','BENCH','IR','NA','IL','PUP'].includes(sp);
+          }
+          
+          const canonical = canonicalMap.get(playerId);
+          const poolEntry = canonical ? poolMap.get(canonical.id) : null;
+          
+          let projectedPoints = 0;
+          let actualPoints = 0;
+          
+          if (poolEntry) {
+            if (isHistorical && poolEntry.actual_fp) {
+              actualPoints = poolEntry.actual_fp;
+            } else if (!isHistorical && poolEntry.projected_fp) {
+              projectedPoints = poolEntry.projected_fp;
+            } else if (poolEntry.composite_fp) {
+              // Fallback to composite
+              if (isHistorical) actualPoints = poolEntry.composite_fp;
+              else projectedPoints = poolEntry.composite_fp;
+            }
+          }
+          
+          const playerTeam = poolEntry?.team || canonical?.team || player.team || 'NFL';
+          const isByeWeek = isTeamOnBye(playerTeam, week);
+          
+          const playerDataObj = {
+            id: playerId || playerName,
+            name: playerName,
+            position: positionName,
+            team: playerTeam,
+            projected: projectedPoints,
+            actualPoints: actualPoints,
+            status: isStarter ? 'starter' : 'bench',
+            is_bye_week: isByeWeek,
+            injury_status: player.injury_status ?? null,
+            week: week,
+          };
+          
+          if (isStarter) {
+            starterPlayers.push(playerDataObj);
+          } else {
+            benchPlayers.push(playerDataObj);
+          }
+        });
+        
+        setStarters(starterPlayers);
+        setBench(benchPlayers);
+        setLoading(false);
+        return;
+      }
+      
+      // For Sleeper, use existing logic
+      if (league.platform === 'sleeper') {
         const starterPlayers: any[] = [];
         const benchPlayers: any[] = [];
         
