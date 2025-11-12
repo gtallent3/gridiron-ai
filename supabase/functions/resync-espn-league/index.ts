@@ -281,21 +281,26 @@ serve(async (req) => {
       }
     }
     
-    // Get all canonical player IDs for bulk stats fetch from player_pool_v2
-    const canonicalIds = Array.from(new Set(Array.from(canonicalMap.values()).map(p => p.id)));
+    // Also fetch all canonical players for name-based fallback matching
+    const { data: allCanonicalPlayers } = await supabase
+      .from('canonical_players')
+      .select('id, espn_id, sleeper_id, nfl_id, player_name, position, team');
     
-    // Fetch all stats from player_pool_v2 (unified source for projections and actuals)
-    const { data: playerPoolStats } = await supabase
-      .from('player_pool_v2')
-      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds, projected_fp, actual_fp')
-      .in('canonical_player_id', canonicalIds)
-      .eq('season', currentYear);
+    const canonicalByName = new Map<string, typeof allCanonicalPlayers>();
+    if (allCanonicalPlayers) {
+      for (const p of allCanonicalPlayers) {
+        const normalizedName = p.player_name.toLowerCase().replace(/[^a-z]/g, '');
+        if (!canonicalByName.has(normalizedName)) {
+          canonicalByName.set(normalizedName, []);
+        }
+        canonicalByName.get(normalizedName)!.push(p);
+      }
+    }
     
-    // Build maps for quick lookup: key = "canonical_id_week"
-    const playerPoolMap = new Map((playerPoolStats || []).map(p => [`${p.canonical_player_id}_${p.week}`, p]));
-
-    // Create missing canonical player entries
+    // Match players by ESPN ID or name, and update canonical players with ESPN IDs
     const playersToInsert = [];
+    const playersToUpdate = [];
+    
     for (const team of espnLeagueData.teams || []) {
       for (const entry of team.roster?.entries || []) {
         const espnId = entry.playerId?.toString();
@@ -305,25 +310,67 @@ serve(async (req) => {
           const position = player?.defaultPositionId?.toString() || 'FLEX';
           const teamAbbr = player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA';
           
-          playersToInsert.push({
-            espn_id: espnId,
-            player_name: playerName,
-            position: position,
-            team: teamAbbr,
-            sleeper_id: null,
-            nfl_id: null,
-          });
+          // Try to match by name
+          const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
+          const matchesByName = canonicalByName.get(normalizedName) || [];
+          
+          // Find best match by position and team
+          let bestMatch = matchesByName.find(p => p.position === position && p.team === teamAbbr);
+          if (!bestMatch && matchesByName.length > 0) {
+            bestMatch = matchesByName.find(p => p.position === position);
+          }
+          if (!bestMatch && matchesByName.length > 0) {
+            bestMatch = matchesByName[0];
+          }
+          
+          if (bestMatch && !bestMatch.espn_id) {
+            // Update existing canonical player with ESPN ID
+            playersToUpdate.push({
+              id: bestMatch.id,
+              espn_id: espnId,
+            });
+            
+            canonicalMap.set(espnId, {
+              id: bestMatch.id,
+              player_name: bestMatch.player_name,
+              position: bestMatch.position,
+              team: bestMatch.team,
+              sleeper_id: bestMatch.sleeper_id,
+              nfl_id: bestMatch.nfl_id,
+            });
+          } else if (!bestMatch) {
+            // Create new canonical player
+            playersToInsert.push({
+              espn_id: espnId,
+              player_name: playerName,
+              position: position,
+              team: teamAbbr,
+              sleeper_id: null,
+              nfl_id: null,
+            });
+          }
         }
       }
     }
 
+    // Update canonical players with ESPN IDs
+    if (playersToUpdate.length > 0) {
+      for (const update of playersToUpdate) {
+        await supabase
+          .from('canonical_players')
+          .update({ espn_id: update.espn_id })
+          .eq('id', update.id);
+      }
+      console.log(`Updated ${playersToUpdate.length} canonical players with ESPN IDs`);
+    }
+
+    // Insert new canonical players
     if (playersToInsert.length > 0) {
       const { data: inserted } = await supabase
         .from('canonical_players')
         .upsert(playersToInsert, { onConflict: 'espn_id' })
         .select('id, espn_id, sleeper_id, nfl_id, player_name, position, team');
       
-      // Update map with newly inserted players
       if (inserted) {
         for (const p of inserted) {
           if (p.espn_id) {
@@ -338,7 +385,21 @@ serve(async (req) => {
           }
         }
       }
+      console.log(`Inserted ${inserted?.length || 0} new canonical players`);
     }
+    
+    // Rebuild canonical IDs list and fetch stats from player_pool_v2
+    const finalCanonicalIds = Array.from(new Set(Array.from(canonicalMap.values()).map(p => p.id)));
+    
+    const { data: playerPoolStats } = await supabase
+      .from('player_pool_v2')
+      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds, projected_fp, actual_fp')
+      .in('canonical_player_id', finalCanonicalIds)
+      .eq('season', currentYear);
+    
+    const playerPoolMap = new Map((playerPoolStats || []).map(p => [`${p.canonical_player_id}_${p.week}`, p]));
+    console.log(`Loaded stats for ${playerPoolStats?.length || 0} player-week combinations from player_pool_v2`);
+    
     
     // Convert league scoring settings to simplified format for calculator
     const scoringSettings: any = {};

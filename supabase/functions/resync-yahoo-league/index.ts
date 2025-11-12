@@ -218,6 +218,22 @@ serve(async (req) => {
       }
     }
     
+    // Also fetch all canonical players for name-based fallback matching
+    const { data: allCanonicalPlayers } = await supabaseAdmin
+      .from('canonical_players')
+      .select('id, yahoo_id, sleeper_id, nfl_id, player_name, position, team');
+    
+    const canonicalByName = new Map<string, typeof allCanonicalPlayers>();
+    if (allCanonicalPlayers) {
+      for (const p of allCanonicalPlayers) {
+        const normalizedName = p.player_name.toLowerCase().replace(/[^a-z]/g, '');
+        if (!canonicalByName.has(normalizedName)) {
+          canonicalByName.set(normalizedName, []);
+        }
+        canonicalByName.get(normalizedName)!.push(p);
+      }
+    }
+    
     // Get all canonical player IDs for bulk stats fetch from player_pool_v2
     const canonicalIds = Array.from(new Set(Array.from(canonicalMap.values()).map(p => p.id)));
     
@@ -345,31 +361,69 @@ serve(async (req) => {
         }
 
         const yahooId = String(core.player_id || '');
-        const canonical = yahooId ? canonicalMap.get(yahooId) : null;
+        let canonical = yahooId ? canonicalMap.get(yahooId) : null;
         
-        // If no canonical player found, create one
+        // If no canonical player found by Yahoo ID, try name-based matching
         if (yahooId && !canonical) {
-          const newPlayer = {
-            yahoo_id: yahooId,
-            player_name: core.name?.full || core.name || '',
-            position: core.primary_position || core.display_position || '',
-            team: core.editorial_team_abbr || '',
-          };
-          const { data: inserted } = await supabaseAdmin
-            .from('canonical_players')
-            .upsert([newPlayer], { onConflict: 'yahoo_id' })
-            .select('id, yahoo_id, sleeper_id, nfl_id, player_name, position, team')
-            .single();
+          const playerName = core.name?.full || core.name || '';
+          const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
+          const matchesByName = canonicalByName.get(normalizedName) || [];
           
-          if (inserted) {
-            canonicalMap.set(yahooId, {
-              id: inserted.id,
-              player_name: inserted.player_name,
-              position: inserted.position,
-              team: inserted.team,
-              sleeper_id: inserted.sleeper_id,
-              nfl_id: inserted.nfl_id,
-            });
+          const position = core.primary_position || core.display_position || '';
+          const team = core.editorial_team_abbr || '';
+          
+          // Find best match by position and team
+          let bestMatch = matchesByName.find(p => p.position === position && p.team === team);
+          if (!bestMatch && matchesByName.length > 0) {
+            bestMatch = matchesByName.find(p => p.position === position);
+          }
+          if (!bestMatch && matchesByName.length > 0) {
+            bestMatch = matchesByName[0];
+          }
+          
+          if (bestMatch && !bestMatch.yahoo_id) {
+            // Update existing canonical player with Yahoo ID
+            await supabaseAdmin
+              .from('canonical_players')
+              .update({ yahoo_id: yahooId })
+              .eq('id', bestMatch.id);
+            
+            canonical = {
+              id: bestMatch.id,
+              player_name: bestMatch.player_name,
+              position: bestMatch.position,
+              team: bestMatch.team,
+              sleeper_id: bestMatch.sleeper_id,
+              nfl_id: bestMatch.nfl_id,
+            };
+            canonicalMap.set(yahooId, canonical);
+            console.log(`Updated canonical player ${bestMatch.player_name} with Yahoo ID ${yahooId}`);
+          } else if (!bestMatch) {
+            // Create new canonical player
+            const newPlayer = {
+              yahoo_id: yahooId,
+              player_name: playerName,
+              position: position,
+              team: team,
+            };
+            const { data: inserted } = await supabaseAdmin
+              .from('canonical_players')
+              .upsert([newPlayer], { onConflict: 'yahoo_id' })
+              .select('id, yahoo_id, sleeper_id, nfl_id, player_name, position, team')
+              .single();
+            
+            if (inserted) {
+              canonical = {
+                id: inserted.id,
+                player_name: inserted.player_name,
+                position: inserted.position,
+                team: inserted.team,
+                sleeper_id: inserted.sleeper_id,
+                nfl_id: inserted.nfl_id,
+              };
+              canonicalMap.set(yahooId, canonical);
+              console.log(`Created new canonical player ${inserted.player_name} with Yahoo ID ${yahooId}`);
+            }
           }
         }
 
@@ -387,7 +441,7 @@ serve(async (req) => {
           console.log(`Fallback selected_position: ${selectedPosition}`);
         }
         
-        const updatedCanonical = yahooId ? canonicalMap.get(yahooId) : null;
+        const updatedCanonical = canonical;
         
         // Calculate projected and actual points using league scoring from player_pool_v2
         let projected = 0;
