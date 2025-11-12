@@ -394,7 +394,7 @@ serve(async (req) => {
     // Fetch only projection rows (not actuals) to avoid Map key collisions
     const { data: projectionStats } = await supabase
       .from('player_pool_v2')
-      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds, projected_fp')
+      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_attempts, passing_completions, passing_ints, passing_2pt_conversions, rushing_yards, rushing_tds, rushing_attempts, rushing_2pt_conversions, receptions, receiving_yards, receiving_tds, receiving_targets, receiving_2pt_conversions, fumbles_lost, projected_fp')
       .in('canonical_player_id', finalCanonicalIds)
       .eq('season', currentYear)
       .not('projected_fp', 'is', null);
@@ -402,7 +402,7 @@ serve(async (req) => {
     // Fetch only actual rows (not projections) to avoid Map key collisions  
     const { data: actualStatsData } = await supabase
       .from('player_pool_v2')
-      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds, actual_fp')
+      .select('canonical_player_id, week, season, passing_yards, passing_tds, passing_attempts, passing_completions, passing_ints, passing_2pt_conversions, rushing_yards, rushing_tds, rushing_attempts, rushing_2pt_conversions, receptions, receiving_yards, receiving_tds, receiving_targets, receiving_2pt_conversions, fumbles_lost, actual_fp')
       .in('canonical_player_id', finalCanonicalIds)
       .eq('season', currentYear)
       .not('actual_fp', 'is', null);
@@ -446,12 +446,20 @@ serve(async (req) => {
             projected = calculateFantasyPoints({
               passing_yards: projStats.passing_yards,
               passing_tds: projStats.passing_tds,
-              passing_ints: projStats.passing_ints,
+              passing_attempts: projStats.passing_attempts,
+              passing_completions: projStats.passing_completions,
+              interceptions: projStats.passing_ints,
+              passing_2pt_conversions: projStats.passing_2pt_conversions,
               rushing_yards: projStats.rushing_yards,
               rushing_tds: projStats.rushing_tds,
+              rushing_attempts: projStats.rushing_attempts,
+              rushing_2pt_conversions: projStats.rushing_2pt_conversions,
               receptions: projStats.receptions,
               receiving_yards: projStats.receiving_yards,
               receiving_tds: projStats.receiving_tds,
+              receiving_targets: projStats.receiving_targets,
+              receiving_2pt_conversions: projStats.receiving_2pt_conversions,
+              fumbles_lost: projStats.fumbles_lost,
             }, scoringSettings);
           }
           
@@ -463,12 +471,20 @@ serve(async (req) => {
               actual = calculateFantasyPoints({
                 passing_yards: actualStats.passing_yards,
                 passing_tds: actualStats.passing_tds,
-                passing_ints: actualStats.passing_ints,
+                passing_attempts: actualStats.passing_attempts,
+                passing_completions: actualStats.passing_completions,
+                interceptions: actualStats.passing_ints,
+                passing_2pt_conversions: actualStats.passing_2pt_conversions,
                 rushing_yards: actualStats.rushing_yards,
                 rushing_tds: actualStats.rushing_tds,
+                rushing_attempts: actualStats.rushing_attempts,
+                rushing_2pt_conversions: actualStats.rushing_2pt_conversions,
                 receptions: actualStats.receptions,
                 receiving_yards: actualStats.receiving_yards,
                 receiving_tds: actualStats.receiving_tds,
+                receiving_targets: actualStats.receiving_targets,
+                receiving_2pt_conversions: actualStats.receiving_2pt_conversions,
+                fumbles_lost: actualStats.fumbles_lost,
               }, scoringSettings);
             }
           }
