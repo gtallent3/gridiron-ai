@@ -127,6 +127,27 @@ export const ConnectedLeagues = () => {
           title: "League Synced",
           description: data?.message || "Your Sleeper league has been updated",
         });
+      } else if (platform === 'yahoo') {
+        const { data, error } = await supabase.functions.invoke('resync-yahoo-league', {
+          body: { leagueId }
+        });
+
+        if (error) {
+          if (error.message?.includes('credentials') || error.message?.includes('expired')) {
+            toast({
+              title: "Credentials Expired",
+              description: "Please reconnect your Yahoo league",
+              variant: "destructive",
+            });
+            return;
+          }
+          throw error;
+        }
+
+        toast({
+          title: "League Synced",
+          description: data?.message || "Your Yahoo league has been updated",
+        });
       } else {
         toast({
           title: "Not Available",
