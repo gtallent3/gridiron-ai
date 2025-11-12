@@ -78,10 +78,27 @@ serve(async (req) => {
       return results;
     };
 
+    const fetchAllNormalized = async () => {
+      const results: any[] = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data, error } = await supabase
+          .from('normalized_players')
+          .select('player_id, player_name, position, team, espn_id, yahoo_id')
+          .not('player_name', 'is', null)
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        results.push(...data);
+        if (data.length < PAGE_SIZE) break;
+      }
+      return results;
+    };
+
     const sleeperPlayers = await fetchAllSleeper();
     const nflPlayers = await fetchAllNFL();
+    const normalizedPlayers = await fetchAllNormalized();
 
-    console.log(`Found ${sleeperPlayers?.length || 0} Sleeper players, ${nflPlayers?.length || 0} NFL players`);
+    console.log(`Found ${sleeperPlayers?.length || 0} Sleeper players, ${nflPlayers?.length || 0} NFL players, ${normalizedPlayers?.length || 0} normalized players`);
 
     // Create maps for deduplication
     const sleeperMap = new Map<string, any>();
@@ -144,11 +161,15 @@ serve(async (req) => {
 
     const existingBySleeperIdMap = new Map<string, any>();
     const existingByNflIdMap = new Map<string, any>();
+    const existingByEspnIdMap = new Map<string, any>();
+    const existingByYahooIdMap = new Map<string, any>();
     const existingByNamePosTeam = new Map<string, any>(); // Add lookup by name+pos+team
     
     for (const cp of existingCanonical || []) {
       if (cp.sleeper_id) existingBySleeperIdMap.set(cp.sleeper_id, cp);
       if (cp.nfl_id) existingByNflIdMap.set(cp.nfl_id, cp);
+      if (cp.espn_id) existingByEspnIdMap.set(cp.espn_id, cp);
+      if (cp.yahoo_id) existingByYahooIdMap.set(cp.yahoo_id, cp);
       
       // Build name+position+team lookup for dedup
       const normalizedName = normalizeName(cp.player_name);
@@ -349,6 +370,52 @@ serve(async (req) => {
       }
     }
 
+    // Process normalized players to add ESPN/Yahoo IDs
+    for (const normPlayer of normalizedPlayers || []) {
+      if (!normPlayer.player_name || !normPlayer.position) continue;
+      
+      const normalizedName = normalizeName(normPlayer.player_name);
+      const normalizedTeam = normalizeTeam(normPlayer.team);
+      const key = `${normalizedName}:${normPlayer.position}`;
+      
+      // Try to find matching canonical player by name+position
+      let matchingCanonical = null;
+      
+      // First try exact team match
+      if (normalizedTeam) {
+        const exactKey = `${normalizedName}:${normPlayer.position}:${normalizedTeam}`;
+        matchingCanonical = existingByNamePosTeam.get(exactKey);
+      }
+      
+      // If no exact match, try any player with same name+position
+      if (!matchingCanonical) {
+        for (const [k, cp] of existingByNamePosTeam.entries()) {
+          if (k.startsWith(key + ':')) {
+            matchingCanonical = cp;
+            break;
+          }
+        }
+      }
+      
+      if (matchingCanonical) {
+        // Update with ESPN/Yahoo IDs if missing
+        const updates: any = {};
+        if (normPlayer.espn_id && !matchingCanonical.espn_id && !existingByEspnIdMap.has(normPlayer.espn_id)) {
+          updates.espn_id = normPlayer.espn_id;
+        }
+        if (normPlayer.yahoo_id && !matchingCanonical.yahoo_id && !existingByYahooIdMap.has(normPlayer.yahoo_id)) {
+          updates.yahoo_id = normPlayer.yahoo_id;
+        }
+        
+        if (Object.keys(updates).length > 0) {
+          toUpdate.push({
+            id: matchingCanonical.id,
+            ...updates
+          });
+        }
+      }
+    }
+
     // Batch upsert new records (split by id presence to avoid unique conflicts)
     const CHUNK_SIZE = 100;
     for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
@@ -387,14 +454,19 @@ serve(async (req) => {
 
     // Batch update existing records
     for (const update of toUpdate) {
-      const updateData: any = { team: update.team };
+      const updateData: any = {};
+      if (update.team) updateData.team = update.team;
       if (update.sleeper_id) updateData.sleeper_id = update.sleeper_id;
       if (update.nfl_id) updateData.nfl_id = update.nfl_id;
+      if (update.espn_id) updateData.espn_id = update.espn_id;
+      if (update.yahoo_id) updateData.yahoo_id = update.yahoo_id;
       
-      await supabase
-        .from('canonical_players')
-        .update(updateData)
-        .eq('id', update.id);
+      if (Object.keys(updateData).length > 0) {
+        await supabase
+          .from('canonical_players')
+          .update(updateData)
+          .eq('id', update.id);
+      }
     }
 
     // Batch insert unmatched records
