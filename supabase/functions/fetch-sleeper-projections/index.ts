@@ -90,7 +90,7 @@ serve(async (req) => {
             player_id: player.player_id ?? player.id ?? null,
             week,
             season,
-            team: player.team ?? player.team_abbr ?? null,
+            team: normalizeTeam(player.team ?? player.team_abbr ?? null),
             position: player.position ?? player.pos ?? null,
             pts_std: toNum(stats?.pts_std),
             pts_ppr: toNum(stats?.pts_ppr),
@@ -111,7 +111,7 @@ serve(async (req) => {
             player_id: stats?.player_id ?? playerId,
             week,
             season,
-            team: stats?.team ?? stats?.team_abbr ?? null,
+            team: normalizeTeam(stats?.team ?? stats?.team_abbr ?? null),
             position: stats?.position ?? stats?.pos ?? null,
             pts_std: toNum(stats?.pts_std),
             pts_ppr: toNum(stats?.pts_ppr),
@@ -168,7 +168,7 @@ serve(async (req) => {
           const playerData = playerDataMap.get(String(proj.player_id));
           if (playerData) {
             proj.player_name = playerData.name;
-            proj.team = playerData.team;
+            proj.team = normalizeTeam(playerData.team);
             proj.position = playerData.position;
           }
         });
