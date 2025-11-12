@@ -8,6 +8,27 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
+// Fantasy points calculator
+function calculateFantasyPoints(stats: any, scoring: any): number {
+  let total = 0;
+  
+  // Passing
+  if (stats.passing_yards && scoring.passing_yards) total += stats.passing_yards * scoring.passing_yards;
+  if (stats.passing_tds && scoring.passing_tds) total += stats.passing_tds * scoring.passing_tds;
+  if (stats.passing_ints && scoring.interceptions) total += stats.passing_ints * scoring.interceptions;
+  
+  // Rushing
+  if (stats.rushing_yards && scoring.rushing_yards) total += stats.rushing_yards * scoring.rushing_yards;
+  if (stats.rushing_tds && scoring.rushing_tds) total += stats.rushing_tds * scoring.rushing_tds;
+  
+  // Receiving
+  if (stats.receptions && scoring.receptions) total += stats.receptions * scoring.receptions;
+  if (stats.receiving_yards && scoring.receiving_yards) total += stats.receiving_yards * scoring.receiving_yards;
+  if (stats.receiving_tds && scoring.receiving_tds) total += stats.receiving_tds * scoring.receiving_tds;
+  
+  return Math.round(total * 100) / 100;
+}
+
 // Comprehensive credential sanitization for logs
 const sanitizeError = (err: any): string => {
   let fullError = '';
@@ -236,12 +257,12 @@ serve(async (req) => {
     }
 
     // Build canonical player map using ESPN IDs
-    const canonicalMap = new Map<string, { id: string; player_name: string; position: string; team: string }>();
+    const canonicalMap = new Map<string, { id: string; player_name: string; position: string; team: string; sleeper_id: string | null; nfl_id: string | null }>();
     
     if (allEspnPlayerIds.size > 0) {
       const { data: canonicalPlayers } = await supabase
         .from('canonical_players')
-        .select('id, espn_id, player_name, position, team')
+        .select('id, espn_id, sleeper_id, nfl_id, player_name, position, team')
         .in('espn_id', Array.from(allEspnPlayerIds));
       
       if (canonicalPlayers && canonicalPlayers.length > 0) {
@@ -252,11 +273,37 @@ serve(async (req) => {
               player_name: p.player_name,
               position: p.position,
               team: p.team,
+              sleeper_id: p.sleeper_id,
+              nfl_id: p.nfl_id,
             });
           }
         }
       }
     }
+    
+    // Get all sleeper_ids and nfl_ids for bulk stats fetch
+    const sleeperIds = Array.from(new Set(Array.from(canonicalMap.values()).map(p => p.sleeper_id).filter(Boolean)));
+    const nflIds = Array.from(new Set(Array.from(canonicalMap.values()).map(p => p.nfl_id).filter(Boolean)));
+    
+    // Fetch projections from sleeper_projections
+    const { data: sleeperProj } = await supabase
+      .from('sleeper_projections')
+      .select('player_id, week, season, pass_yd, pass_td, pass_int, rush_yd, rush_td, rec, rec_yd, rec_td')
+      .in('player_id', sleeperIds)
+      .eq('season', currentYear)
+      .gte('week', currentWeek);
+    
+    const sleeperProjMap = new Map((sleeperProj || []).map(p => [`${p.player_id}_${p.week}`, p]));
+    
+    // Fetch actuals from nfl_fantasy_points
+    const { data: nflActuals } = await supabase
+      .from('nfl_fantasy_points')
+      .select('player_id, week, season, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds')
+      .in('player_id', nflIds)
+      .eq('season', currentYear)
+      .lt('week', currentWeek);
+    
+    const nflActualsMap = new Map((nflActuals || []).map(p => [`${p.player_id}_${p.week}`, p]));
 
     // Create missing canonical player entries
     const playersToInsert = [];
@@ -274,6 +321,8 @@ serve(async (req) => {
             player_name: playerName,
             position: position,
             team: teamAbbr,
+            sleeper_id: null,
+            nfl_id: null,
           });
         }
       }
@@ -283,7 +332,7 @@ serve(async (req) => {
       const { data: inserted } = await supabase
         .from('canonical_players')
         .upsert(playersToInsert, { onConflict: 'espn_id' })
-        .select('id, espn_id, player_name, position, team');
+        .select('id, espn_id, sleeper_id, nfl_id, player_name, position, team');
       
       // Update map with newly inserted players
       if (inserted) {
@@ -294,29 +343,93 @@ serve(async (req) => {
               player_name: p.player_name,
               position: p.position,
               team: p.team,
+              sleeper_id: p.sleeper_id,
+              nfl_id: p.nfl_id,
             });
           }
         }
       }
     }
+    
+    // Convert league scoring settings to simplified format for calculator
+    const scoringSettings: any = {};
+    if (updatedLeague.scoring_settings?.scoringItems) {
+      const items = updatedLeague.scoring_settings.scoringItems;
+      scoringSettings.passing_yards = items['3']?.points || items[3]?.points || 0.04;
+      scoringSettings.passing_tds = items['4']?.points || items[4]?.points || 4;
+      scoringSettings.interceptions = items['20']?.points || items[20]?.points || -2;
+      scoringSettings.rushing_yards = items['24']?.points || items[24]?.points || 0.1;
+      scoringSettings.rushing_tds = items['25']?.points || items[25]?.points || 6;
+      scoringSettings.receptions = items['53']?.points || items[53]?.points || 1;
+      scoringSettings.receiving_yards = items['42']?.points || items[42]?.points || 0.1;
+      scoringSettings.receiving_tds = items['43']?.points || items[43]?.points || 6;
+    }
 
     // Sync all teams
     for (const team of espnLeagueData.teams || []) {
-      const roster = (team.roster?.entries || []).map((entry: any) => {
+      const rosterPromises = (team.roster?.entries || []).map(async (entry: any) => {
         const player = entry.playerPoolEntry?.player;
         const espnId = entry.playerId?.toString();
         const canonical = espnId ? canonicalMap.get(espnId) : null;
+        
+        // Calculate projected and actual points using league scoring
+        let projected = 0;
+        let actual = 0;
+        
+        if (canonical) {
+          // Get current week projection
+          if (canonical.sleeper_id) {
+            const projKey = `${canonical.sleeper_id}_${currentWeek}`;
+            const projStats = sleeperProjMap.get(projKey);
+            if (projStats) {
+              projected = calculateFantasyPoints({
+                passing_yards: projStats.pass_yd,
+                passing_tds: projStats.pass_td,
+                passing_ints: projStats.pass_int,
+                rushing_yards: projStats.rush_yd,
+                rushing_tds: projStats.rush_td,
+                receptions: projStats.rec,
+                receiving_yards: projStats.rec_yd,
+                receiving_tds: projStats.rec_td,
+              }, scoringSettings);
+            }
+          }
+          
+          // Get last week's actual
+          if (canonical.nfl_id && currentWeek > 1) {
+            const actualKey = `${canonical.nfl_id}_${currentWeek - 1}`;
+            const actualStats = nflActualsMap.get(actualKey);
+            if (actualStats) {
+              actual = calculateFantasyPoints({
+                passing_yards: actualStats.passing_yards,
+                passing_tds: actualStats.passing_tds,
+                passing_ints: actualStats.passing_ints,
+                rushing_yards: actualStats.rushing_yards,
+                rushing_tds: actualStats.rushing_tds,
+                receptions: actualStats.receptions,
+                receiving_yards: actualStats.receiving_yards,
+                receiving_tds: actualStats.receiving_tds,
+              }, scoringSettings);
+            }
+          }
+        }
         
         return {
           player_id: espnId || 'unknown',
           canonical_player_id: canonical?.id || null,
           espn_id: espnId,
+          sleeper_id: canonical?.sleeper_id || null,
+          nfl_id: canonical?.nfl_id || null,
           player_name: canonical?.player_name || player?.fullName,
           position: canonical?.position || player?.defaultPositionId,
           team: canonical?.team || (player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : null),
           slot: entry.lineupSlotId,
+          projected,
+          actual,
         };
       });
+      
+      const roster = await Promise.all(rosterPromises);
 
       // Upsert roster to user_teams
       const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
@@ -416,7 +529,7 @@ serve(async (req) => {
           const { data: inserted } = await supabase
             .from('canonical_players')
             .upsert([newPlayer], { onConflict: 'espn_id' })
-            .select('id, espn_id, player_name, position, team')
+            .select('id, espn_id, sleeper_id, nfl_id, player_name, position, team')
             .single();
           
           if (inserted) {
@@ -425,6 +538,8 @@ serve(async (req) => {
               player_name: inserted.player_name,
               position: inserted.position,
               team: inserted.team,
+              sleeper_id: inserted.sleeper_id,
+              nfl_id: inserted.nfl_id,
             };
             canonicalMap.set(espnId, canonical);
           }
