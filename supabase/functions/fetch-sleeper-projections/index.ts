@@ -271,6 +271,9 @@ serve(async (req) => {
 
         console.log(`Week ${week}: Added opponent data and defensive ranks to projections`);
 
+        // Ensure final team normalization for all records (e.g., LAR -> LA)
+        projections = projections.map(p => ({ ...p, team: normalizeTeam(p.team) }));
+
         // Insert in smaller chunks to avoid CPU timeouts
         const chunkSize = 500;
         for (let i = 0; i < projections.length; i += chunkSize) {
