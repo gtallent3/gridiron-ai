@@ -18,13 +18,34 @@ serve(async (req) => {
     );
 
     const season = 2025;
-    console.log(`Populating player pool for season ${season}...`);
 
-    // Clear existing data
-    await supabase
-      .from('player_pool_v2')
-      .delete()
-      .eq('season', season);
+    // Parse optional controls from request body
+    let reset = false;
+    let maxBatches = 20; // process ~20k rows per invocation by default to avoid timeouts
+    let startSleeperId: string | null = null;
+    let startNflId: string | null = null;
+    try {
+      const body = await req.json();
+      reset = !!body?.reset;
+      if (typeof body?.maxBatches === 'number' && body.maxBatches > 0) {
+        maxBatches = body.maxBatches;
+      }
+      if (typeof body?.startSleeperId === 'string') startSleeperId = body.startSleeperId;
+      if (typeof body?.startNflId === 'string') startNflId = body.startNflId;
+    } catch (_) {
+      // no body provided, use defaults
+    }
+
+    console.log(`Populating player pool for season ${season}...`, { reset, maxBatches, startSleeperId, startNflId });
+
+    // Only clear existing data when explicitly requested (prevents losing progress on resumable runs)
+    if (reset) {
+      await supabase
+        .from('player_pool_v2')
+        .delete()
+        .eq('season', season);
+      console.log('Cleared existing player_pool_v2 rows for season', season);
+    }
 
     // Fetch all canonical players
     const { data: canonicalPlayers, error: canonicalError } = await supabase
@@ -52,8 +73,9 @@ serve(async (req) => {
     let nflInserted = 0;
 
     // Process Sleeper projections in batches (keyset pagination)
-    let lastSleeperId: string | null = null;
+    let lastSleeperId: string | null = startSleeperId;
     const pageSize = 1000;
+    let sleeperBatches = 0;
     
     while (true) {
       let query = supabase
@@ -129,13 +151,20 @@ serve(async (req) => {
       
       console.log(`Processed batch: fetched ${projections.length} projections, matched ${poolRecords.length} records, inserted ${sleeperInserted} total, last ID: ${lastSleeperId}`);
       
+      sleeperBatches++;
+      if (sleeperBatches >= maxBatches) {
+        console.log(`Reached maxBatches (${maxBatches}) for sleeper_projections; nextSleeperId=${lastSleeperId}`);
+        break;
+      }
+      
       if (projections.length < pageSize) break;
     }
 
     console.log(`Inserted ${sleeperInserted} Sleeper projection records`);
 
     // Process NFL actual stats in batches (keyset pagination)
-    let lastNflId: string | null = null;
+    let lastNflId: string | null = startNflId;
+    let nflBatches = 0;
     
     while (true) {
       let nflQuery = supabase
@@ -206,6 +235,12 @@ serve(async (req) => {
       
       console.log(`Processed NFL batch: fetched ${actuals.length} actuals, matched ${poolRecords.length} records, inserted ${nflInserted} total, last ID: ${lastNflId}`);
       
+      nflBatches++;
+      if (nflBatches >= maxBatches) {
+        console.log(`Reached maxBatches (${maxBatches}) for nfl_actual; nextNflId=${lastNflId}`);
+        break;
+      }
+      
       if (actuals.length < pageSize) break;
     }
 
@@ -216,7 +251,13 @@ serve(async (req) => {
         success: true,
         sleeperInserted,
         nflInserted,
-        message: 'Player pool populated successfully'
+        nextSleeperId: lastSleeperId,
+        nextNflId: lastNflId,
+        sleeperBatches,
+        nflBatches,
+        hasMoreSleeper: sleeperInserted > 0 && sleeperBatches >= maxBatches,
+        hasMoreNfl: nflInserted > 0 && nflBatches >= maxBatches,
+        message: 'Player pool populated successfully (resumable)'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
