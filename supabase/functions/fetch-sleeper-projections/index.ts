@@ -34,6 +34,15 @@ serve(async (req) => {
       return Number.isFinite(n) ? Math.round(n) : 0;
     };
 
+    // Normalize team abbreviations to match strength_of_schedule table
+    const normalizeTeam = (team: string | null): string | null => {
+      if (!team) return null;
+      const teamUpper = team.toUpperCase();
+      // LA Rams use "LA" not "LAR"
+      if (teamUpper === 'LAR') return 'LA';
+      return teamUpper;
+    };
+
     // Define background task function
     async function fetchAllProjections() {
       let totalFetched = 0;
@@ -247,8 +256,9 @@ serve(async (req) => {
                   }
                 }
 
-                // Add team SOS rankings
-                const teamSosKey = `${proj.team}:${pos}`;
+                // Add team SOS rankings (normalize team for lookup)
+                const normalizedTeam = normalizeTeam(proj.team);
+                const teamSosKey = `${normalizedTeam}:${pos}`;
                 const teamSos = teamSosMap.get(teamSosKey);
                 if (teamSos) {
                   proj.ros_sos_rank = teamSos.ros;
