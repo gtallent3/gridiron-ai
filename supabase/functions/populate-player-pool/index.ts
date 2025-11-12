@@ -105,6 +105,7 @@ serve(async (req) => {
           opponent_def_rank: proj.opponent_def_rank,
           ros_sos_rank: proj.ros_sos_rank,
           playoff_sos_rank: proj.playoff_sos_rank,
+          bye_week: proj.bye_week || false,
           raw_source_ids: { sleeper_id: proj.player_id }
         });
       }

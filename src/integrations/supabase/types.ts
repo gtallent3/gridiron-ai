@@ -703,6 +703,7 @@ export type Database = {
       player_pool_v2: {
         Row: {
           actual_fp: number | null
+          bye_week: boolean
           canonical_player_id: string
           composite_fp: number | null
           created_at: string
@@ -731,6 +732,7 @@ export type Database = {
         }
         Insert: {
           actual_fp?: number | null
+          bye_week?: boolean
           canonical_player_id: string
           composite_fp?: number | null
           created_at?: string
@@ -759,6 +761,7 @@ export type Database = {
         }
         Update: {
           actual_fp?: number | null
+          bye_week?: boolean
           canonical_player_id?: string
           composite_fp?: number | null
           created_at?: string
