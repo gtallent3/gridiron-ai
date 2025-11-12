@@ -32,6 +32,7 @@ interface PlayerRanking {
 export default function PlayerRankings() {
   const [loading, setLoading] = useState(true);
   const [computing, setComputing] = useState(false);
+  const [computingTradeValues, setComputingTradeValues] = useState(false);
   const [rankings, setRankings] = useState<PlayerRanking[]>([]);
   const [selectedPosition, setSelectedPosition] = useState<string>("ALL");
   const { toast } = useToast();
@@ -83,6 +84,30 @@ export default function PlayerRankings() {
     }
   };
 
+  const computeTradeValues = async () => {
+    setComputingTradeValues(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("compute-trade-value-index");
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: data?.message || "Trade values computed successfully",
+      });
+      
+      await fetchRankings();
+    } catch (error) {
+      console.error("Error computing trade values:", error);
+      toast({
+        title: "Error",
+        description: "Failed to compute trade values",
+        variant: "destructive",
+      });
+    } finally {
+      setComputingTradeValues(false);
+    }
+  };
+
   useEffect(() => {
     fetchRankings();
   }, []);
@@ -102,19 +127,34 @@ export default function PlayerRankings() {
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Player Rankings</h1>
-        <Button onClick={computeRankings} disabled={computing}>
-          {computing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Computing...
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              Compute Rankings
-            </>
-          )}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={computeRankings} disabled={computing} variant="outline">
+            {computing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Computing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Compute Rankings
+              </>
+            )}
+          </Button>
+          <Button onClick={computeTradeValues} disabled={computingTradeValues}>
+            {computingTradeValues ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Computing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Compute Trade Values
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       <Card>
