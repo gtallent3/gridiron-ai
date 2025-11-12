@@ -27,6 +27,7 @@ interface PlayerRanking {
   playoff_sos_rank: number | null;
   season: number;
   current_week: number;
+  trade_value: number | null;
 }
 
 export default function PlayerRankings() {
@@ -197,6 +198,7 @@ export default function PlayerRankings() {
                     <TableHead>Bye</TableHead>
                     <TableHead className="text-right">Proj PPG (ROS)</TableHead>
                     <TableHead className="text-right">Actual PPG</TableHead>
+                    <TableHead className="text-right">Trade Value</TableHead>
                     <TableHead className="text-center">ROS SOS</TableHead>
                     <TableHead className="text-center">Playoff SOS</TableHead>
                   </TableRow>
@@ -216,6 +218,9 @@ export default function PlayerRankings() {
                       </TableCell>
                       <TableCell className="text-right">
                         {player.avg_actual_ppg.toFixed(1)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {player.trade_value ? player.trade_value.toFixed(1) : "-"}
                       </TableCell>
                       <TableCell className="text-center">
                         {player.ros_sos_rank ? (
