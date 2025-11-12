@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Table,
@@ -36,6 +36,8 @@ export default function PlayerRankings() {
   const [computingTradeValues, setComputingTradeValues] = useState(false);
   const [rankings, setRankings] = useState<PlayerRanking[]>([]);
   const [selectedPosition, setSelectedPosition] = useState<string>("ALL");
+  const [sortColumn, setSortColumn] = useState<keyof PlayerRanking | null>("avg_projected_ppg_ros");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const { toast } = useToast();
 
   const fetchRankings = async () => {
@@ -113,9 +115,55 @@ export default function PlayerRankings() {
     fetchRankings();
   }, []);
 
-  const filteredRankings = selectedPosition === "ALL" 
+  const handleSort = (column: keyof PlayerRanking) => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === "desc" ? "asc" : "desc");
+    } else {
+      setSortColumn(column);
+      setSortDirection("desc");
+    }
+  };
+
+  const getSortIcon = (column: keyof PlayerRanking) => {
+    if (sortColumn !== column) {
+      return <ArrowUpDown className="ml-2 h-4 w-4 inline opacity-50" />;
+    }
+    return sortDirection === "desc" ? (
+      <ArrowDown className="ml-2 h-4 w-4 inline" />
+    ) : (
+      <ArrowUp className="ml-2 h-4 w-4 inline" />
+    );
+  };
+
+  let filteredRankings = selectedPosition === "ALL" 
     ? rankings 
     : rankings.filter(r => r.position === selectedPosition);
+
+  // Apply sorting
+  if (sortColumn) {
+    filteredRankings = [...filteredRankings].sort((a, b) => {
+      const aVal = a[sortColumn];
+      const bVal = b[sortColumn];
+      
+      // Handle null values - push them to the end
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+      
+      // Compare values
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return sortDirection === "desc" ? bVal - aVal : aVal - bVal;
+      }
+      
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDirection === "desc" 
+          ? bVal.localeCompare(aVal)
+          : aVal.localeCompare(bVal);
+      }
+      
+      return 0;
+    });
+  }
 
   const getSosColor = (rank: number | null) => {
     if (!rank) return "default";
@@ -192,15 +240,60 @@ export default function PlayerRankings() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Rank</TableHead>
-                    <TableHead>Player</TableHead>
-                    <TableHead>Pos</TableHead>
-                    <TableHead>Team</TableHead>
-                    <TableHead>Bye</TableHead>
-                    <TableHead className="text-right">Proj PPG (ROS)</TableHead>
-                    <TableHead className="text-right">Actual PPG</TableHead>
-                    <TableHead className="text-right">Trade Value</TableHead>
-                    <TableHead className="text-center">ROS SOS</TableHead>
-                    <TableHead className="text-center">Playoff SOS</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleSort("player_name")}
+                    >
+                      Player{getSortIcon("player_name")}
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleSort("position")}
+                    >
+                      Pos{getSortIcon("position")}
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleSort("team")}
+                    >
+                      Team{getSortIcon("team")}
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleSort("bye_week")}
+                    >
+                      Bye{getSortIcon("bye_week")}
+                    </TableHead>
+                    <TableHead 
+                      className="text-right cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleSort("avg_projected_ppg_ros")}
+                    >
+                      Proj PPG (ROS){getSortIcon("avg_projected_ppg_ros")}
+                    </TableHead>
+                    <TableHead 
+                      className="text-right cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleSort("avg_actual_ppg")}
+                    >
+                      Actual PPG{getSortIcon("avg_actual_ppg")}
+                    </TableHead>
+                    <TableHead 
+                      className="text-right cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleSort("trade_value")}
+                    >
+                      Trade Value{getSortIcon("trade_value")}
+                    </TableHead>
+                    <TableHead 
+                      className="text-center cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleSort("ros_sos_rank")}
+                    >
+                      ROS SOS{getSortIcon("ros_sos_rank")}
+                    </TableHead>
+                    <TableHead 
+                      className="text-center cursor-pointer hover:bg-accent/50 transition-colors"
+                      onClick={() => handleSort("playoff_sos_rank")}
+                    >
+                      Playoff SOS{getSortIcon("playoff_sos_rank")}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
