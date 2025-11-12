@@ -1352,6 +1352,33 @@ export type Database = {
           },
         ]
       }
+      team_bye_weeks: {
+        Row: {
+          bye_week: number
+          created_at: string | null
+          id: string
+          season: number
+          team: string
+          updated_at: string | null
+        }
+        Insert: {
+          bye_week: number
+          created_at?: string | null
+          id?: string
+          season?: number
+          team: string
+          updated_at?: string | null
+        }
+        Update: {
+          bye_week?: number
+          created_at?: string | null
+          id?: string
+          season?: number
+          team?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       team_positional_strengths: {
         Row: {
           created_at: string
