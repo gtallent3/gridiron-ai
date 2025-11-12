@@ -294,8 +294,8 @@ serve(async (req) => {
       const rosSosRank = projWithSos?.ros_sos_rank ?? null;
       const playoffSosRank = projWithSos?.playoff_sos_rank ?? null;
 
-      // Get bye week from player_pool_v2 data
-      const byeWeek = byeWeekMap.get(playerInfo.player_id) ?? null;
+      // Get bye week from player_pool_v2 data using the playerKey (which is canonical_player_id when available)
+      const byeWeek = byeWeekMap.get(playerKey) ?? null;
 
       rankings.push({
         player_id: playerInfo.player_id,
