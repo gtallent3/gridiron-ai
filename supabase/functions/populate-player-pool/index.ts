@@ -55,18 +55,29 @@ serve(async (req) => {
       console.log('Cleared existing player_pool_v2 rows for season', season);
     }
 
-    // Fetch all canonical players
-    const { data: canonicalPlayers, error: canonicalError } = await supabase
-      .from('canonical_players')
-      .select('id, sleeper_id, nfl_id, player_name, position');
+    // Fetch all canonical players with pagination to avoid 1k default limit
+    const canonicalPlayers: Array<{ id: string; sleeper_id: string | null; nfl_id: string | null; player_name: string; position: string }> = [];
+    const cpChunkSize = 1000;
+    let cpFrom = 0;
+    while (true) {
+      const { data: batch, error: canonicalError } = await supabase
+        .from('canonical_players')
+        .select('id, sleeper_id, nfl_id, player_name, position')
+        .range(cpFrom, cpFrom + cpChunkSize - 1);
 
-    if (canonicalError) throw canonicalError;
+      if (canonicalError) throw canonicalError;
+      if (!batch || batch.length === 0) break;
+
+      canonicalPlayers.push(...batch);
+      cpFrom += batch.length;
+      if (batch.length < cpChunkSize) break; // last page reached
+    }
 
     // Build lookup maps with player names
     const sleeperIdMap = new Map<string, { id: string, player_name: string }>();
     const nflIdMap = new Map<string, { id: string, player_name: string }>();
     
-    for (const player of canonicalPlayers || []) {
+    for (const player of canonicalPlayers) {
       if (player.sleeper_id) {
         sleeperIdMap.set(player.sleeper_id, { id: player.id, player_name: player.player_name });
       }
@@ -75,7 +86,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Loaded ${canonicalPlayers?.length || 0} canonical players`);
+    console.log(`Loaded ${canonicalPlayers.length} canonical players`);
 
     let sleeperInserted = 0;
     let nflInserted = 0;
