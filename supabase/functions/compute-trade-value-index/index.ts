@@ -89,8 +89,8 @@ serve(async (req) => {
       if (position === 'QB') {
         wProj = 0.5;
         wActual = 0.5;
-        sosMult = 0.15;
-        sosPlayoffMult = 0.25;
+        sosMult = 0.12;  // Reduced by 20%
+        sosPlayoffMult = 0.20;  // Reduced by 20%
         scarcity = 1.15;
       } else if (position === 'RB') {
         wProj = 0.3;
@@ -101,14 +101,14 @@ serve(async (req) => {
       } else if (position === 'WR') {
         wProj = 0.4;
         wActual = 0.6;
-        sosMult = 0.12;
-        sosPlayoffMult = 0.20;
+        sosMult = 0.078;  // Reduced by 35%
+        sosPlayoffMult = 0.13;  // Reduced by 35%
         scarcity = 1.05;
       } else if (position === 'TE') {
         wProj = 0.6;
         wActual = 0.4;
-        sosMult = 0.05;
-        sosPlayoffMult = 0.08;
+        sosMult = 0.0325;  // Reduced by 35%
+        sosPlayoffMult = 0.052;  // Reduced by 35%
         scarcity = 1.20;
       } else {
         continue; // Skip unknown positions
