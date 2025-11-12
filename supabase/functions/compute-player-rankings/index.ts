@@ -159,19 +159,20 @@ serve(async (req) => {
 
     console.log(`Fetched ${actuals.length} actuals and ${projections.length} projections from player_pool_v2`);
 
-    // Fetch bye weeks from team_schedules
+    // Fetch bye weeks from player_pool_v2 (where bye_week=true)
     const { data: byeData, error: byeError } = await supabase
-      .from('team_schedules')
-      .select('team, week, opponent')
-      .eq('season', season);
+      .from('player_pool_v2')
+      .select('canonical_player_id, week')
+      .eq('season', season)
+      .eq('bye_week', true);
 
     if (byeError) throw byeError;
 
-    // Build bye week map (week where opponent is 'BYE' or null)
+    // Build bye week map (canonical_player_id -> bye week number)
     const byeWeekMap = new Map<string, number>();
-    for (const sched of byeData || []) {
-      if (!sched.opponent || sched.opponent === 'BYE') {
-        byeWeekMap.set(sched.team, sched.week);
+    for (const bye of byeData || []) {
+      if (bye.canonical_player_id) {
+        byeWeekMap.set(bye.canonical_player_id, bye.week);
       }
     }
 
@@ -293,8 +294,8 @@ serve(async (req) => {
       const rosSosRank = projWithSos?.ros_sos_rank ?? null;
       const playoffSosRank = projWithSos?.playoff_sos_rank ?? null;
 
-      // Get bye week
-      const byeWeek = byeWeekMap.get(playerInfo.team) ?? null;
+      // Get bye week from player_pool_v2 data
+      const byeWeek = byeWeekMap.get(playerInfo.player_id) ?? null;
 
       rankings.push({
         player_id: playerInfo.player_id,
