@@ -264,8 +264,35 @@ function evaluateTradeByStartingLineup(
   const teamAGivesValue = teamAGivesPlayers.reduce((sum, p) => sum + (p?.trade_value || 0), 0);
   const teamBGivesValue = teamBGivesPlayers.reduce((sum, p) => sum + (p?.trade_value || 0), 0);
 
-  // Calculate value difference based on trade values
-  const netValueDiff = teamBGivesValue - teamAGivesValue; // Positive means Team A gains value
+  // Best Player Bonus - find the highest-valued player in the trade
+  const allTradedPlayers = [...teamAGivesPlayers, ...teamBGivesPlayers].filter(p => p !== null);
+  let bestPlayer = allTradedPlayers[0];
+  let bestPlayerBonus = 0;
+  let bestPlayerReceivedBy = teamAId;
+  
+  if (bestPlayer && allTradedPlayers.length > 0) {
+    // Find the player with highest trade value
+    for (const player of allTradedPlayers) {
+      if (player.trade_value > bestPlayer.trade_value) {
+        bestPlayer = player;
+      }
+    }
+    
+    // Determine who receives the best player
+    const bestPlayerReceivedByA = teamBGivesPlayers.some(p => p?.id === bestPlayer.id);
+    bestPlayerReceivedBy = bestPlayerReceivedByA ? teamAId : teamBId;
+    bestPlayerBonus = bestPlayer.trade_value * 0.15; // 15% bonus
+  }
+
+  // Adjust values with best player bonus
+  let adjustedTeamAValue = teamBGivesValue;
+  
+  if (bestPlayer && teamBGivesPlayers.some(p => p?.id === bestPlayer.id)) {
+    adjustedTeamAValue += bestPlayerBonus; // Team A gets bonus for receiving best player
+  }
+
+  // Calculate value difference based on trade values with best player bonus
+  const netValueDiff = adjustedTeamAValue - teamAGivesValue; // Positive means Team A gains value
   const totalTradeValue = teamAGivesValue + teamBGivesValue;
   const percentDifference = totalTradeValue > 0 
     ? (Math.abs(netValueDiff) / totalTradeValue) * 100 
@@ -276,6 +303,8 @@ function evaluateTradeByStartingLineup(
     advantage_team: netValueDiff > 0 ? teamAId : teamBId,
     value_difference: Math.abs(netValueDiff),
     percent_difference: percentDifference,
+    best_player_received_by: bestPlayerReceivedBy,
+    best_player_bonus: bestPlayerBonus,
     explanation,
     is_acceptable: isAcceptable,
     is_fair: isFairTrade,
