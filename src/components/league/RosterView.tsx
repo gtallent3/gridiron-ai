@@ -134,9 +134,6 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         userTeam.roster.forEach((player: any) => {
           const playerId = String(player.player_id ?? player.playerId ?? player.id ?? '');
           const playerName = player.player_name || player.playerName || player.name || 'Unknown Player';
-          const positionName = league.platform === 'espn' 
-            ? (POSITION_MAP[player.position] || 'FLEX')
-            : (player.position || 'FLEX');
           
           let isStarter = false;
           if (league.platform === 'espn') {
@@ -148,6 +145,10 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           
           const canonical = canonicalMap.get(playerId);
           const poolEntry = canonical ? poolMap.get(canonical.id) : null;
+          
+          // Use canonical position first, then fall back to platform-specific logic
+          const positionName = canonical?.position || 
+            (league.platform === 'espn' ? (POSITION_MAP[player.position] || 'FLEX') : (player.position || 'FLEX'));
           
           let projectedPoints = 0;
           let actualPoints = 0;
@@ -454,12 +455,10 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         const playerId = String(playerIdRaw ?? '');
         const playerName = (player.player_name || player.playerName || player.name || 'Unknown Player') as string;
         
-        let positionName = POSITION_MAP[player.position] || 'FLEX';
         let isStarter = STARTER_SLOTS.includes(player.slot);
         let isBench = player.slot === BENCH_SLOT;
         
         if (league.platform === 'sleeper') {
-          positionName = player.position || 'FLEX';
           isStarter = player.starter !== false;
           isBench = player.starter === false;
         }
@@ -471,6 +470,10 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         const actualStats = (actualById.get(playerId) as any) || (playerName ? actualByName.get(playerName.toLowerCase().trim()) as any : undefined);
         const projStats = (projById.get(playerId) as any) || (playerName ? projByName.get(playerName.toLowerCase().trim()) as any : undefined);
         const chosenStats = isHistorical ? (actualStats || projStats) : (projStats || actualStats);
+        
+        // Get position from stats data first, then fall back to roster data
+        let positionName = chosenStats?.position || 
+          (league.platform === 'sleeper' ? (player.position || 'FLEX') : (POSITION_MAP[player.position] || player.position || 'FLEX'));
         
         const projectedPoints = !isHistorical
           ? (positionName === 'K' || positionName === 'DST' || positionName === 'DEF'
