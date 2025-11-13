@@ -35,13 +35,25 @@ serve(async (req) => {
     
     console.log('Find trades:', { mode, targetPlayerId, shopPlayerId });
 
-    // Get player values from cache
-    const { data: playerValues } = await supabase
-      .from('player_value_cache')
+    // Get player values from player_rankings (using canonical_player_id)
+    const { data: playerRankings } = await supabase
+      .from('player_rankings')
       .select('*')
-      .eq('league_id', leagueId);
+      .eq('season', 2025);
 
-    const valueMap = new Map((playerValues || []).map(v => [v.player_id, v]));
+    // Build a map by canonical_player_id
+    const rankingsMap = new Map((playerRankings || []).map(r => [r.player_id, r]));
+    
+    // Helper to get canonical_player_id from roster player
+    const getCanonicalId = (player: any): string => {
+      return player.canonical_player_id || player.player_id || player.id || '';
+    };
+
+    const getPlayerValue = (player: any) => {
+      const canonicalId = getCanonicalId(player);
+      const ranking = rankingsMap.get(canonicalId);
+      return ranking?.trade_value || 0;
+    };
 
     // Get positional strengths for my team
     const { data: myStrengths } = await supabase
@@ -59,13 +71,6 @@ serve(async (req) => {
       .map(s => s.position);
 
     console.log('My weak positions:', weakPositions);
-
-    const getPlayerValue = (player: any) => {
-      const playerId = player.id || player.player_id || player.player_id;
-      const val = valueMap.get(playerId);
-      if (!val) return 0;
-      return Number(val.value_score) || 0;
-    };
 
     const normPos = (pos: any): string => {
       if (typeof pos === 'number') {
