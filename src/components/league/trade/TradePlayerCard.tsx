@@ -87,7 +87,7 @@ export function TradePlayerCard({ player, isSelected, onToggle }: TradePlayerCar
 
         <div className="pt-2 border-t border-border/50 space-y-2">
           <div>
-            <p className="text-xs text-muted-foreground">Rest-of-Season Projection</p>
+            <p className="text-xs text-muted-foreground">Projected PPG (ROS)</p>
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -103,8 +103,8 @@ export function TradePlayerCard({ player, isSelected, onToggle }: TradePlayerCar
                 </TooltipTrigger>
                 <TooltipContent>
                   <div className="space-y-1">
-                    <p>ROS Total: {(player.ros_projection ?? 0).toFixed(1)} pts</p>
-                    <p>PPG: {(player.ppg_projection ?? 0).toFixed(1)} pts/game</p>
+                    <p>Projected PPG (ROS): {(player.ros_projection ?? 0).toFixed(1)}</p>
+                    <p>Actual PPG: {(player.ppg_projection ?? 0).toFixed(1)} pts/game</p>
                     <p>This Week: {player.projected.toFixed(1)} pts</p>
                     {player.trade_value && player.trade_value > 0 && (
                       <p className="text-primary font-semibold">Trade Value: {player.trade_value.toFixed(1)}</p>
