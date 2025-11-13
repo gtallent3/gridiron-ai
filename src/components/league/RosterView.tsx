@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { PlayerStatsDialog } from "./PlayerStatsDialog";
 import { getCurrentNFLWeek } from "@/lib/nflWeekUtils";
 import { isTeamOnBye } from "@/lib/byeWeekSchedule";
+import { calculateFantasyPoints } from "@/lib/fantasyPointsCalculator";
 
 type League = {
   id: string;
@@ -152,14 +153,32 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           let actualPoints = 0;
           
           if (poolEntry) {
-            if (isHistorical && poolEntry.actual_fp) {
-              actualPoints = poolEntry.actual_fp;
-            } else if (!isHistorical && poolEntry.projected_fp) {
-              projectedPoints = poolEntry.projected_fp;
-            } else if (poolEntry.composite_fp) {
-              // Fallback to composite
-              if (isHistorical) actualPoints = poolEntry.composite_fp;
-              else projectedPoints = poolEntry.composite_fp;
+            // Compute points from raw stats using league scoring to match PlayerStatsDialog
+            const stats = {
+              passing_yards: Number(poolEntry.passing_yards) || 0,
+              passing_tds: Number(poolEntry.passing_tds) || 0,
+              interceptions: Number(poolEntry.passing_ints) || 0,
+              rushing_yards: Number(poolEntry.rushing_yards) || 0,
+              rushing_tds: Number(poolEntry.rushing_tds) || 0,
+              receptions: Number(poolEntry.receptions) || 0,
+              receiving_yards: Number(poolEntry.receiving_yards) || 0,
+              receiving_tds: Number(poolEntry.receiving_tds) || 0,
+            } as Record<string, number>;
+
+            const statSum: number = (Object.values(stats) as number[]).reduce(
+              (s, v) => s + (Number(v) || 0),
+              0
+            );
+            const { total } = calculateFantasyPoints(stats, scoringSettings);
+
+            if (isHistorical) {
+              actualPoints = statSum > 0
+                ? total
+                : (Number(poolEntry.actual_fp) || Number(poolEntry.composite_fp) || 0);
+            } else {
+              projectedPoints = statSum > 0
+                ? total
+                : (Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0);
             }
           }
           
