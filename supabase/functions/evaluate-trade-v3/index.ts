@@ -233,6 +233,32 @@ function evaluateTradeByStartingLineup(
     explanation += positionChanges.slice(0, 2).join(' ');
   }
 
+  // Get player details for display
+  const teamAGivesPlayers = teamAGives.map(id => {
+    const player = teamAPlayers.find(p => p.player_id === id);
+    return player ? {
+      id: player.player_id,
+      name: player.player_name,
+      position: player.position,
+      trade_value: player.value_score || 0,
+      ppg_projection: player.ppg_projection || 0,
+    } : null;
+  }).filter(Boolean);
+
+  const teamBGivesPlayers = teamBGives.map(id => {
+    const player = teamBPlayers.find(p => p.player_id === id);
+    return player ? {
+      id: player.player_id,
+      name: player.player_name,
+      position: player.position,
+      trade_value: player.value_score || 0,
+      ppg_projection: player.ppg_projection || 0,
+    } : null;
+  }).filter(Boolean);
+
+  const teamAGivesValue = teamAGivesPlayers.reduce((sum, p) => sum + (p?.trade_value || 0), 0);
+  const teamBGivesValue = teamBGivesPlayers.reduce((sum, p) => sum + (p?.trade_value || 0), 0);
+
   const result = {
     trade_grade: grade,
     advantage_team: teamAPpgChange > teamBPpgChange ? teamAId : teamBId,
@@ -242,12 +268,22 @@ function evaluateTradeByStartingLineup(
     is_acceptable: isAcceptable,
     is_fair: isFairTrade,
     audit: {
+      teamA_out: teamAGivesValue,
+      teamA_in: teamBGivesValue,
+      teamA_net: teamBGivesValue - teamAGivesValue,
+      teamB_out: teamBGivesValue,
+      teamB_in: teamAGivesValue,
+      teamB_net: teamAGivesValue - teamBGivesValue,
       teamA_starting_ppg_before: teamAStartingBefore.totalPpg,
       teamA_starting_ppg_after: teamAStartingAfter.totalPpg,
       teamA_ppg_change: teamAPpgChange,
       teamB_starting_ppg_before: teamBStartingBefore.totalPpg,
       teamB_starting_ppg_after: teamBStartingAfter.totalPpg,
       teamB_ppg_change: teamBPpgChange,
+    },
+    players_traded: {
+      teamA_gives: teamAGivesPlayers,
+      teamB_gives: teamBGivesPlayers,
     },
     starting_lineup_breakdown: {
       teamA_before: teamAStartingBefore.breakdown,
