@@ -168,7 +168,7 @@ Format: [{"benchPlayerName":"...","starterPlayerName":"...","reasoning":"...","p
       aiRecommendations = [];
     }
 
-    // Map AI recommendations to actual player objects
+    // Map AI recommendations to actual player objects and enforce 2-point rule
     const recommendations: Recommendation[] = aiRecommendations
       .map((rec: any) => {
         const benchPlayer = bench.find((p: Player) => 
@@ -186,6 +186,13 @@ Format: [{"benchPlayerName":"...","starterPlayerName":"...","reasoning":"...","p
         // Validate that positions match
         if (benchPlayer.position !== starterPlayer.position) {
           console.warn('Position mismatch:', benchPlayer.position, starterPlayer.position);
+          return null;
+        }
+
+        // CRITICAL: Enforce 2-point rule - bench player must not be projected 2+ points lower
+        const projectionDifference = benchPlayer.projected - starterPlayer.projected;
+        if (projectionDifference < -2) {
+          console.warn(`Filtered out bad recommendation: ${benchPlayer.name} (${benchPlayer.projected}) would replace ${starterPlayer.name} (${starterPlayer.projected}), losing ${Math.abs(projectionDifference).toFixed(1)} points`);
           return null;
         }
 
