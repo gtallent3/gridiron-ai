@@ -6,6 +6,7 @@ import { Sparkles, ArrowLeftRight, TrendingUp, Loader2, Coins } from "lucide-rea
 import { useToast } from "@/hooks/use-toast";
 import { useTokens } from "@/hooks/useTokens";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 type Player = {
   id: string;
@@ -51,33 +52,44 @@ export function StartSitRecommendations({ starters, bench, onSubstitution }: Sta
     setIsAnalyzing(true);
     
     try {
-      // Simulate AI analysis
-      await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Mock recommendations - will be replaced with real AI
-    const mockRecommendations: Recommendation[] = [
-      {
-        benchPlayer: bench.find(p => p.name === "Jaylen Waddle")!,
-        starterPlayer: starters.find(p => p.position === "WR" && p.name !== "Tyreek Hill" && p.name !== "CeeDee Lamb")!,
-        reasoning: "Waddle has a more favorable matchup against a weak secondary. Expected target share of 28% with Tyreek Hill drawing coverage.",
-        projectedGain: 2.2,
-        winProbabilityChange: 3.2,
-      },
-    ].filter(r => r.benchPlayer && r.starterPlayer);
+      const now = new Date();
+      const season = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+      const week = Math.max(1, Math.min(18, Math.ceil((now.getTime() - new Date(season, 8, 5).getTime()) / (7 * 24 * 60 * 60 * 1000))));
+
+      // Call AI-powered lineup analysis
+      const { data, error } = await supabase.functions.invoke('analyze-lineup', {
+        body: {
+          starters,
+          bench,
+          week,
+          season,
+        }
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      if (!data?.recommendations) {
+        throw new Error('No recommendations returned');
+      }
 
       // Deduct token after successful analysis
-      await deductToken("start_sit", "Lineup optimization analysis");
+      await deductToken("start_sit", "AI lineup optimization analysis");
 
-      setRecommendations(mockRecommendations);
+      setRecommendations(data.recommendations);
       
       toast({
         title: "Analysis Complete",
-        description: `Found ${mockRecommendations.length} optimization${mockRecommendations.length !== 1 ? 's' : ''}`,
+        description: data.recommendations.length > 0 
+          ? `Found ${data.recommendations.length} optimization${data.recommendations.length !== 1 ? 's' : ''}`
+          : "Your lineup looks optimal!",
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Analysis error:', error);
       toast({
-        title: "Error",
-        description: "Failed to analyze lineup",
+        title: "Analysis Failed",
+        description: error.message || "Failed to analyze lineup. Please try again.",
         variant: "destructive",
       });
     } finally {
