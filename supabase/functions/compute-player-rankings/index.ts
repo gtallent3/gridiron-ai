@@ -57,6 +57,7 @@ serve(async (req) => {
 
     // Fetch actuals from player_pool_v2 (actual_fp)
     // Use lte to include the current week if it has actual data
+    // Explicitly exclude kickers (K) from rankings
     const { data: actualsData, error: actualsError } = await supabase
       .from('player_pool_v2')
       .select('canonical_player_id, player_name, position, team, week, actual_fp')
@@ -71,6 +72,7 @@ serve(async (req) => {
     if (actualsError) throw actualsError;
 
     // Fetch projections from player_pool_v2 (projected_fp)
+    // Explicitly exclude kickers (K) from rankings
     const { data: projectionsData, error: projectionsError } = await supabase
       .from('player_pool_v2')
       .select('canonical_player_id, player_name, position, team, week, projected_fp, ros_sos_rank, playoff_sos_rank')
