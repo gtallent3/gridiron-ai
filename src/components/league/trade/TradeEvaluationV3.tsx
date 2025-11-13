@@ -14,9 +14,9 @@ interface TradeResultV3 {
   advantage_team: string;
   value_difference: number;
   percent_difference: number;
-  best_player_received_by: string;
-  best_player_bonus: number;
-  positional_fit_notes: string[];
+  best_player_received_by?: string;
+  best_player_bonus?: number;
+  positional_fit_notes?: string[];
   rank_changes?: Array<{
     team: string;
     position: string;
@@ -35,6 +35,22 @@ interface TradeResultV3 {
     teamB_out: number;
     teamB_in: number;
     teamB_net: number;
+  };
+  players_traded?: {
+    teamA_gives: Array<{
+      id: string;
+      name: string;
+      position: string;
+      trade_value: number;
+      ppg_projection: number;
+    }>;
+    teamB_gives: Array<{
+      id: string;
+      name: string;
+      position: string;
+      trade_value: number;
+      ppg_projection: number;
+    }>;
   };
   ros_points_delta: number;
   next_3_weeks_delta: number;
@@ -233,77 +249,91 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
         </CardContent>
       </Card>
 
-      {/* Detailed Breakdown */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Detailed Value Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground">Your Side</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Giving Away:</span>
-                  <span className="font-mono">{(result.audit.teamA_out || 0).toFixed(1)}</span>
+      {/* Player Trade Details */}
+      {result.players_traded && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Players Traded</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid sm:grid-cols-2 gap-6">
+              {/* Your Team Gives */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-muted-foreground">You Give:</p>
+                <div className="space-y-2">
+                  {result.players_traded.teamA_gives.map((player) => (
+                    <div key={player.id} className="flex justify-between items-center p-2 rounded-lg bg-muted/30">
+                      <div>
+                        <p className="font-medium text-sm">{player.name}</p>
+                        <p className="text-xs text-muted-foreground">{player.position} • {player.ppg_projection.toFixed(1)} PPG</p>
+                      </div>
+                      <Badge variant="outline" className="font-mono">
+                        {player.trade_value.toFixed(1)}
+                      </Badge>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center pt-2 border-t font-medium">
+                    <span>Total Value:</span>
+                    <span className="text-red-500">{result.audit.teamA_out.toFixed(1)}</span>
+                  </div>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Receiving:</span>
-                  <span className="font-mono">{(result.audit.teamA_in || 0).toFixed(1)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-bold pt-2 border-t">
-                  <span>Net Change:</span>
-                  <span className={`font-mono ${result.audit.teamA_net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {result.audit.teamA_net >= 0 ? '+' : ''}
-                    {(result.audit.teamA_net || 0).toFixed(1)}
-                  </span>
+              </div>
+
+              {/* Your Team Receives */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-muted-foreground">You Receive:</p>
+                <div className="space-y-2">
+                  {result.players_traded.teamB_gives.map((player) => (
+                    <div key={player.id} className="flex justify-between items-center p-2 rounded-lg bg-muted/30">
+                      <div>
+                        <p className="font-medium text-sm">{player.name}</p>
+                        <p className="text-xs text-muted-foreground">{player.position} • {player.ppg_projection.toFixed(1)} PPG</p>
+                      </div>
+                      <Badge variant="outline" className="font-mono">
+                        {player.trade_value.toFixed(1)}
+                      </Badge>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center pt-2 border-t font-medium">
+                    <span>Total Value:</span>
+                    <span className="text-green-500">{result.audit.teamA_in.toFixed(1)}</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-3">
-              <h4 className="font-medium text-sm text-muted-foreground">Opponent's Side</h4>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>Giving Away:</span>
-                  <span className="font-mono">{(result.audit.teamB_out || 0).toFixed(1)}</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span>Receiving:</span>
-                  <span className="font-mono">{(result.audit.teamB_in || 0).toFixed(1)}</span>
-                </div>
-                <div className="flex justify-between text-sm font-bold pt-2 border-t">
-                  <span>Net Change:</span>
-                  <span className={`font-mono ${result.audit.teamB_net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {result.audit.teamB_net >= 0 ? '+' : ''}
-                    {(result.audit.teamB_net || 0).toFixed(1)}
-                  </span>
-                </div>
+            {/* Net Value Change */}
+            <div className="mt-4 p-4 rounded-lg bg-primary/5 border border-primary/20">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold">Your Net Value Change:</span>
+                <span className={`text-xl font-bold ${result.audit.teamA_net >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {result.audit.teamA_net >= 0 ? '+' : ''}{result.audit.teamA_net.toFixed(1)}
+                </span>
               </div>
             </div>
-          </div>
 
-          {/* ROS Projections */}
-          <div className="mt-4 pt-4 border-t">
-            <div className="grid sm:grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Rest of Season Impact</p>
-                <p className="text-lg font-bold">
-                  {result.ros_points_delta >= 0 ? '+' : ''}
-                  {(result.ros_points_delta || 0).toFixed(1)} pts
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground mb-1">Next 3 Weeks Impact</p>
-                <p className="text-lg font-bold">
-                  {result.next_3_weeks_delta >= 0 ? '+' : ''}
-                  {(result.next_3_weeks_delta || 0).toFixed(1)} pts
-                </p>
+            {/* ROS Projections */}
+            <div className="mt-4 pt-4 border-t">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Rest of Season Impact</p>
+                  <p className="text-lg font-bold">
+                    {result.ros_points_delta >= 0 ? '+' : ''}
+                    {(result.ros_points_delta || 0).toFixed(1)} pts
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Next 3 Weeks Impact</p>
+                  <p className="text-lg font-bold">
+                    {result.next_3_weeks_delta >= 0 ? '+' : ''}
+                    {(result.next_3_weeks_delta || 0).toFixed(1)} pts
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
