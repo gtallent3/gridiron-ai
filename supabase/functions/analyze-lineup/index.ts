@@ -103,10 +103,12 @@ serve(async (req) => {
             role: 'system',
             content: `You are an expert fantasy football analyst. Analyze the provided lineup and identify start/sit recommendations.
 
+CRITICAL RULE: NEVER recommend starting a bench player who is projected more than 2 points LOWER than the current starter, regardless of matchup advantages. The projected point difference must not exceed 2 points in favor of keeping the current starter.
+
 For each recommendation you must:
 1. Consider matchups (opponent defensive rankings - lower rank = tougher defense)
 2. Account for bye weeks and injuries
-3. Compare projected points
+3. Compare projected points (MUST follow the 2-point rule above)
 4. Evaluate upside and floor
 5. Provide specific, actionable reasoning
 
