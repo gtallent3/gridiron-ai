@@ -103,10 +103,10 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly, showActual 
         <div>
           <h4 className="font-semibold text-sm leading-tight break-words line-clamp-2">{player.name}</h4>
           <p className="text-xs text-muted-foreground truncate">{player.team}</p>
-          {player.opponent && player.position !== 'K' && player.position !== 'DEF' && (
+          {player.opponent && (
             <p className="text-xs text-muted-foreground">
               vs {player.opponent}
-              {player.opponent_def_rank && (
+              {player.opponent_def_rank && player.position !== 'K' && player.position !== 'DEF' && (
                 <span className="ml-1 font-medium">
                   (#{player.opponent_def_rank})
                 </span>
