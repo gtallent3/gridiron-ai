@@ -142,7 +142,8 @@ function evaluateTradeByStartingLineup(
   // Convert rosters to player arrays with values from player_rankings
   const getPlayerData = (roster: any[]): Player[] => {
     return roster.map(p => {
-      const playerId = String(p.player_id || p.playerId || p.id || '');
+      // Use canonical_player_id first (matches player_rankings), then fall back to platform IDs
+      const playerId = String(p.canonical_player_id || p.player_id || p.playerId || p.id || '');
       const ranking = rankingsMap.get(playerId);
       
       // Use avg_projected_ppg_ros from player_rankings
