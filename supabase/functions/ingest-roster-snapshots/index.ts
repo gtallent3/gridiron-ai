@@ -12,10 +12,21 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) throw new Error('Authentication required');
+
+    const token = authHeader.replace('Bearer ', '');
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { data: { user }, error: authError } = await supabaseUser.auth.getUser(token);
+    if (authError || !user) throw new Error('Authentication required');
 
     const { leagueId } = await req.json();
 
@@ -28,28 +39,35 @@ serve(async (req) => {
       .from('connected_leagues')
       .select('*')
       .eq('id', leagueId)
+      .eq('user_id', user.id)
       .single();
 
     if (leagueError) throw leagueError;
+    if (league.platform !== 'espn') throw new Error('This function only supports ESPN leagues');
 
-    // Get ESPN credentials
-    const { data: credentials } = await supabase
-      .from('espn_credentials')
-      .select('*')
-      .eq('user_id', league.user_id)
-      .eq('league_id', league.league_id)
-      .single();
+    // Get ESPN credentials from Vault
+    const { data: credentials, error: credError } = await supabaseUser.rpc('get_league_credentials', {
+      p_user_id: user.id,
+      p_platform: 'espn',
+      p_league_id: league.league_id
+    });
 
-    if (!credentials) {
-      throw new Error('ESPN credentials not found');
+    if (credError || !credentials) {
+      throw new Error('Unable to retrieve ESPN credentials');
     }
 
+    const { espn_s2, swid } = credentials;
+
     // Fetch current rosters from ESPN
-    const espnUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2024/segments/0/leagues/${league.league_id}?view=mRoster`;
+    const now = new Date();
+    const currentSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+    const espnUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?view=mRoster`;
+    
+    const swidCookie = swid?.startsWith('{') ? swid : `{${swid}}`;
     
     const espnResponse = await fetch(espnUrl, {
       headers: {
-        'Cookie': `swid=${credentials.swid_encrypted}; espn_s2=${credentials.espn_s2_encrypted}`,
+        'Cookie': `espn_s2=${espn_s2}; SWID=${swidCookie}`,
       },
     });
 
