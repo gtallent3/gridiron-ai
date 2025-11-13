@@ -539,8 +539,8 @@ serve(async (req) => {
         });
     }
 
-    // Fetch projections for remaining weeks
-    console.log(`Fetching projections for weeks ${currentWeek} to 18`);
+    // Fetch projections for current week only to avoid ESPN 400s on future weeks
+    console.log(`Fetching projections for week ${currentWeek}`);
     try {
       const projectionResponse = await fetch(`${supabaseUrl}/functions/v1/fetch-espn-projections`, {
         method: 'POST',
@@ -551,7 +551,7 @@ serve(async (req) => {
         body: JSON.stringify({
           leagueId: updatedLeague.id,
           startWeek: currentWeek,
-          endWeek: 18,
+          endWeek: currentWeek,
         }),
       });
 
