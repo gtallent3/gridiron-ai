@@ -48,23 +48,23 @@ serve(async (req) => {
       });
     }
 
-    // Fetch player values from cache
-    const { data: playerValues, error: valuesError } = await supabase
-      .from('player_value_cache')
+    // Fetch player rankings (all stats and values)
+    const { data: playerRankings, error: rankingsError } = await supabase
+      .from('player_rankings')
       .select('*')
-      .eq('league_id', leagueId);
+      .eq('season', 2025);
 
-    if (valuesError) {
-      console.error('Error fetching player values:', valuesError);
+    if (rankingsError) {
+      console.error('Error fetching player rankings:', rankingsError);
       return new Response(
         JSON.stringify({ error: 'Unable to fetch player data' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const valueMap = new Map<string, any>();
-    for (const pv of playerValues || []) {
-      valueMap.set(pv.player_id, pv);
+    const rankingsMap = new Map<string, any>();
+    for (const pr of playerRankings || []) {
+      rankingsMap.set(pr.player_id, pr);
     }
 
     // Fetch team rosters
@@ -101,7 +101,7 @@ serve(async (req) => {
       teamBRoster,
       teamAGives,
       teamBGives,
-      valueMap,
+      rankingsMap,
       teamAId,
       teamBId
     );
@@ -135,26 +135,26 @@ function evaluateTradeByStartingLineup(
   teamBRoster: any[],
   teamAGives: string[],
   teamBGives: string[],
-  valueMap: Map<string, any>,
+  rankingsMap: Map<string, any>,
   teamAId: string,
   teamBId: string
 ) {
-  // Convert rosters to player arrays with values
+  // Convert rosters to player arrays with values from player_rankings
   const getPlayerData = (roster: any[]): Player[] => {
     return roster.map(p => {
       const playerId = String(p.player_id || p.playerId || p.id || '');
-      const value = valueMap.get(playerId);
+      const ranking = rankingsMap.get(playerId);
       
-      // Calculate PPG from ROS projection (assuming ~10 weeks remaining on average)
-      const rosProj = value?.projected_fp_ros || 0;
-      const ppg = p.ppg_projection || (rosProj > 0 ? rosProj / 10 : 0);
+      // Use avg_projected_ppg_ros from player_rankings
+      const ppg = ranking?.avg_projected_ppg_ros || 0;
+      const tradeValue = ranking?.trade_value || 0;
       
       return {
         player_id: playerId,
-        player_name: p.player_name || p.playerName || p.name || 'Unknown',
-        position: String(p.position || '').toUpperCase(),
+        player_name: p.player_name || p.playerName || p.name || ranking?.player_name || 'Unknown',
+        position: String(p.position || ranking?.position || '').toUpperCase(),
         ppg_projection: ppg,
-        value_score: value?.value_score || 0,
+        value_score: tradeValue,
       };
     }).filter(p => p.player_id);
   };

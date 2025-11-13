@@ -30,19 +30,19 @@ export async function enrichRosterWithValuations(
   const rosterArray = Array.isArray(roster) ? roster : [];
   if (rosterArray.length === 0) return rosterArray as RosterPlayer[];
 
-  // Extract player IDs
+  // Extract player IDs - can be canonical_player_id or platform-specific IDs
   const playerIds = rosterArray
-    .map(p => p.player_id || p.playerId || p.id)
+    .map(p => p.canonical_player_id || p.player_id || p.playerId || p.id)
     .filter(Boolean);
 
   if (playerIds.length === 0) {
     return enrichWithHardcodedByeWeeks(rosterArray);
   }
 
-  // Fetch ROS projections from player_rankings
+  // Fetch ROS projections and all stats from player_rankings
   const { data: rankings } = await supabase
     .from('player_rankings')
-    .select('player_id, avg_projected_ppg_ros, avg_actual_ppg')
+    .select('*')
     .eq('season', opts?.season || 2025)
     .in('player_id', playerIds);
 
@@ -50,9 +50,9 @@ export async function enrichRosterWithValuations(
     (rankings || []).map(r => [r.player_id, r])
   );
 
-  // Enrich with bye weeks and ROS data
+  // Enrich with bye weeks and ROS data from player_rankings
   return roster.map(player => {
-    const playerId = player.player_id || player.playerId || player.id;
+    const playerId = player.canonical_player_id || player.player_id || player.playerId || player.id;
     const team = player.team;
     const isByeWeek = team ? isTeamOnBye(team, 1) : false;
     const rankingData = playerId ? rankingsMap.get(playerId) : null;
@@ -64,6 +64,9 @@ export async function enrichRosterWithValuations(
       injury_duration_weeks: player.injury_duration_weeks || 0,
       ros_projection: rankingData?.avg_projected_ppg_ros || 0,
       ppg_projection: rankingData?.avg_actual_ppg || 0,
+      trade_value: rankingData?.trade_value || 0,
+      // Include all player_rankings data for comprehensive stats
+      player_rankings: rankingData,
     };
   });
 }
