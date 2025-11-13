@@ -37,7 +37,7 @@ export function StartSitRecommendations({ starters, bench, onSubstitution }: Sta
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
 
-  const analyzeLineup = async () => {
+    const analyzeLineup = async () => {
     // Check token balance
     if (!hasUnlimited && !checkBalance(1)) {
       toast({
@@ -52,6 +52,13 @@ export function StartSitRecommendations({ starters, bench, onSubstitution }: Sta
     setIsAnalyzing(true);
     
     try {
+      // Deduct token BEFORE analysis for immediate UI update
+      const deductResult = await deductToken("start_sit", "AI lineup optimization analysis");
+      if (!deductResult.success) {
+        setIsAnalyzing(false);
+        return;
+      }
+
       const now = new Date();
       const season = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
       const week = Math.max(1, Math.min(18, Math.ceil((now.getTime() - new Date(season, 8, 5).getTime()) / (7 * 24 * 60 * 60 * 1000))));
@@ -73,9 +80,6 @@ export function StartSitRecommendations({ starters, bench, onSubstitution }: Sta
       if (!data?.recommendations) {
         throw new Error('No recommendations returned');
       }
-
-      // Deduct token after successful analysis
-      await deductToken("start_sit", "AI lineup optimization analysis");
 
       setRecommendations(data.recommendations);
       
