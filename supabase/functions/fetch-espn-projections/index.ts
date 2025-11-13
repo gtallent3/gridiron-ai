@@ -102,27 +102,51 @@ serve(async (req) => {
         }
       };
 
-      const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=mRoster&view=kona_player_info`;
+      const rosterUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=mRoster`;
+      const playersUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=kona_player_info`;
 
-      const response = await fetch(leagueUrl, {
+      // 1) Fetch rosters (mRoster) WITHOUT X-Fantasy-Filter to avoid ESPN 400 errors
+      const rosterResponse = await fetch(rosterUrl, {
+        headers: {
+          'Cookie': `SWID=${swidCookie}; espn_s2=${espn_s2}`,
+        },
+      });
+      if (!rosterResponse.ok) {
+        console.error(`Failed to fetch roster for week ${week}: ${rosterResponse.status}`);
+        continue;
+      }
+      const rosterCT = rosterResponse.headers.get('content-type') || '';
+      const rosterRaw = await rosterResponse.text();
+      if (!rosterCT.includes('application/json') || rosterRaw.trim().startsWith('<')) {
+        console.error(`Week ${week}: Non-JSON roster response from ESPN (status ${rosterResponse.status})`);
+        continue;
+      }
+      const weekData = JSON.parse(rosterRaw);
+
+      // 2) Fetch player info + stats (kona_player_info) WITH X-Fantasy-Filter
+      const playersResponse = await fetch(playersUrl, {
         headers: {
           'Cookie': `SWID=${swidCookie}; espn_s2=${espn_s2}`,
           'X-Fantasy-Filter': JSON.stringify(fantasyFilter),
         },
       });
-
-      if (!response.ok) {
-        console.error(`Failed to fetch week ${week}: ${response.status}`);
-        continue;
+      let playersById = new Map<string, any>();
+      if (playersResponse.ok) {
+        const pct = playersResponse.headers.get('content-type') || '';
+        const praw = await playersResponse.text();
+        if (pct.includes('application/json') && !praw.trim().startsWith('<')) {
+          const pdata = JSON.parse(praw);
+          const allPlayers: any[] = pdata.players || [];
+          for (const pl of allPlayers) {
+            if (pl?.id != null) playersById.set(String(pl.id), pl);
+          }
+          console.log(`Week ${week}: Loaded ${playersById.size} players with stats context`);
+        } else {
+          console.error(`Week ${week}: Non-JSON players response from ESPN (status ${playersResponse.status})`);
+        }
+      } else {
+        console.error(`Failed to fetch players for week ${week}: ${playersResponse.status}`);
       }
-
-      const contentType = response.headers.get('content-type') || '';
-      const raw = await response.text();
-      if (!contentType.includes('application/json') || raw.trim().startsWith('<')) {
-        console.error(`Week ${week}: Non-JSON response from ESPN (status ${response.status})`);
-        continue;
-      }
-      const weekData = JSON.parse(raw);
       const projectionStatsToInsert: any[] = [];
       const poolRows: any[] = [];
       const waiverRows: any[] = [];
@@ -170,7 +194,8 @@ serve(async (req) => {
           const espnId = entry.playerId?.toString();
           const normalizedPlayer = espnId ? normalizedMap.get(espnId) : null;
 
-          const projCandidates = (player.stats || []).filter((stat: any) =>
+          const playerInfo = playersById.get(espnId);
+          const projCandidates = (playerInfo?.stats || []).filter((stat: any) =>
             stat.statSourceId === 1 && stat.statSplitTypeId === 2
           );
           const weekProjection = projCandidates.find((stat: any) => stat.scoringPeriodId === week) || projCandidates[0];
