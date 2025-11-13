@@ -20,6 +20,13 @@ export const TokenBalance = () => {
   useEffect(() => {
     fetchBalance();
 
+    const onTokenUpdate = (e: CustomEvent) => {
+      const detail: any = e.detail || {};
+      if (typeof detail.balance === 'number') setBalance(detail.balance);
+      if (typeof detail.unlimited === 'boolean') setHasUnlimited(detail.unlimited);
+    };
+    window.addEventListener('token-balance-updated', onTokenUpdate as EventListener);
+
     const channel = supabase
       .channel("token_balance_changes")
       .on(
@@ -37,6 +44,7 @@ export const TokenBalance = () => {
 
     return () => {
       supabase.removeChannel(channel);
+      window.removeEventListener('token-balance-updated', onTokenUpdate as EventListener);
     };
   }, []);
 
