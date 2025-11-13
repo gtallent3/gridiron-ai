@@ -45,6 +45,7 @@ export function TradeFinder({ league, userTeam, allTeams }: TradeFinderProps) {
     }
     return {
       id: playerId,
+      canonical_player_id: player.canonical_player_id, // Preserve for player_rankings lookup
       name: playerName,
       position: positionName.toString().toUpperCase(),
       team: player.team || 'NFL',
