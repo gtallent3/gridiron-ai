@@ -459,53 +459,65 @@ serve(async (req) => {
         let actual = 0;
         
         if (updatedCanonical) {
-          // Get current week projection - calculate using league scoring
+          const playerPosition = core.primary_position || core.display_position || '';
+          
+          // Get current week projection
           const projKey = `${updatedCanonical.id}_${league.current_week || 1}`;
           const projStats = projectionMap.get(projKey);
           if (projStats) {
-            projected = calculateFantasyPoints({
-              passing_yards: projStats.passing_yards,
-              passing_tds: projStats.passing_tds,
-              passing_attempts: projStats.passing_attempts,
-              passing_completions: projStats.passing_completions,
-              interceptions: projStats.passing_ints,
-              passing_2pt_conversions: projStats.passing_2pt_conversions,
-              rushing_yards: projStats.rushing_yards,
-              rushing_tds: projStats.rushing_tds,
-              rushing_attempts: projStats.rushing_attempts,
-              rushing_2pt_conversions: projStats.rushing_2pt_conversions,
-              receptions: projStats.receptions,
-              receiving_yards: projStats.receiving_yards,
-              receiving_tds: projStats.receiving_tds,
-              receiving_targets: projStats.receiving_targets,
-              receiving_2pt_conversions: projStats.receiving_2pt_conversions,
-              fumbles_lost: projStats.fumbles_lost,
-            }, league.scoring_settings || {});
+            // For kickers, use projected_fp directly as raw stats don't apply
+            if (playerPosition === 'K') {
+              projected = projStats.projected_fp || 0;
+            } else {
+              projected = calculateFantasyPoints({
+                passing_yards: projStats.passing_yards,
+                passing_tds: projStats.passing_tds,
+                passing_attempts: projStats.passing_attempts,
+                passing_completions: projStats.passing_completions,
+                interceptions: projStats.passing_ints,
+                passing_2pt_conversions: projStats.passing_2pt_conversions,
+                rushing_yards: projStats.rushing_yards,
+                rushing_tds: projStats.rushing_tds,
+                rushing_attempts: projStats.rushing_attempts,
+                rushing_2pt_conversions: projStats.rushing_2pt_conversions,
+                receptions: projStats.receptions,
+                receiving_yards: projStats.receiving_yards,
+                receiving_tds: projStats.receiving_tds,
+                receiving_targets: projStats.receiving_targets,
+                receiving_2pt_conversions: projStats.receiving_2pt_conversions,
+                fumbles_lost: projStats.fumbles_lost,
+              }, league.scoring_settings || {});
+            }
           }
           
-          // Get last week's actual - calculate using league scoring
+          // Get last week's actual
           if ((league.current_week || 1) > 1) {
             const actualKey = `${updatedCanonical.id}_${(league.current_week || 1) - 1}`;
             const actualStats = actualMap.get(actualKey);
             if (actualStats) {
-              actual = calculateFantasyPoints({
-                passing_yards: actualStats.passing_yards,
-                passing_tds: actualStats.passing_tds,
-                passing_attempts: actualStats.passing_attempts,
-                passing_completions: actualStats.passing_completions,
-                interceptions: actualStats.passing_ints,
-                passing_2pt_conversions: actualStats.passing_2pt_conversions,
-                rushing_yards: actualStats.rushing_yards,
-                rushing_tds: actualStats.rushing_tds,
-                rushing_attempts: actualStats.rushing_attempts,
-                rushing_2pt_conversions: actualStats.rushing_2pt_conversions,
-                receptions: actualStats.receptions,
-                receiving_yards: actualStats.receiving_yards,
-                receiving_tds: actualStats.receiving_tds,
-                receiving_targets: actualStats.receiving_targets,
-                receiving_2pt_conversions: actualStats.receiving_2pt_conversions,
-                fumbles_lost: actualStats.fumbles_lost,
-              }, league.scoring_settings || {});
+              // For kickers, use actual_fp directly as raw stats don't apply
+              if (playerPosition === 'K') {
+                actual = actualStats.actual_fp || 0;
+              } else {
+                actual = calculateFantasyPoints({
+                  passing_yards: actualStats.passing_yards,
+                  passing_tds: actualStats.passing_tds,
+                  passing_attempts: actualStats.passing_attempts,
+                  passing_completions: actualStats.passing_completions,
+                  interceptions: actualStats.passing_ints,
+                  passing_2pt_conversions: actualStats.passing_2pt_conversions,
+                  rushing_yards: actualStats.rushing_yards,
+                  rushing_tds: actualStats.rushing_tds,
+                  rushing_attempts: actualStats.rushing_attempts,
+                  rushing_2pt_conversions: actualStats.rushing_2pt_conversions,
+                  receptions: actualStats.receptions,
+                  receiving_yards: actualStats.receiving_yards,
+                  receiving_tds: actualStats.receiving_tds,
+                  receiving_targets: actualStats.receiving_targets,
+                  receiving_2pt_conversions: actualStats.receiving_2pt_conversions,
+                  fumbles_lost: actualStats.fumbles_lost,
+                }, league.scoring_settings || {});
+              }
             }
           }
         }
