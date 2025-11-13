@@ -180,19 +180,28 @@ serve(async (req) => {
           const playerName = position === 'DST' 
             ? `${teamAbbrev} D/ST` 
             : (normalizedPlayer?.player_name || player.fullName || 'Unknown');
+          
+          // Debug logging for D/ST detection
+          if (player.defaultPositionId === 16 || position === 'DST') {
+            console.log(`[D/ST FOUND] name=${playerName}, position=${position}, defaultPosId=${player.defaultPositionId}, espnId=${espnId}, hasProjection=${!!weekProjection}, projCandidates=${projCandidates.length}`);
+          }
 
           // Get or create canonical player (including D/ST)
           let canonicalId = null;
           if (position === 'DST' && espnId) {
-            let { data: canonicalDST } = await supabase
+            console.log(`Creating/finding D/ST canonical: ${playerName}, espnId=${espnId}`);
+            let { data: canonicalDST, error: queryError } = await supabase
               .from('canonical_players')
               .select('id')
               .eq('espn_id', espnId)
               .eq('position', 'DST')
               .maybeSingle();
 
+            if (queryError) console.error(`Error querying D/ST canonical:`, queryError);
+
             if (!canonicalDST) {
-              const { data: newDST } = await supabase
+              console.log(`Inserting new D/ST canonical: ${playerName}`);
+              const { data: newDST, error: insertError } = await supabase
                 .from('canonical_players')
                 .insert({
                   espn_id: espnId,
@@ -202,15 +211,24 @@ serve(async (req) => {
                 })
                 .select('id')
                 .single();
+              
+              if (insertError) {
+                console.error(`ERROR inserting D/ST canonical:`, insertError);
+              } else {
+                console.log(`Successfully created D/ST canonical id=${newDST?.id}`);
+              }
               canonicalDST = newDST;
+            } else {
+              console.log(`Found existing D/ST canonical id=${canonicalDST.id}`);
             }
             canonicalId = canonicalDST?.id;
           }
 
           // Add to player_pool_v2 for D/ST
           if (espnId && position === 'DST' && canonicalId && weekProjection) {
+            console.log(`Upserting D/ST to player_pool_v2: ${playerName}, canonicalId=${canonicalId}`);
             const rawStats = weekProjection.stats || {};
-            await supabase.from('player_pool_v2').upsert({
+            const { error: poolError } = await supabase.from('player_pool_v2').upsert({
               canonical_player_id: canonicalId,
               player_name: playerName,
               position: 'DST',
@@ -233,6 +251,12 @@ serve(async (req) => {
               onConflict: 'canonical_player_id,season,week,source',
               ignoreDuplicates: false
             });
+            
+            if (poolError) {
+              console.error(`ERROR upserting D/ST to player_pool_v2:`, poolError);
+            } else {
+              console.log(`Successfully upserted D/ST to player_pool_v2: ${playerName}`);
+            }
             totalDSTInserted++;
           }
 
