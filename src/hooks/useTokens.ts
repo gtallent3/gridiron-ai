@@ -98,6 +98,11 @@ export const useTokens = () => {
         throw new Error(data.error || "Failed to deduct token");
       }
 
+      // Immediately reflect new balance locally and notify listeners (e.g., header counter)
+      if (typeof data.balance === 'number' && data.balance >= 0) setBalance(data.balance);
+      if (typeof data.unlimited === 'boolean') setHasUnlimited(data.unlimited);
+      window.dispatchEvent(new CustomEvent('token-balance-updated', { detail: { balance: data.balance, unlimited: data.unlimited } }));
+
       return { success: true, balance: data.balance, unlimited: data.unlimited };
     } catch (error: any) {
       console.error("Error deducting token:", error);
