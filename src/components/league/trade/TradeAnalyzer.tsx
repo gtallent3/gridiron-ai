@@ -198,7 +198,9 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
         injury_status: player.injury_status || null,
         injury_duration_weeks: player.injury_duration_weeks || 0,
       };
-    }).filter(p => p.id); // Filter out invalid players
+    })
+      .filter(p => p.id) // Filter out invalid players
+      .filter(p => p.position !== 'K' && p.position !== 'DEF' && p.position !== 'DST'); // Filter out kickers and defenses
   };
 
   const handleEvaluateTrade = async () => {
