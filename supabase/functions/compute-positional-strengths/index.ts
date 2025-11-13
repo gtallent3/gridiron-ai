@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -40,7 +39,7 @@ const POSITION_WEIGHTS: Record<string, number[]> = {
 // FLEX weights for leftover RB/WR/TE
 const FLEX_WEIGHTS = [0.90, 0.50];
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -79,20 +78,34 @@ serve(async (req) => {
 
     if (teamsError) throw teamsError;
 
-    // Fetch player value cache for this league
-    const { data: playerValues, error: valuesError } = await supabase
-      .from('player_value_cache')
-      .select('*')
-      .eq('league_id', leagueId);
+    // Fetch player rankings (global data source)
+    const { data: playerRankings, error: rankingsError } = await supabase
+      .from('player_rankings')
+      .select('player_id, player_name, position, team, trade_value');
 
-    if (valuesError) throw valuesError;
+    if (rankingsError) throw rankingsError;
 
-    // Build player value maps (by id and by name)
-    const valueMapById = new Map<string, any>();
-    const valueMapByName = new Map<string, any>();
-    for (const pv of playerValues || []) {
-      valueMapById.set(pv.player_id, pv);
-      if (pv.player_name) valueMapByName.set(String(pv.player_name).toLowerCase().trim(), pv);
+    console.log(`Loaded ${playerRankings?.length || 0} player rankings`);
+
+    // Fetch canonical players for ID mapping
+    const { data: canonicalPlayers, error: canonicalError } = await supabase
+      .from('canonical_players')
+      .select('id, espn_id, yahoo_id, sleeper_id, player_name, position');
+
+    if (canonicalError) throw canonicalError;
+
+    // Build mapping: canonical_player_id -> ranking
+    const rankingMap = new Map<string, any>();
+    for (const ranking of playerRankings || []) {
+      rankingMap.set(ranking.player_id, ranking);
+    }
+
+    // Build mapping: platform_id -> canonical_player_id
+    const canonicalMap = new Map<string, string>();
+    for (const cp of canonicalPlayers || []) {
+      if (cp.espn_id) canonicalMap.set(`espn_${cp.espn_id}`, cp.id);
+      if (cp.yahoo_id) canonicalMap.set(`yahoo_${cp.yahoo_id}`, cp.id);
+      if (cp.sleeper_id) canonicalMap.set(`sleeper_${cp.sleeper_id}`, cp.id);
     }
 
     // Calculate PSS for each team and position
@@ -118,11 +131,17 @@ serve(async (req) => {
     };
 
     const getValueForPlayer = (p: any) => {
-      const pid = p.player_id || p.playerId || p.id;
-      if (pid && valueMapById.has(String(pid))) return valueMapById.get(String(pid));
-      const name = (p.player_name || p.playerName || p.name || '').toLowerCase().trim();
-      if (name && valueMapByName.has(name)) return valueMapByName.get(name);
-      return null;
+      // Try to get canonical_player_id from player or lookup via platform ID
+      let canonicalId = p.canonical_player_id;
+      
+      if (!canonicalId && p.player_id) {
+        canonicalId = canonicalMap.get(p.player_id);
+      }
+      
+      if (!canonicalId) return null;
+      
+      const ranking = rankingMap.get(canonicalId);
+      return ranking ? { trade_value: ranking.trade_value } : null;
     };
 
     // Helper: Calculate PSS for a position using slot-weighted diminishing returns
@@ -152,7 +171,7 @@ serve(async (req) => {
           .filter(p => normPos(p.position) === pos)
           .map(p => {
             const value = getValueForPlayer(p);
-            return value ? Number(value.value_score) || 0 : 0;
+            return value ? Number(value.trade_value) || 0 : 0;
           })
           .sort((a, b) => b - a); // descending
         
