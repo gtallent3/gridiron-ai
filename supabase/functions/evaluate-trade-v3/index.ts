@@ -259,11 +259,18 @@ function evaluateTradeByStartingLineup(
   const teamAGivesValue = teamAGivesPlayers.reduce((sum, p) => sum + (p?.trade_value || 0), 0);
   const teamBGivesValue = teamBGivesPlayers.reduce((sum, p) => sum + (p?.trade_value || 0), 0);
 
+  // Calculate value difference based on trade values
+  const netValueDiff = teamBGivesValue - teamAGivesValue; // Positive means Team A gains value
+  const totalTradeValue = teamAGivesValue + teamBGivesValue;
+  const percentDifference = totalTradeValue > 0 
+    ? (Math.abs(netValueDiff) / totalTradeValue) * 100 
+    : 0;
+
   const result = {
     trade_grade: grade,
-    advantage_team: teamAPpgChange > teamBPpgChange ? teamAId : teamBId,
-    value_difference: Math.abs(teamAPpgChange - teamBPpgChange),
-    percent_difference: ((Math.abs(teamAPpgChange - teamBPpgChange) / (teamAStartingBefore.totalPpg + teamBStartingBefore.totalPpg)) * 100),
+    advantage_team: netValueDiff > 0 ? teamAId : teamBId,
+    value_difference: Math.abs(netValueDiff),
+    percent_difference: percentDifference,
     explanation,
     is_acceptable: isAcceptable,
     is_fair: isFairTrade,
