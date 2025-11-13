@@ -46,16 +46,7 @@ export function ManualSyncButton({ leagueId, onSyncComplete }: ManualSyncButtonP
 
         toast.success(`✓ Synced ${data?.teamsSynced || 0} teams with updated rosters`);
       } else {
-        // ESPN/Sleeper sync (transactions + rosters)
-        const { data: transactionsData, error: transactionsError } = await supabase.functions.invoke(
-          'ingest-league-transactions',
-          { body: { leagueId } }
-        );
-
-        if (transactionsError) {
-          throw new Error(`Transactions sync failed: ${transactionsError.message}`);
-        }
-
+        // ESPN/Sleeper sync (rosters only)
         const { data: rostersData, error: rostersError } = await supabase.functions.invoke(
           'ingest-roster-snapshots',
           { body: { leagueId } }
@@ -66,7 +57,7 @@ export function ManualSyncButton({ leagueId, onSyncComplete }: ManualSyncButtonP
         }
 
         toast.success(
-          `✓ Synced ${transactionsData?.transactionsProcessed || 0} transactions and ${rostersData?.rosterEntriesProcessed || 0} roster entries`
+          `✓ Synced ${rostersData?.rosterEntriesProcessed || 0} roster entries`
         );
       }
 

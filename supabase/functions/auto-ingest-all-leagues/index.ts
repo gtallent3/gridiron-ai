@@ -44,17 +44,6 @@ serve(async (req) => {
       try {
         console.log(`Processing league: ${league.league_name} (${league.id})`);
 
-        // Fetch transactions
-        const transactionsResponse = await supabase.functions.invoke('ingest-league-transactions', {
-          body: { leagueId: league.id },
-        });
-
-        if (transactionsResponse.error) {
-          throw new Error(`Transactions error: ${transactionsResponse.error.message}`);
-        }
-
-        console.log(`✓ Transactions ingested for ${league.league_name}`);
-
         // Check if we need to fetch rosters (daily update)
         const { data: fetchMeta } = await supabase
           .from('fetch_metadata')
