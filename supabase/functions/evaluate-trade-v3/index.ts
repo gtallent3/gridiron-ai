@@ -313,8 +313,8 @@ function evaluateTradeByStartingLineup(
     is_fair: isFairTrade,
     audit: {
       teamA_out: teamAGivesValue,
-      teamA_in: teamBGivesValue,
-      teamA_net: teamBGivesValue - teamAGivesValue,
+      teamA_in: adjustedTeamAValue,  // Include best player bonus
+      teamA_net: adjustedTeamAValue - teamAGivesValue,  // Net with bonus
       teamB_out: teamBGivesValue,
       teamB_in: teamAGivesValue,
       teamB_net: teamAGivesValue - teamBGivesValue,
