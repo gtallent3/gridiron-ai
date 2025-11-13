@@ -63,7 +63,21 @@ Deno.serve(async (req) => {
       .from('player_rankings')
       .select('canonical_player_id, player_name, position, team, trade_value, avg_projected_ppg_ros');
 
+    console.log(`Loaded ${playerRankings?.length || 0} player rankings`);
+
     const valueMap = new Map((playerRankings || []).map(v => [v.canonical_player_id, v]));
+
+    // Get canonical players mapping for roster lookups
+    const { data: canonicalPlayers } = await supabase
+      .from('canonical_players')
+      .select('canonical_player_id, espn_id, yahoo_id, sleeper_id, player_name, position');
+
+    const canonicalMap = new Map<string, string>(); // platform_id -> canonical_player_id
+    (canonicalPlayers || []).forEach(cp => {
+      if (cp.espn_id) canonicalMap.set(`espn_${cp.espn_id}`, cp.canonical_player_id);
+      if (cp.yahoo_id) canonicalMap.set(`yahoo_${cp.yahoo_id}`, cp.canonical_player_id);
+      if (cp.sleeper_id) canonicalMap.set(`sleeper_${cp.sleeper_id}`, cp.canonical_player_id);
+    });
 
     // Get positional strengths for all teams
     const { data: allStrengths } = await supabase
@@ -114,7 +128,15 @@ Deno.serve(async (req) => {
     };
 
     const getPlayerValue = (player: any) => {
-      const canonicalId = player.canonical_player_id || player.id || player.player_id;
+      // Try to get canonical_player_id from player or lookup via platform ID
+      let canonicalId = player.canonical_player_id;
+      
+      if (!canonicalId && player.player_id) {
+        canonicalId = canonicalMap.get(player.player_id);
+      }
+      
+      if (!canonicalId) return 0;
+      
       const val = valueMap.get(canonicalId);
       if (!val) return 0;
       return Number(val.trade_value) || 0;
@@ -169,16 +191,24 @@ Deno.serve(async (req) => {
     };
 
     const normalizePlayerForTrade = (player: any) => {
-      const canonicalId = player.canonical_player_id || player.id || player.player_id;
-      const playerRanking = valueMap.get(canonicalId);
+      // Try to get canonical_player_id from player or lookup via platform ID
+      let canonicalId = player.canonical_player_id;
+      
+      if (!canonicalId && player.player_id) {
+        canonicalId = canonicalMap.get(player.player_id);
+      }
+      
+      const playerRanking = canonicalId ? valueMap.get(canonicalId) : null;
+      const value = getPlayerValue(player);
+      
       return {
-        id: canonicalId,
+        id: canonicalId || player.player_id,
         player_id: player.player_id || canonicalId,
         canonical_player_id: canonicalId,
         name: player.player_name || player.name || playerRanking?.player_name || 'Unknown Player',
         position: normPos(player.position),
         team: player.team || playerRanking?.team || 'FA',
-        value: getPlayerValue(player),
+        value,
         trade_value: playerRanking?.trade_value || 0,
         projected_ppg: playerRanking?.avg_projected_ppg_ros || 0,
       };
@@ -223,6 +253,8 @@ Deno.serve(async (req) => {
         .filter((p: any) => p.value > 0) // Only include players with value
         .sort((a: any, b: any) => b.value - a.value);
 
+      console.log(`Team ${team.team_id} has ${theirPosPlayers.length} ${targetPosition} players with value`);
+
       if (theirPosPlayers.length < 2) continue; // Need at least 2 to target depth
 
       // Try to find fair trades - target their 2nd, 3rd, 4th best player at this position
@@ -241,6 +273,8 @@ Deno.serve(async (req) => {
             .map((p: any) => normalizePlayerForTrade(p))
             .filter((p: any) => p.value > 0)
             .sort((a: any, b: any) => b.value - a.value);
+
+          console.log(`My team has ${myPosPlayers.length} ${needPos.position} players with value`);
 
           if (myPosPlayers.length < 2) continue;
 
