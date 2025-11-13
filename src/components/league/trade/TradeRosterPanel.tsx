@@ -12,6 +12,7 @@ type Player = {
   projected: number;
   ros_projection?: number;
   ppg_projection?: number;
+  trade_value?: number;
   status?: string;
   is_bye_week?: boolean;
   injury_status?: string | null;
