@@ -264,30 +264,33 @@ function evaluateTradeByStartingLineup(
   const teamAGivesValue = teamAGivesPlayers.reduce((sum, p) => sum + (p?.trade_value || 0), 0);
   const teamBGivesValue = teamBGivesPlayers.reduce((sum, p) => sum + (p?.trade_value || 0), 0);
 
-  // Best Player Bonus - find the highest-valued player in the trade
-  const allTradedPlayers = [...teamAGivesPlayers, ...teamBGivesPlayers].filter(p => p !== null);
-  let bestPlayer = allTradedPlayers[0];
+  // Best Player Bonus - difference between best overall player and best player on the other side
+  const teamAGivesFiltered = teamAGivesPlayers.filter(p => p !== null);
+  const teamBGivesFiltered = teamBGivesPlayers.filter(p => p !== null);
+  
   let bestPlayerBonus = 0;
   let bestPlayerReceivedBy = teamAId;
   
-  if (bestPlayer && allTradedPlayers.length > 0) {
-    // Find the player with highest trade value
-    for (const player of allTradedPlayers) {
-      if (player.trade_value > bestPlayer.trade_value) {
-        bestPlayer = player;
-      }
-    }
+  if (teamAGivesFiltered.length > 0 && teamBGivesFiltered.length > 0) {
+    // Find best player from each side
+    const bestFromA = teamAGivesFiltered.reduce((best, p) => 
+      p.trade_value > best.trade_value ? p : best
+    );
+    const bestFromB = teamBGivesFiltered.reduce((best, p) => 
+      p.trade_value > best.trade_value ? p : best
+    );
     
-    // Determine who receives the best player
-    const bestPlayerReceivedByA = teamBGivesPlayers.some(p => p?.id === bestPlayer.id);
-    bestPlayerReceivedBy = bestPlayerReceivedByA ? teamAId : teamBId;
-    bestPlayerBonus = bestPlayer.trade_value * 0.15; // 15% bonus
+    // The bonus is the difference between the two best players
+    bestPlayerBonus = Math.abs(bestFromA.trade_value - bestFromB.trade_value);
+    
+    // Determine who receives the overall best player
+    bestPlayerReceivedBy = bestFromA.trade_value > bestFromB.trade_value ? teamBId : teamAId;
   }
 
-  // Adjust values with best player bonus
+  // Adjust values with best player bonus (team receiving best player gets the bonus)
   let adjustedTeamAValue = teamBGivesValue;
   
-  if (bestPlayer && teamBGivesPlayers.some(p => p?.id === bestPlayer.id)) {
+  if (bestPlayerReceivedBy === teamAId) {
     adjustedTeamAValue += bestPlayerBonus; // Team A gets bonus for receiving best player
   }
 
