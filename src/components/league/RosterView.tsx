@@ -542,8 +542,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   }, [selectedWeek, userTeam, league.platform]);
 
   const handleWeekChange = (direction: 'prev' | 'next') => {
+    const currentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
     setSelectedWeek(prev => {
-      if (direction === 'prev' && prev > 1) return prev - 1;
+      if (direction === 'prev' && prev > currentWeek) return prev - 1;
       if (direction === 'next' && prev < 18) return prev + 1;
       return prev;
     });
@@ -602,12 +603,12 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
       <Card>
         <CardContent className="py-3 sm:py-4">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleWeekChange('prev')}
-              disabled={selectedWeek <= 1 || loading}
-              className="touch-target"
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleWeekChange('prev')}
+                disabled={selectedWeek <= currentWeek || loading}
+                className="touch-target"
             >
               <ChevronLeft className="h-4 w-4" />
               <span className="hidden sm:inline">Previous Week</span>
@@ -626,7 +627,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-card z-50 max-h-[300px]">
-                    {Array.from({ length: maxWeek }, (_, i) => i + 1).map(w => (
+                    {Array.from({ length: maxWeek - currentWeek + 1 }, (_, i) => currentWeek + i).map(w => (
                       <SelectItem key={w} value={String(w)}>
                         Week {w}
                         {w === currentWeek && <span className="ml-1 text-xs text-primary">(Current)</span>}
