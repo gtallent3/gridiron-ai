@@ -86,6 +86,7 @@ serve(async (req) => {
     }
 
     let totalProjectionsInserted = 0;
+    let totalDSTInserted = 0;
 
     for (let week = startWeek; week <= endWeek; week++) {
       console.log(`Fetching projections for week ${week}...`);
@@ -102,6 +103,7 @@ serve(async (req) => {
       };
 
       const leagueUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?scoringPeriodId=${week}&view=kona_player_info`;
+      const matchupUrl = `https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/${currentSeason}/segments/0/leagues/${league.league_id}?view=mMatchup&view=mMatchupScore&scoringPeriodId=${week}`;
       
       const response = await fetch(leagueUrl, {
         headers: {
@@ -307,6 +309,186 @@ serve(async (req) => {
         }
       }
 
+      // Fetch and process D/ST data from matchup endpoint
+      console.log(`Fetching D/ST data from matchup endpoint for week ${week}...`);
+      try {
+        const matchupRes = await fetch(matchupUrl, {
+          headers: {
+            'Cookie': `espn_s2=${espn_s2}; SWID=${swidCookie}`,
+            'Accept': 'application/json'
+          }
+        });
+
+        if (matchupRes.ok) {
+          const matchupData = await matchupRes.json();
+          const schedule = matchupData.schedule || [];
+
+          for (const matchup of schedule) {
+            if (matchup.matchupPeriodId !== week) continue;
+
+            // Process home team D/ST
+            if (matchup.home?.teamId) {
+              const homeTeam = matchupData.teams?.find((t: any) => t.id === matchup.home.teamId);
+              if (homeTeam?.abbrev) {
+                const dstStats = matchup.home?.pointsByScoringPeriod?.[week] || 0;
+                const dstProjection = matchup.home?.totalProjectedPointsLive || 0;
+                
+                // Get D/ST player from roster
+                const dstPlayer = homeTeam.roster?.entries?.find((e: any) => 
+                  e.playerPoolEntry?.player?.defaultPositionId === 16
+                );
+
+                if (dstPlayer) {
+                  const player = dstPlayer.playerPoolEntry.player;
+                  const espnId = player.id?.toString();
+                  const teamAbbrev = getTeamAbbreviation(player.proTeamId);
+                  const playerName = `${teamAbbrev} D/ST`;
+
+                  // Get or create canonical player for this D/ST
+                  let { data: canonicalDST } = await supabase
+                    .from('canonical_players')
+                    .select('id')
+                    .eq('espn_id', espnId)
+                    .eq('position', 'DST')
+                    .maybeSingle();
+
+                  if (!canonicalDST) {
+                    const { data: newDST } = await supabase
+                      .from('canonical_players')
+                      .insert({
+                        espn_id: espnId,
+                        player_name: playerName,
+                        position: 'DST',
+                        team: teamAbbrev
+                      })
+                      .select('id')
+                      .single();
+                    canonicalDST = newDST;
+                  }
+
+                  if (canonicalDST) {
+                    // Find projection stats for this D/ST
+                    const projCandidates = (player.stats || []).filter((stat: any) =>
+                      stat.statSourceId === 1 && stat.statSplitTypeId === 2
+                    );
+                    const weekProjection = projCandidates.find((stat: any) => stat.scoringPeriodId === week);
+
+                    if (weekProjection) {
+                      const rawStats = weekProjection.stats || {};
+                      
+                      // Insert into player_pool_v2
+                      await supabase.from('player_pool_v2').upsert({
+                        canonical_player_id: canonicalDST.id,
+                        player_name: playerName,
+                        position: 'DST',
+                        team: teamAbbrev,
+                        season: currentSeason,
+                        week,
+                        source: 'espn_projection',
+                        projected_fp: weekProjection.appliedTotal || 0,
+                        // D/ST specific stats
+                        passing_yards: parseFloat(rawStats['95']) || null, // interceptions
+                        passing_tds: parseFloat(rawStats['99']) || null, // sacks
+                        rushing_yards: parseFloat(rawStats['96']) || null, // fumbles recovered
+                        rushing_tds: parseFloat(rawStats['103']) || null, // INT TDs
+                        receiving_yards: parseFloat(rawStats['104']) || null, // fumble recovery TDs
+                        receiving_tds: parseFloat(rawStats['98']) || null, // safeties
+                        receptions: parseFloat(rawStats['97']) || null, // blocked kicks
+                        raw_source_ids: { espn: espnId },
+                        updated_at: new Date().toISOString()
+                      }, {
+                        onConflict: 'canonical_player_id,season,week,source',
+                        ignoreDuplicates: false
+                      });
+
+                      totalDSTInserted++;
+                    }
+                  }
+                }
+              }
+            }
+
+            // Process away team D/ST
+            if (matchup.away?.teamId) {
+              const awayTeam = matchupData.teams?.find((t: any) => t.id === matchup.away.teamId);
+              if (awayTeam?.abbrev) {
+                const dstPlayer = awayTeam.roster?.entries?.find((e: any) => 
+                  e.playerPoolEntry?.player?.defaultPositionId === 16
+                );
+
+                if (dstPlayer) {
+                  const player = dstPlayer.playerPoolEntry.player;
+                  const espnId = player.id?.toString();
+                  const teamAbbrev = getTeamAbbreviation(player.proTeamId);
+                  const playerName = `${teamAbbrev} D/ST`;
+
+                  let { data: canonicalDST } = await supabase
+                    .from('canonical_players')
+                    .select('id')
+                    .eq('espn_id', espnId)
+                    .eq('position', 'DST')
+                    .maybeSingle();
+
+                  if (!canonicalDST) {
+                    const { data: newDST } = await supabase
+                      .from('canonical_players')
+                      .insert({
+                        espn_id: espnId,
+                        player_name: playerName,
+                        position: 'DST',
+                        team: teamAbbrev
+                      })
+                      .select('id')
+                      .single();
+                    canonicalDST = newDST;
+                  }
+
+                  if (canonicalDST) {
+                    const projCandidates = (player.stats || []).filter((stat: any) =>
+                      stat.statSourceId === 1 && stat.statSplitTypeId === 2
+                    );
+                    const weekProjection = projCandidates.find((stat: any) => stat.scoringPeriodId === week);
+
+                    if (weekProjection) {
+                      const rawStats = weekProjection.stats || {};
+                      
+                      await supabase.from('player_pool_v2').upsert({
+                        canonical_player_id: canonicalDST.id,
+                        player_name: playerName,
+                        position: 'DST',
+                        team: teamAbbrev,
+                        season: currentSeason,
+                        week,
+                        source: 'espn_projection',
+                        projected_fp: weekProjection.appliedTotal || 0,
+                        passing_yards: parseFloat(rawStats['95']) || null,
+                        passing_tds: parseFloat(rawStats['99']) || null,
+                        rushing_yards: parseFloat(rawStats['96']) || null,
+                        rushing_tds: parseFloat(rawStats['103']) || null,
+                        receiving_yards: parseFloat(rawStats['104']) || null,
+                        receiving_tds: parseFloat(rawStats['98']) || null,
+                        receptions: parseFloat(rawStats['97']) || null,
+                        raw_source_ids: { espn: espnId },
+                        updated_at: new Date().toISOString()
+                      }, {
+                        onConflict: 'canonical_player_id,season,week,source',
+                        ignoreDuplicates: false
+                      });
+
+                      totalDSTInserted++;
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          console.log(`Inserted ${totalDSTInserted} D/ST entries for week ${week}`);
+        }
+      } catch (dstError) {
+        console.error(`Error fetching D/ST data for week ${week}:`, dstError);
+      }
+
       if (projectionStatsToInsert.length > 0) {
         await supabase.from('projected_player_stats').upsert(projectionStatsToInsert, {
           onConflict: 'player_id,season,week,source',
@@ -337,7 +519,8 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         message: `Fetched projections for weeks ${startWeek}-${endWeek}`,
-        projections_inserted: totalProjectionsInserted
+        projections_inserted: totalProjectionsInserted,
+        dst_inserted: totalDSTInserted
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
