@@ -196,6 +196,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             is_bye_week: isByeWeek,
             injury_status: player.injury_status ?? null,
             week: week,
+            opponent: poolEntry?.opponent,
+            opponent_def_rank: poolEntry?.opponent_def_rank,
           };
           
           if (isStarter) {
@@ -317,6 +319,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
               is_bye_week: isByeWeek,
               injury_status: injuryStatus,
               week: week,
+              opponent: stats?.opponent,
+              opponent_def_rank: undefined,
             };
             
             if (isStarter) {
@@ -385,6 +389,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
               is_bye_week: isByeWeek,
               injury_status: injuryStatus,
               week: week,
+              opponent: projection?.opponent,
+              opponent_def_rank: projection?.opponent_def_rank,
             };
             
             if (isStarter) {
@@ -488,6 +494,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           is_bye_week: isByeWeek,
           injury_status: injuryStatus,
           week: week,
+          opponent: chosenStats?.opponent,
+          opponent_def_rank: chosenStats?.opponent_def_rank,
         };
 
         if (isStarter) {
