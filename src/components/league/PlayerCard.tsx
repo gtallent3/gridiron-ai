@@ -16,6 +16,8 @@ type Player = {
   is_bye_week?: boolean;
   injury_status?: string | null;
   injury_duration_weeks?: number;
+  opponent?: string;
+  opponent_def_rank?: number;
 };
 
 type PlayerCardProps = {
@@ -101,6 +103,16 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly, showActual 
         <div>
           <h4 className="font-semibold text-sm leading-tight break-words line-clamp-2">{player.name}</h4>
           <p className="text-xs text-muted-foreground truncate">{player.team}</p>
+          {player.opponent && player.position !== 'K' && player.position !== 'DEF' && (
+            <p className="text-xs text-muted-foreground">
+              vs {player.opponent}
+              {player.opponent_def_rank && (
+                <span className="ml-1 font-medium">
+                  (#{player.opponent_def_rank})
+                </span>
+              )}
+            </p>
+          )}
         </div>
 
         <div className="pt-2 border-t border-border/50">
