@@ -1,4 +1,3 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.75.0";
 
 const corsHeaders = {
@@ -34,7 +33,7 @@ const DEFAULT_STARTERS: Record<string, number> = {
   QB: 1, RB: 2, WR: 2, TE: 1, K: 1, DST: 1 
 };
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -59,13 +58,12 @@ serve(async (req) => {
     
     console.log('Improve position:', { targetPosition, myTeamId: myTeam.team_id });
 
-    // Get player values from cache
-    const { data: playerValues } = await supabase
-      .from('player_value_cache')
-      .select('*')
-      .eq('league_id', leagueId);
+    // Get player rankings data
+    const { data: playerRankings } = await supabase
+      .from('player_rankings')
+      .select('canonical_player_id, player_name, position, team, trade_value, avg_projected_ppg_ros');
 
-    const valueMap = new Map((playerValues || []).map(v => [v.player_id, v]));
+    const valueMap = new Map((playerRankings || []).map(v => [v.canonical_player_id, v]));
 
     // Get positional strengths for all teams
     const { data: allStrengths } = await supabase
@@ -116,10 +114,10 @@ serve(async (req) => {
     };
 
     const getPlayerValue = (player: any) => {
-      const playerId = player.id || player.player_id;
-      const val = valueMap.get(playerId);
+      const canonicalId = player.canonical_player_id || player.id || player.player_id;
+      const val = valueMap.get(canonicalId);
       if (!val) return 0;
-      return Number(val.value_score) || 0;
+      return Number(val.trade_value) || 0;
     };
 
     // Helper to calculate what PSS would be after adding/removing a player
@@ -171,15 +169,18 @@ serve(async (req) => {
     };
 
     const normalizePlayerForTrade = (player: any) => {
-      const playerId = player.id || player.player_id;
-      const playerValue = valueMap.get(playerId);
+      const canonicalId = player.canonical_player_id || player.id || player.player_id;
+      const playerRanking = valueMap.get(canonicalId);
       return {
-        id: playerId,
-        player_id: playerId,
-        name: player.player_name || player.name || playerValue?.player_name || 'Unknown Player',
+        id: canonicalId,
+        player_id: player.player_id || canonicalId,
+        canonical_player_id: canonicalId,
+        name: player.player_name || player.name || playerRanking?.player_name || 'Unknown Player',
         position: normPos(player.position),
-        team: player.team || playerValue?.team || 'FA',
+        team: player.team || playerRanking?.team || 'FA',
         value: getPlayerValue(player),
+        trade_value: playerRanking?.trade_value || 0,
+        projected_ppg: playerRanking?.avg_projected_ppg_ros || 0,
       };
     };
 
