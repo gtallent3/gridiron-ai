@@ -512,16 +512,41 @@ serve(async (req) => {
         const normalizedPos = normalizePosition(pool.position);
         const key = `${normalizedName}:${normalizedPos}:${pool.week}`;
         
-        // Extract raw stats from player_pool_v2
+        // Extract raw stats from player_pool_v2 - include ALL stat fields
         const normalizedStats: PlayerStats = {
           passing_yards: Number(pool.passing_yards) || 0,
           passing_tds: Number(pool.passing_tds) || 0,
+          passing_attempts: Number(pool.passing_attempts) || 0,
+          passing_completions: Number(pool.passing_completions) || 0,
           interceptions: Number(pool.passing_ints) || 0,
+          passing_2pt_conversions: Number(pool.passing_2pt_conversions) || 0,
           rushing_yards: Number(pool.rushing_yards) || 0,
           rushing_tds: Number(pool.rushing_tds) || 0,
+          rushing_attempts: Number(pool.rushing_attempts) || 0,
+          rushing_2pt_conversions: Number(pool.rushing_2pt_conversions) || 0,
           receptions: Number(pool.receptions) || 0,
           receiving_yards: Number(pool.receiving_yards) || 0,
           receiving_tds: Number(pool.receiving_tds) || 0,
+          receiving_targets: Number(pool.receiving_targets) || 0,
+          receiving_2pt_conversions: Number(pool.receiving_2pt_conversions) || 0,
+          fumbles_lost: Number(pool.fumbles_lost) || 0,
+          fg_made_0_19: Number(pool.fg_made_0_19) || 0,
+          fg_made_20_29: Number(pool.fg_made_20_29) || 0,
+          fg_made_30_39: Number(pool.fg_made_30_39) || 0,
+          fg_made_40_49: Number(pool.fg_made_40_49) || 0,
+          fg_made_50_plus: Number(pool.fg_made_50_plus) || 0,
+          xp_made: Number(pool.xp_made) || 0,
+          sacks: Number(pool.sacks) || 0,
+          fumbles_recovered: Number(pool.fumbles_recovered) || 0,
+          interception_tds: Number(pool.interception_tds) || 0,
+          fumble_recovery_tds: Number(pool.fumble_recovery_tds) || 0,
+          defensive_tds: Number(pool.defensive_tds) || 0,
+          kick_return_tds: Number(pool.kick_return_tds) || 0,
+          punt_return_tds: Number(pool.punt_return_tds) || 0,
+          safeties: Number(pool.safeties) || 0,
+          blocked_kicks: Number(pool.blocked_kicks) || 0,
+          points_allowed: pool.points_allowed !== null ? Number(pool.points_allowed) : undefined,
+          yards_allowed: pool.yards_allowed !== null ? Number(pool.yards_allowed) : undefined,
         };
         
         // Calculate fantasy points from raw stats using league scoring
