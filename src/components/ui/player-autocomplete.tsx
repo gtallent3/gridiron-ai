@@ -46,8 +46,9 @@ export function PlayerAutocomplete({
       setLoading(true);
       try {
         const { data, error} = await supabase
-          .from('trade_value_weekly')
+          .from('player_rankings')
           .select('player_id, player_name, team, position')
+          .eq('season', 2025)
           .or(`player_name.ilike.%${query}%`)
           .order('trade_value', { ascending: false })
           .limit(50);
