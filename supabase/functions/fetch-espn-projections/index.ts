@@ -249,10 +249,10 @@ serve(async (req) => {
             canonicalId = canonicalDST?.id;
           }
 
-          // Add to player_pool_v2 for D/ST
-          if (espnId && position === 'DST' && canonicalId && weekProjection) {
-            console.log(`Upserting D/ST to player_pool_v2: ${playerName}, canonicalId=${canonicalId}`);
-            const rawStats = weekProjection.stats || {};
+          // Add to player_pool_v2 for D/ST (even if no projections available)
+          if (espnId && position === 'DST' && canonicalId) {
+            console.log(`Upserting D/ST to player_pool_v2: ${playerName}, canonicalId=${canonicalId}, hasProjection=${!!weekProjection}`);
+            const rawStats = weekProjection?.stats || {};
             const { error: poolError } = await supabase.from('player_pool_v2').upsert({
               canonical_player_id: canonicalId,
               player_name: playerName,
@@ -261,14 +261,14 @@ serve(async (req) => {
               season: currentSeason,
               week,
               source: 'espn_projection',
-              projected_fp: weekProjection.appliedTotal || 0,
-              passing_yards: parseFloat(rawStats['95']) || null, // INTs
-              passing_tds: parseFloat(rawStats['99']) || null, // sacks
-              rushing_yards: parseFloat(rawStats['96']) || null, // fumbles recovered
-              rushing_tds: parseFloat(rawStats['103']) || null, // INT TDs
-              receiving_yards: parseFloat(rawStats['104']) || null, // fumble TDs
-              receiving_tds: parseFloat(rawStats['98']) || null, // safeties
-              receptions: parseFloat(rawStats['97']) || null, // blocked kicks
+              projected_fp: typeof weekProjection?.appliedTotal === 'number' ? weekProjection.appliedTotal : null,
+              passing_yards: rawStats ? (parseFloat(rawStats['95']) || null) : null, // INTs
+              passing_tds: rawStats ? (parseFloat(rawStats['99']) || null) : null, // sacks
+              rushing_yards: rawStats ? (parseFloat(rawStats['96']) || null) : null, // fumbles recovered
+              rushing_tds: rawStats ? (parseFloat(rawStats['103']) || null) : null, // INT TDs
+              receiving_yards: rawStats ? (parseFloat(rawStats['104']) || null) : null, // fumble TDs
+              receiving_tds: rawStats ? (parseFloat(rawStats['98']) || null) : null, // safeties
+              receptions: rawStats ? (parseFloat(rawStats['97']) || null) : null, // blocked kicks
               raw_source_ids: { espn: espnId },
               bye_week: false,
               updated_at: new Date().toISOString()
@@ -392,9 +392,9 @@ serve(async (req) => {
           canonicalId = canonicalDST?.id;
         }
 
-        // Add D/ST to player_pool_v2
-        if (espnId && position === 'DST' && canonicalId && weekProjection) {
-          const rawStats = weekProjection.stats || {};
+        // Add D/ST to player_pool_v2 (even if no projections available)
+        if (espnId && position === 'DST' && canonicalId) {
+          const rawStats = weekProjection?.stats || {};
           await supabase.from('player_pool_v2').upsert({
             canonical_player_id: canonicalId,
             player_name: playerName,
@@ -403,14 +403,14 @@ serve(async (req) => {
             season: currentSeason,
             week,
             source: 'espn_projection',
-            projected_fp: weekProjection.appliedTotal || 0,
-            passing_yards: parseFloat(rawStats['95']) || null,
-            passing_tds: parseFloat(rawStats['99']) || null,
-            rushing_yards: parseFloat(rawStats['96']) || null,
-            rushing_tds: parseFloat(rawStats['103']) || null,
-            receiving_yards: parseFloat(rawStats['104']) || null,
-            receiving_tds: parseFloat(rawStats['98']) || null,
-            receptions: parseFloat(rawStats['97']) || null,
+            projected_fp: typeof weekProjection?.appliedTotal === 'number' ? weekProjection.appliedTotal : null,
+            passing_yards: rawStats ? (parseFloat(rawStats['95']) || null) : null,
+            passing_tds: rawStats ? (parseFloat(rawStats['99']) || null) : null,
+            rushing_yards: rawStats ? (parseFloat(rawStats['96']) || null) : null,
+            rushing_tds: rawStats ? (parseFloat(rawStats['103']) || null) : null,
+            receiving_yards: rawStats ? (parseFloat(rawStats['104']) || null) : null,
+            receiving_tds: rawStats ? (parseFloat(rawStats['98']) || null) : null,
+            receptions: rawStats ? (parseFloat(rawStats['97']) || null) : null,
             raw_source_ids: { espn: espnId },
             bye_week: false,
             updated_at: new Date().toISOString()
