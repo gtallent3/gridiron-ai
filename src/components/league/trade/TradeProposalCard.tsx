@@ -23,15 +23,22 @@ export function TradeProposalCard({ proposal }: TradeProposalCardProps) {
   return (
     <Card className="hover:shadow-md transition-shadow">
       <CardContent className="p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex-1">
-            <div className="text-sm font-medium mb-1">You Give</div>
-            {proposal.myPlayers.map((p: any, idx: number) => (
-              <div key={idx} className="text-sm">
-                {p.name} <Badge variant="outline" className="ml-1">{p.position}</Badge>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex-1">
+          <div className="text-sm font-medium mb-2">You Give</div>
+          <div className="space-y-1">
+            {proposal.myPlayers.map((p: any, i: number) => (
+              <div key={i} className="space-y-0.5">
+                <div className="text-sm font-medium">
+                  {p.name || p.player_name} <span className="text-muted-foreground">({p.position})</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Trade Value: {p.trade_value?.toFixed(1) || 'N/A'} | Proj PPG: {p.projected_ppg?.toFixed(1) || 'N/A'}
+                </div>
               </div>
             ))}
           </div>
+        </div>
 
           <div className="flex flex-col items-center gap-2">
             <ArrowLeftRight className="h-5 w-5 text-muted-foreground" />
@@ -40,19 +47,26 @@ export function TradeProposalCard({ proposal }: TradeProposalCardProps) {
             </Badge>
           </div>
 
-          <div className="flex-1">
-            <div className="text-sm font-medium mb-1">You Get</div>
-            {proposal.theirPlayers.map((p: any, idx: number) => (
-              <div key={idx} className="text-sm">
-                {p.name} <Badge variant="outline" className="ml-1">{p.position}</Badge>
+        <div className="flex-1">
+          <div className="text-sm font-medium mb-2">You Get</div>
+          <div className="space-y-1">
+            {proposal.theirPlayers.map((p: any, i: number) => (
+              <div key={i} className="space-y-0.5">
+                <div className="text-sm font-medium">
+                  {p.name || p.player_name} <span className="text-muted-foreground">({p.position})</span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Trade Value: {p.trade_value?.toFixed(1) || 'N/A'} | Proj PPG: {p.projected_ppg?.toFixed(1) || 'N/A'}
+                </div>
               </div>
             ))}
-            {proposal.theirTeam && (
-              <div className="text-xs text-muted-foreground mt-1">
-                from {proposal.theirTeam.team_name}
-              </div>
-            )}
           </div>
+          {proposal.theirTeam && (
+            <div className="text-xs text-muted-foreground mt-1">
+              from {proposal.theirTeam.team_name}
+            </div>
+          )}
+        </div>
 
           <div className="flex items-center gap-2">
             {isPositive ? (

@@ -55,6 +55,11 @@ serve(async (req) => {
       return ranking?.trade_value || 0;
     };
 
+    const getPlayerRanking = (player: any) => {
+      const canonicalId = getCanonicalId(player);
+      return rankingsMap.get(canonicalId);
+    };
+
     // Get positional strengths for my team
     const { data: myStrengths } = await supabase
       .from('team_positional_strengths')
@@ -165,9 +170,12 @@ serve(async (req) => {
           const tradingFromStrength = myPosStrength && myPosStrength.z_score > 0.5;
           const fitScore = calculateTradeFitScore(targetPlayer, [p], targetPos, targetPosStrength);
           
+          const pRanking = getPlayerRanking(p);
+          const targetRanking = getPlayerRanking(targetPlayer);
+          
           return {
-            myPlayers: [p],
-            theirPlayers: [targetPlayer],
+            myPlayers: [{ ...p, trade_value: pRanking?.trade_value, projected_ppg: pRanking?.avg_projected_ppg_ros }],
+            theirPlayers: [{ ...targetPlayer, trade_value: targetRanking?.trade_value, projected_ppg: targetRanking?.avg_projected_ppg_ros }],
             valueDiff: getPlayerValue(p) - targetValue,
             positionalFitBonus: targetPosBonus,
             tradingFromStrength,
@@ -190,9 +198,14 @@ serve(async (req) => {
           const comboValue = combo.reduce((sum, p) => sum + getPlayerValue(p), 0);
           if (comboValue >= targetValue * 0.85 && comboValue <= targetValue * 1.15) {
             const fitScore = calculateTradeFitScore(targetPlayer, combo, targetPos, targetPosStrength);
+            const targetRanking = getPlayerRanking(targetPlayer);
+            
             twoForOne.push({
-              myPlayers: combo,
-              theirPlayers: [targetPlayer],
+              myPlayers: combo.map(p => {
+                const pRanking = getPlayerRanking(p);
+                return { ...p, trade_value: pRanking?.trade_value, projected_ppg: pRanking?.avg_projected_ppg_ros };
+              }),
+              theirPlayers: [{ ...targetPlayer, trade_value: targetRanking?.trade_value, projected_ppg: targetRanking?.avg_projected_ppg_ros }],
               valueDiff: comboValue - targetValue,
               positionalFitBonus: targetPosBonus,
               improvesWeakPosition: targetIsWeakPos,
@@ -258,9 +271,12 @@ serve(async (req) => {
             const improvesWeakPos = weakPositions.includes(targetPos);
             const fitScore = calculateTradeFitScore(p, [shopPlayer], targetPos, targetPosStrength);
             
+            const shopRanking = getPlayerRanking(shopPlayer);
+            const pRanking = getPlayerRanking(p);
+            
             return {
-              myPlayers: [shopPlayer],
-              theirPlayers: [p],
+              myPlayers: [{ ...shopPlayer, trade_value: shopRanking?.trade_value, projected_ppg: shopRanking?.avg_projected_ppg_ros }],
+              theirPlayers: [{ ...p, trade_value: pRanking?.trade_value, projected_ppg: pRanking?.avg_projected_ppg_ros }],
               theirTeam: team,
               valueDiff: getPlayerValue(p) - shopValue,
               positionalFitBonus: posBonus,
