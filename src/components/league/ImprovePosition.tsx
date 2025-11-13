@@ -239,14 +239,21 @@ export function ImprovePosition({
                     </h4>
                     <div className="space-y-2">
                       {pkg.my_gives.map((player, i) => (
-                        <div key={i} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
-                          <div>
+                        <div key={i} className="flex items-center justify-between p-3 rounded-md bg-muted/50">
+                          <div className="flex-1">
                             <p className="font-medium text-sm">{player.name}</p>
                             <p className="text-xs text-muted-foreground">
                               {player.position} - {player.team}
                             </p>
+                            <div className="flex gap-3 mt-1 text-xs">
+                              <span className="text-muted-foreground">
+                                Trade Value: <span className="font-medium text-foreground">{player.trade_value?.toFixed(1) || 0}</span>
+                              </span>
+                              <span className="text-muted-foreground">
+                                Proj PPG: <span className="font-medium text-foreground">{player.projected_ppg?.toFixed(1) || 0}</span>
+                              </span>
+                            </div>
                           </div>
-                          <Badge variant="outline">{player.value?.toFixed(1) || 0}</Badge>
                         </div>
                       ))}
                     </div>
@@ -258,14 +265,21 @@ export function ImprovePosition({
                     </h4>
                     <div className="space-y-2">
                       {pkg.i_receive.map((player, i) => (
-                        <div key={i} className="flex items-center justify-between p-2 rounded-md bg-primary/5 border border-primary/20">
-                          <div>
+                        <div key={i} className="flex items-center justify-between p-3 rounded-md bg-primary/5 border border-primary/20">
+                          <div className="flex-1">
                             <p className="font-medium text-sm">{player.name}</p>
                             <p className="text-xs text-muted-foreground">
                               {player.position} - {player.team}
                             </p>
+                            <div className="flex gap-3 mt-1 text-xs">
+                              <span className="text-muted-foreground">
+                                Trade Value: <span className="font-medium text-foreground">{player.trade_value?.toFixed(1) || 0}</span>
+                              </span>
+                              <span className="text-muted-foreground">
+                                Proj PPG: <span className="font-medium text-foreground">{player.projected_ppg?.toFixed(1) || 0}</span>
+                              </span>
+                            </div>
                           </div>
-                          <Badge variant="outline">{player.value?.toFixed(1) || 0}</Badge>
                         </div>
                       ))}
                     </div>
