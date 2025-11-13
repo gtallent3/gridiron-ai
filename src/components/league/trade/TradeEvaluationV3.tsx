@@ -94,7 +94,7 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
               <p className="text-sm font-medium text-muted-foreground">Value Difference</p>
               <p className="text-2xl font-bold">
                 {result.percent_difference >= 0 ? '+' : ''}
-                {result.percent_difference.toFixed(1)}%
+                {(result.percent_difference || 0).toFixed(1)}%
               </p>
             </div>
             {isMyAdvantage ? (
@@ -116,7 +116,7 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
           {result.best_player_bonus > 0 && (
             <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
               <p className="text-sm font-medium">
-                🏆 Best Player Bonus: +{result.best_player_bonus.toFixed(1)} value
+                🏆 Best Player Bonus: +{(result.best_player_bonus || 0).toFixed(1)} value
               </p>
               <p className="text-xs text-muted-foreground mt-1">
                 Awarded to {result.best_player_received_by === myTeamId ? 'you' : 'opponent'} for receiving the highest-valued player
@@ -172,7 +172,7 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
                         <TooltipContent>
                           <div className="space-y-1 text-xs">
                             <p>Current Rank: {change.beforeRank}</p>
-                            <p>Z-Score: {change.beforeZ.toFixed(2)}</p>
+                            <p>Z-Score: {(change.beforeZ || 0).toFixed(2)}</p>
                             <p className="text-muted-foreground">
                               {change.beforeRank > 6 ? 'Weak position - likely improves rank' : 
                                change.beforeRank <= 3 ? 'Strong position - may worsen with trade' :
@@ -197,7 +197,7 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
                       <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 cursor-help">
                         <p className="text-sm font-medium">
                           Your Position Fit: {result.positional_fit_bonus_a >= 0 ? '+' : ''}
-                          {result.positional_fit_bonus_a.toFixed(1)}
+                          {(result.positional_fit_bonus_a || 0).toFixed(1)}
                         </p>
                       </div>
                     </TooltipTrigger>
@@ -216,7 +216,7 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
                       <div className="p-3 rounded-lg bg-muted/50 border cursor-help">
                         <p className="text-sm font-medium text-muted-foreground">
                           Opponent Position Fit: {result.positional_fit_bonus_b >= 0 ? '+' : ''}
-                          {result.positional_fit_bonus_b.toFixed(1)}
+                          {(result.positional_fit_bonus_b || 0).toFixed(1)}
                         </p>
                       </div>
                     </TooltipTrigger>
@@ -245,17 +245,17 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Giving Away:</span>
-                  <span className="font-mono">{result.audit.teamA_out.toFixed(1)}</span>
+                  <span className="font-mono">{(result.audit.teamA_out || 0).toFixed(1)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Receiving:</span>
-                  <span className="font-mono">{result.audit.teamA_in.toFixed(1)}</span>
+                  <span className="font-mono">{(result.audit.teamA_in || 0).toFixed(1)}</span>
                 </div>
                 <div className="flex justify-between text-sm font-bold pt-2 border-t">
                   <span>Net Change:</span>
                   <span className={`font-mono ${result.audit.teamA_net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {result.audit.teamA_net >= 0 ? '+' : ''}
-                    {result.audit.teamA_net.toFixed(1)}
+                    {(result.audit.teamA_net || 0).toFixed(1)}
                   </span>
                 </div>
               </div>
@@ -266,17 +266,17 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Giving Away:</span>
-                  <span className="font-mono">{result.audit.teamB_out.toFixed(1)}</span>
+                  <span className="font-mono">{(result.audit.teamB_out || 0).toFixed(1)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Receiving:</span>
-                  <span className="font-mono">{result.audit.teamB_in.toFixed(1)}</span>
+                  <span className="font-mono">{(result.audit.teamB_in || 0).toFixed(1)}</span>
                 </div>
                 <div className="flex justify-between text-sm font-bold pt-2 border-t">
                   <span>Net Change:</span>
                   <span className={`font-mono ${result.audit.teamB_net >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {result.audit.teamB_net >= 0 ? '+' : ''}
-                    {result.audit.teamB_net.toFixed(1)}
+                    {(result.audit.teamB_net || 0).toFixed(1)}
                   </span>
                 </div>
               </div>
@@ -290,14 +290,14 @@ export function TradeEvaluationV3({ result, myTeamId }: TradeEvaluationV3Props) 
                 <p className="text-xs text-muted-foreground mb-1">Rest of Season Impact</p>
                 <p className="text-lg font-bold">
                   {result.ros_points_delta >= 0 ? '+' : ''}
-                  {result.ros_points_delta.toFixed(1)} pts
+                  {(result.ros_points_delta || 0).toFixed(1)} pts
                 </p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Next 3 Weeks Impact</p>
                 <p className="text-lg font-bold">
                   {result.next_3_weeks_delta >= 0 ? '+' : ''}
-                  {result.next_3_weeks_delta.toFixed(1)} pts
+                  {(result.next_3_weeks_delta || 0).toFixed(1)} pts
                 </p>
               </div>
             </div>
