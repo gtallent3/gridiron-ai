@@ -22,6 +22,7 @@ import Billing from "./pages/Billing";
 import NFLFantasyPoints from "./pages/NFLFantasyPoints";
 import StrengthOfSchedule from "./pages/StrengthOfSchedule";
 import TradeValues from "./pages/TradeValues";
+import TradeAnalyzer from "./pages/TradeAnalyzer";
 import PlayerRankings from "./pages/PlayerRankings";
 import CanonicalPlayers from "./pages/CanonicalPlayers";
 
@@ -52,6 +53,7 @@ const App = () => (
             <Route path="/nfl-stats" element={<NFLFantasyPoints />} />
             <Route path="/strength-of-schedule" element={<StrengthOfSchedule />} />
             <Route path="/trade-values" element={<TradeValues />} />
+            <Route path="/trade-analyzer" element={<TradeAnalyzer />} />
             <Route path="/player-rankings" element={<PlayerRankings />} />
             <Route path="/canonical-players" element={<CanonicalPlayers />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
