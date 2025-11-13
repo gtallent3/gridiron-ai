@@ -80,13 +80,12 @@ serve(async (req) => {
     const espnLeagueId = league.league_id;
     const userTeamId = league.user_team_id;
 
-    // Get stored credentials from espn_credentials table
-    const { data: credentials, error: credError } = await supabase
-      .from('espn_credentials')
-      .select('swid_encrypted, espn_s2_encrypted, expires_at')
-      .eq('user_id', user.id)
-      .eq('league_id', espnLeagueId)
-      .maybeSingle();
+    // Get stored credentials from Vault using RPC
+    const { data: credentials, error: credError } = await supabaseUser.rpc('get_league_credentials', {
+      p_user_id: user.id,
+      p_platform: 'espn',
+      p_league_id: espnLeagueId
+    });
 
     if (credError) {
       console.error('Error fetching credentials:', credError);
@@ -97,13 +96,8 @@ serve(async (req) => {
       throw new Error('No credentials found for this league');
     }
 
-    // Check if credentials are expired
-    if (credentials.expires_at && new Date(credentials.expires_at) < new Date()) {
-      throw new Error('Credentials have expired. Please reconnect your league.');
-    }
-
-    const espn_s2 = credentials.espn_s2_encrypted;
-    const swid = credentials.swid_encrypted;
+    const espn_s2 = credentials.espn_s2;
+    const swid = credentials.swid;
 
     const now = new Date();
     const currentSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
