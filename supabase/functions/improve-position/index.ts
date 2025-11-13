@@ -59,24 +59,32 @@ Deno.serve(async (req) => {
     console.log('Improve position:', { targetPosition, myTeamId: myTeam.team_id });
 
     // Get player rankings data
-    const { data: playerRankings } = await supabase
+    const { data: playerRankings, error: rankingsError } = await supabase
       .from('player_rankings')
-      .select('canonical_player_id, player_name, position, team, trade_value, avg_projected_ppg_ros');
+      .select('player_id, player_name, position, team, trade_value, avg_projected_ppg_ros');
+
+    if (rankingsError) {
+      console.error('Rankings load error:', rankingsError);
+    }
 
     console.log(`Loaded ${playerRankings?.length || 0} player rankings`);
 
-    const valueMap = new Map((playerRankings || []).map(v => [v.canonical_player_id, v]));
+    const valueMap = new Map((playerRankings || []).map(v => [v.player_id, v]));
 
     // Get canonical players mapping for roster lookups
-    const { data: canonicalPlayers } = await supabase
+    const { data: canonicalPlayers, error: canonicalError } = await supabase
       .from('canonical_players')
-      .select('canonical_player_id, espn_id, yahoo_id, sleeper_id, player_name, position');
+      .select('id, espn_id, yahoo_id, sleeper_id, player_name, position');
+
+    if (canonicalError) {
+      console.error('Canonical players load error:', canonicalError);
+    }
 
     const canonicalMap = new Map<string, string>(); // platform_id -> canonical_player_id
     (canonicalPlayers || []).forEach(cp => {
-      if (cp.espn_id) canonicalMap.set(`espn_${cp.espn_id}`, cp.canonical_player_id);
-      if (cp.yahoo_id) canonicalMap.set(`yahoo_${cp.yahoo_id}`, cp.canonical_player_id);
-      if (cp.sleeper_id) canonicalMap.set(`sleeper_${cp.sleeper_id}`, cp.canonical_player_id);
+      if (cp.espn_id) canonicalMap.set(`espn_${cp.espn_id}`, cp.id);
+      if (cp.yahoo_id) canonicalMap.set(`yahoo_${cp.yahoo_id}`, cp.id);
+      if (cp.sleeper_id) canonicalMap.set(`sleeper_${cp.sleeper_id}`, cp.id);
     });
 
     // Get positional strengths for all teams
