@@ -720,6 +720,224 @@ export default function Admin() {
     }
   };
 
+  // CANONICAL PLAYERS MAPPING
+  const [mappingPlayers, setMappingPlayers] = useState(false);
+  const [mappingResult, setMappingResult] = useState<any>(null);
+  
+  const handleMapCanonicalPlayers = async () => {
+    setMappingPlayers(true);
+    setMappingResult(null);
+    
+    try {
+      toast({
+        title: "Starting Player Mapping",
+        description: "Matching Sleeper and NFL player IDs..."
+      });
+
+      const { data, error } = await supabase.functions.invoke('map-canonical-players');
+      
+      if (error) throw error;
+
+      setMappingResult(data);
+      toast({
+        title: "Mapping Complete",
+        description: `${data.matched} matched, ${data.created} created, ${data.unmatched} unmatched`
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+      setMappingResult({ error: error.message });
+    } finally {
+      setMappingPlayers(false);
+    }
+  };
+
+  // POPULATE PLAYER POOL WITH AUTO-RESUME
+  const [populatingPool, setPopulatingPool] = useState(false);
+  const [populateProgress, setPopulateProgress] = useState<string>("");
+  
+  const handlePopulatePlayerPool = async () => {
+    setPopulatingPool(true);
+    setPopulateProgress("");
+    
+    let totalSleeperInserted = 0;
+    let totalNflInserted = 0;
+    let iteration = 0;
+    let nextSleeperId: string | null = null;
+    let nextNflId: string | null = null;
+    let hasMoreSleeper = true;
+    let hasMoreNfl = true;
+
+    try {
+      toast({
+        title: "Starting Player Pool Population",
+        description: "Processing player data..."
+      });
+
+      while (hasMoreSleeper || hasMoreNfl) {
+        iteration++;
+        setPopulateProgress(`Batch ${iteration}: Processing...`);
+
+        const body: any = { maxBatches: 50 };
+        if (typeof nextSleeperId === 'number') body.startSleeperIndex = nextSleeperId;
+        if (typeof nextNflId === 'number') body.startNflIndex = nextNflId;
+
+        const { data, error } = await supabase.functions.invoke('populate-player-pool', {
+          body
+        });
+        
+        if (error) throw error;
+
+        totalSleeperInserted += data.sleeperInserted ?? 0;
+        totalNflInserted += data.nflInserted ?? 0;
+        nextSleeperId = data.nextSleeperIndex ?? nextSleeperId;
+        nextNflId = data.nextNflIndex ?? nextNflId;
+        hasMoreSleeper = data.hasMoreSleeper ?? false;
+        hasMoreNfl = data.hasMoreNfl ?? false;
+
+        setPopulateProgress(
+          `Batch ${iteration}: +${data.sleeperInserted || 0} projections, +${data.nflInserted || 0} actuals (Total: ${totalSleeperInserted} projections, ${totalNflInserted} actuals)`
+        );
+
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      toast({
+        title: "Population Complete ✅",
+        description: `Total: ${totalSleeperInserted} projections, ${totalNflInserted} actuals inserted across ${iteration} batches`
+      });
+      setPopulateProgress(`Complete: ${totalSleeperInserted} projections, ${totalNflInserted} actuals`);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+      setPopulateProgress(`Error after batch ${iteration}`);
+    } finally {
+      setPopulatingPool(false);
+    }
+  };
+
+  // DEFENSIVE RANKINGS
+  const [computingDefRankings, setComputingDefRankings] = useState(false);
+  
+  const handleComputeDefensiveRankings = async () => {
+    setComputingDefRankings(true);
+    try {
+      toast({
+        title: "Computing",
+        description: "Computing defensive rankings...",
+      });
+      
+      const { error } = await supabase.functions.invoke('compute-defensive-rankings', {
+        body: { season: 2025 },
+      });
+
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Defensive rankings computed successfully",
+      });
+    } catch (error: any) {
+      console.error('Error computing rankings:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to compute defensive rankings",
+        variant: "destructive",
+      });
+    } finally {
+      setComputingDefRankings(false);
+    }
+  };
+
+  // TEAM SOS
+  const [computingTeamSos, setComputingTeamSos] = useState(false);
+  
+  const handleComputeTeamSos = async () => {
+    setComputingTeamSos(true);
+    try {
+      toast({
+        title: "Computing",
+        description: "Computing team SOS rankings...",
+      });
+      
+      const { error } = await supabase.functions.invoke('compute-team-sos', {
+        body: { season: 2025, currentWeek: 10 },
+      });
+
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Team SOS rankings computed successfully",
+      });
+    } catch (error: any) {
+      console.error('Error computing team SOS:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to compute team SOS rankings",
+        variant: "destructive",
+      });
+    } finally {
+      setComputingTeamSos(false);
+    }
+  };
+
+  // PLAYER RANKINGS
+  const [computingPlayerRankings, setComputingPlayerRankings] = useState(false);
+  
+  const handleComputePlayerRankings = async () => {
+    setComputingPlayerRankings(true);
+    try {
+      const { error } = await supabase.functions.invoke("compute-player-rankings");
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Player rankings computed successfully",
+      });
+    } catch (error: any) {
+      console.error("Error computing rankings:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to compute player rankings",
+        variant: "destructive",
+      });
+    } finally {
+      setComputingPlayerRankings(false);
+    }
+  };
+
+  // TRADE VALUE INDEX
+  const [computingTradeValues, setComputingTradeValues] = useState(false);
+  
+  const handleComputeTradeValues = async () => {
+    setComputingTradeValues(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("compute-trade-value-index");
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: data?.message || "Trade values computed successfully",
+      });
+    } catch (error: any) {
+      console.error("Error computing trade values:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to compute trade values",
+        variant: "destructive",
+      });
+    } finally {
+      setComputingTradeValues(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -799,11 +1017,12 @@ export default function Admin() {
 
           {/* Main Admin Tabs */}
           <Tabs defaultValue="users" className="spacing-mobile">
-            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto">
+            <TabsList className="grid w-full grid-cols-2 sm:grid-cols-5 h-auto">
               <TabsTrigger value="users" className="text-sm py-2 sm:py-3">User Management</TabsTrigger>
               <TabsTrigger value="props" className="text-sm py-2 sm:py-3">Props Management</TabsTrigger>
               <TabsTrigger value="transactions" className="text-sm py-2 sm:py-3">Transactions</TabsTrigger>
-              <TabsTrigger value="scraper" className="text-sm py-2 sm:py-3">Data Scraper</TabsTrigger>
+              <TabsTrigger value="pipeline" className="text-sm py-2 sm:py-3">Data Pipeline</TabsTrigger>
+              <TabsTrigger value="scraper" className="text-sm py-2 sm:py-3">Legacy Tools</TabsTrigger>
             </TabsList>
 
             {/* User Management Tab */}
@@ -1117,7 +1336,254 @@ export default function Admin() {
               </Card>
             </TabsContent>
 
-            {/* Data Scraper Tab */}
+            {/* Data Pipeline Tab */}
+            <TabsContent value="pipeline" className="spacing-mobile">
+              <div className="space-y-4">
+                {/* Stage 1: Data Ingestion */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">1</span>
+                      Data Ingestion
+                    </CardTitle>
+                    <CardDescription>Run these first to fetch raw player data from external sources</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Ingest Sleeper Players</p>
+                      <p className="text-xs text-muted-foreground">Fetches all player data from Sleeper API</p>
+                      <Button 
+                        onClick={handleIngestSleeperPlayers} 
+                        disabled={playersIngesting}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {playersIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {playersIngesting ? "Ingesting..." : "Ingest Sleeper Players"}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Fetch Sleeper Projections</p>
+                      <p className="text-xs text-muted-foreground">Gets weekly player projections from Sleeper</p>
+                      <Button 
+                        onClick={handleFetchSleeperProjections} 
+                        disabled={sleeperFetching}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {sleeperFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {sleeperFetching ? "Fetching..." : "Fetch Projections"}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Fetch NFL Fantasy Points</p>
+                      <p className="text-xs text-muted-foreground">Gets actual player stats from NFL.com</p>
+                      <Button 
+                        onClick={handleFetchNFLFantasyPoints} 
+                        disabled={nflFetching}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {nflFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {nflFetching ? "Fetching..." : "Fetch NFL Stats"}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Ingest Team Schedules</p>
+                      <p className="text-xs text-muted-foreground">Fetches NFL team schedules and matchups</p>
+                      <Button 
+                        onClick={handleIngestTeamSchedules} 
+                        disabled={teamSchedulesFetching}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {teamSchedulesFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {teamSchedulesFetching ? "Ingesting..." : "Ingest Schedules"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Stage 2: Player Mapping */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">2</span>
+                      Player Mapping
+                    </CardTitle>
+                    <CardDescription>
+                      Run after Stage 1 - Links Sleeper and NFL player IDs to create unified player records
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Map Canonical Players</p>
+                      <p className="text-xs text-muted-foreground">
+                        Creates canonical_players table matching Sleeper IDs to NFL IDs
+                      </p>
+                      <Button 
+                        onClick={handleMapCanonicalPlayers} 
+                        disabled={mappingPlayers}
+                        size="sm"
+                        className="w-full sm:w-auto"
+                      >
+                        {mappingPlayers && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {mappingPlayers ? "Mapping..." : "Map Players"}
+                      </Button>
+                      {mappingResult && (
+                        <div className="p-3 border rounded-lg text-xs space-y-1">
+                          {mappingResult.error ? (
+                            <div className="text-destructive">Error: {mappingResult.error}</div>
+                          ) : (
+                            <>
+                              <div>Matched: <span className="font-medium text-green-600">{mappingResult.matched}</span></div>
+                              <div>Created: <span className="font-medium text-blue-600">{mappingResult.created}</span></div>
+                              <div>Unmatched: <span className="font-medium text-yellow-600">{mappingResult.unmatched}</span></div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Stage 3: Data Computation */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">3</span>
+                      Data Computation
+                    </CardTitle>
+                    <CardDescription>
+                      Run after Stage 2 - Consolidates and computes derived metrics
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Populate Player Pool</p>
+                      <p className="text-xs text-muted-foreground">
+                        Consolidates projections and actuals into player_pool_v2 (auto-resumes)
+                      </p>
+                      <Button 
+                        onClick={handlePopulatePlayerPool} 
+                        disabled={populatingPool}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {populatingPool && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {populatingPool ? "Populating..." : "Populate Player Pool"}
+                      </Button>
+                      {populateProgress && (
+                        <div className="p-2 border rounded text-xs">
+                          {populateProgress}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Compute Defensive Rankings</p>
+                      <p className="text-xs text-muted-foreground">
+                        Calculates defensive rankings by position (requires NFL stats)
+                      </p>
+                      <Button 
+                        onClick={handleComputeDefensiveRankings} 
+                        disabled={computingDefRankings}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {computingDefRankings && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {computingDefRankings ? "Computing..." : "Compute Def Rankings"}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Compute Team SOS</p>
+                      <p className="text-xs text-muted-foreground">
+                        Calculates strength of schedule (requires Def Rankings + Schedules)
+                      </p>
+                      <Button 
+                        onClick={handleComputeTeamSos} 
+                        disabled={computingTeamSos}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {computingTeamSos && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {computingTeamSos ? "Computing..." : "Compute Team SOS"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Stage 4: Final Computations */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">4</span>
+                      Final Computations
+                    </CardTitle>
+                    <CardDescription>
+                      Run last - Generates player rankings and trade values for app features
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Compute Player Rankings</p>
+                      <p className="text-xs text-muted-foreground">
+                        Generates player_rankings table (requires Player Pool + SOS)
+                      </p>
+                      <Button 
+                        onClick={handleComputePlayerRankings} 
+                        disabled={computingPlayerRankings}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {computingPlayerRankings && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {computingPlayerRankings ? "Computing..." : "Compute Rankings"}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Compute Trade Values</p>
+                      <p className="text-xs text-muted-foreground">
+                        Calculates trade value index (requires Player Rankings)
+                      </p>
+                      <Button 
+                        onClick={handleComputeTradeValues} 
+                        disabled={computingTradeValues}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {computingTradeValues && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {computingTradeValues ? "Computing..." : "Compute Trade Values"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Pipeline Info */}
+                <Card className="bg-muted/50">
+                  <CardContent className="pt-6">
+                    <div className="space-y-2 text-sm">
+                      <p className="font-semibold">Pipeline Execution Order:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                        <li>Ingest all raw data (Sleeper Players, Projections, NFL Stats, Schedules)</li>
+                        <li>Map Canonical Players to link data sources</li>
+                        <li>Populate Player Pool, Compute Def Rankings, then Compute Team SOS</li>
+                        <li>Compute Player Rankings, then Compute Trade Values</li>
+                      </ol>
+                      <p className="text-xs text-muted-foreground mt-4">
+                        ⚠️ Running functions out of order will cause errors due to missing dependencies.
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+
+            {/* Legacy Tools Tab (renamed from Data Scraper) */}
             <TabsContent value="scraper" className="spacing-mobile">
               <Card>
                 <CardHeader>
