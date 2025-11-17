@@ -120,14 +120,21 @@ serve(async (req) => {
       .limit(2000);
 
     const tvwMap = new Map<string, { trade_value: number; projected_ppg: number }>();
+    const tvwByLast = new Map<string, { trade_value: number; projected_ppg: number }>();
     (tvw || []).forEach(r => {
-      const key = `${normalizeName(r.player_name)}|${(r.position || '').toUpperCase()}`;
-      if (!tvwMap.has(key)) {
-        tvwMap.set(key, {
-          trade_value: Number(r.trade_value) || 0,
-          projected_ppg: Number(r.meta_proj_ros_ppg) || 0,
-        });
-      }
+      const nameNorm = normalizeName(r.player_name);
+      const posNorm = (r.position || '').toUpperCase();
+      const key = `${nameNorm}|${posNorm}`;
+      const last = nameNorm.split(' ').pop() || '';
+      const lastKey = `${last}|${posNorm}`;
+      const obj = {
+        trade_value: Number(r.trade_value) || 0,
+        projected_ppg: Number(r.meta_proj_ros_ppg) || 0,
+      };
+      if (!tvwMap.has(key)) tvwMap.set(key, obj);
+      // Keep highest value for last-name map
+      const prev = tvwByLast.get(lastKey);
+      if (!prev || obj.trade_value > prev.trade_value) tvwByLast.set(lastKey, obj);
     });
 
     // Organize rosters by team
@@ -140,8 +147,11 @@ serve(async (req) => {
       let trade_value = ranking?.trade_value || 0;
       let projected_ppg = ranking?.avg_projected_ppg_ros || 0;
       if (!trade_value || trade_value === 0) {
-        const key = `${normalizeName(r.player_name)}|${(r.position || '').toUpperCase()}`;
-        const tv = tvwMap.get(key);
+        const nameNorm = normalizeName(r.player_name);
+        const posNorm = (r.position || '').toUpperCase();
+        const key = `${nameNorm}|${posNorm}`;
+        const lastKey = `${(nameNorm.split(' ').pop() || '')}|${posNorm}`;
+        const tv = tvwMap.get(key) || tvwByLast.get(lastKey);
         if (tv) {
           trade_value = tv.trade_value || trade_value;
           projected_ppg = tv.projected_ppg || projected_ppg;
