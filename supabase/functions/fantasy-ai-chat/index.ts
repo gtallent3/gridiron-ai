@@ -190,13 +190,13 @@ ${contextParts.join('\n')}
 Your role:
 - Provide actionable fantasy advice based on current projections and trade values
 - Help evaluate trades using the analyze_trade tool
-- Optimize lineups using the analyze_lineup tool
+- For lineup/start-sit questions, analyze the roster data provided above and make recommendations based on projections, matchups, and injury status
 - Suggest position improvements using the find_position_upgrade tool
-- Compare players using the compare_players tool
+- Compare two specific players using the compare_players tool when users ask to compare Player A vs Player B
 - Keep responses concise and data-driven
 - Always reference specific player projections and trade values when making recommendations
 
-When users ask about trades, lineups, position improvements, or player comparisons, USE THE TOOLS provided to give them accurate analysis.`;
+For lineup analysis: You have the full roster with projections above. Recommend lineup changes by comparing starters vs bench players with higher projections, considering bye weeks and injuries.`;
 
     const tools = [
       {
@@ -225,22 +225,6 @@ When users ask about trades, lineups, position improvements, or player compariso
       {
         type: "function",
         function: {
-          name: "analyze_lineup",
-          description: "Analyze lineup and provide start/sit recommendations",
-          parameters: {
-            type: "object",
-            properties: {
-              week: {
-                type: "number",
-                description: "Week number (defaults to current week)"
-              }
-            }
-          }
-        }
-      },
-      {
-        type: "function",
-        function: {
           name: "find_position_upgrade",
           description: "Find trade opportunities to improve a specific position",
           parameters: {
@@ -260,17 +244,24 @@ When users ask about trades, lineups, position improvements, or player compariso
         type: "function",
         function: {
           name: "compare_players",
-          description: "Compare players side-by-side",
+          description: "Compare two specific players for start/sit decisions",
           parameters: {
             type: "object",
             properties: {
-              playerIds: {
-                type: "array",
-                description: "Array of player IDs to compare",
-                items: { type: "string" }
+              player1Name: {
+                type: "string",
+                description: "Name of the first player"
+              },
+              player2Name: {
+                type: "string",
+                description: "Name of the second player"
+              },
+              week: {
+                type: "number",
+                description: "Week number (optional)"
               }
             },
-            required: ["playerIds"]
+            required: ["player1Name", "player2Name"]
           }
         }
       }
@@ -408,22 +399,20 @@ When users ask about trades, lineups, position improvements, or player compariso
                     body: { leagueId, teamAPlayers: args.teamAPlayers, teamBPlayers: args.teamBPlayers }
                   });
                   toolResult = tradeResponse.data;
-                } else if (funcName === 'analyze_lineup') {
-                  const lineupResponse = await supabase.functions.invoke('analyze-start-sit', {
-                    body: { leagueId, week: args.week || currentWeek }
-                  });
-                  toolResult = lineupResponse.data;
                 } else if (funcName === 'find_position_upgrade') {
                   const upgradeResponse = await supabase.functions.invoke('improve-position', {
                     body: { leagueId, position: args.position }
                   });
                   toolResult = upgradeResponse.data;
                 } else if (funcName === 'compare_players') {
-                  const playersData = await supabase
-                    .from('player_rankings')
-                    .select('*')
-                    .in('player_id', args.playerIds);
-                  toolResult = { players: playersData.data || [] };
+                  const compareResponse = await supabase.functions.invoke('analyze-start-sit', {
+                    body: { 
+                      player1Name: args.player1Name, 
+                      player2Name: args.player2Name,
+                      week: args.week || currentWeek
+                    }
+                  });
+                  toolResult = compareResponse.data;
                 }
 
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'tool_result', name: funcName, result: toolResult })}\n\n`));
