@@ -76,16 +76,16 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
     let prompt = "";
     switch (action) {
       case "start-sit":
-        prompt = "Help me with a start/sit decision";
+        prompt = "Analyze my lineup and tell me who to start this week";
         break;
       case "trade":
-        prompt = "Should I accept this trade?";
+        prompt = "I'm considering a trade. Can you help me evaluate it?";
         break;
-      case "waiver":
-        prompt = "Who should I pick up from waivers?";
+      case "upgrade":
+        prompt = "Which position should I try to upgrade via trade?";
         break;
-      case "projection":
-        prompt = "What's my weekly projection?";
+      case "compare":
+        prompt = "Compare two players for me";
         break;
     }
     setInput(prompt);
