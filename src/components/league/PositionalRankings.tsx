@@ -344,7 +344,8 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                             <TooltipContent>
                               <div className="text-sm space-y-1">
                                 <p className="font-semibold">{pos} Strength</p>
-                                <p>PSS: {strength.pss.toFixed(1)}</p>
+                                <p className="font-medium">Total Trade Value: {strength.pss.toFixed(1)}</p>
+                                <p className="text-xs text-muted-foreground">(Weighted by roster importance)</p>
                                 <p>Z-Score: {strength.z_score.toFixed(2)}</p>
                                 <p>
                                   vs Median: {strength.delta_vs_median > 0 ? '+' : ''}
