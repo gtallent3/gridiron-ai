@@ -1394,9 +1394,9 @@ export default function Admin() {
                     <CardDescription>Run these first to fetch raw player data from external sources</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">Ingest Sleeper Players</p>
-                      <p className="text-xs text-muted-foreground">Fetches all player data from Sleeper API</p>
+                  <div className="space-y-2">
+                      <p className="text-sm font-medium">Normalize Player Data</p>
+                      <p className="text-xs text-muted-foreground">Ingests & normalizes all player data from Sleeper into canonical format</p>
                       <Button 
                         onClick={handleIngestSleeperPlayers} 
                         disabled={playersIngesting}
@@ -1404,7 +1404,7 @@ export default function Admin() {
                         className="w-full"
                       >
                         {playersIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {playersIngesting ? "Ingesting..." : "Ingest Sleeper Players"}
+                        {playersIngesting ? "Normalizing..." : "Normalize Players"}
                       </Button>
                     </div>
 
@@ -1702,7 +1702,7 @@ export default function Admin() {
                       variant="secondary"
                     >
                       {playersIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {playersIngesting ? "Ingesting Players..." : "Ingest Sleeper Players"}
+                      {playersIngesting ? "Normalizing Players..." : "Normalize Player Data"}
                     </Button>
 
                     {playersResult && (
