@@ -107,8 +107,8 @@ serve(async (req) => {
     }
 
     const [leagueResult, userTeamResult, allTeamsResult, posStrengthsResult, topPlayersResult] = await Promise.all([
-      supabase.from('connected_leagues').select('*').eq('id', leagueId).single(),
-      supabase.from('user_teams').select('*').eq('league_id', leagueId).limit(1).single(),
+      supabase.from('connected_leagues').select('*').eq('id', leagueId).eq('user_id', userId).single(),
+      supabase.from('user_teams').select('*').eq('league_id', leagueId).eq('user_id', userId).single(),
       supabase.from('user_teams').select('*').eq('league_id', leagueId),
       supabase.from('team_positional_strengths').select('*').eq('league_id', leagueId),
       supabase.from('trade_value_weekly').select('*').order('trade_value', { ascending: false }).limit(150)
