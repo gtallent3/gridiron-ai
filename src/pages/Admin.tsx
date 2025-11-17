@@ -1395,8 +1395,8 @@ export default function Admin() {
                   </CardHeader>
                   <CardContent className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                      <p className="text-sm font-medium">Normalize Player Data</p>
-                      <p className="text-xs text-muted-foreground">Ingests & normalizes all player data from Sleeper into canonical format</p>
+                      <p className="text-sm font-medium">Ingest Sleeper Players</p>
+                      <p className="text-xs text-muted-foreground">Fetches all player data from Sleeper API</p>
                       <Button 
                         onClick={handleIngestSleeperPlayers} 
                         disabled={playersIngesting}
@@ -1404,13 +1404,13 @@ export default function Admin() {
                         className="w-full"
                       >
                         {playersIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {playersIngesting ? "Normalizing..." : "Normalize Players"}
+                        {playersIngesting ? "Ingesting..." : "Ingest Sleeper Players"}
                       </Button>
                     </div>
 
                     <div className="space-y-2">
-                      <p className="text-sm font-medium">Fetch Sleeper Projections</p>
-                      <p className="text-xs text-muted-foreground">Gets weekly player projections from Sleeper</p>
+                      <p className="text-sm font-medium">Normalize Player Data</p>
+                      <p className="text-xs text-muted-foreground">Fetches & normalizes weekly projections into canonical player format</p>
                       <Button 
                         onClick={handleFetchSleeperProjections} 
                         disabled={sleeperFetching}
@@ -1418,7 +1418,7 @@ export default function Admin() {
                         className="w-full"
                       >
                         {sleeperFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {sleeperFetching ? "Fetching..." : "Fetch Projections"}
+                        {sleeperFetching ? "Normalizing..." : "Normalize Players"}
                       </Button>
                     </div>
 
@@ -1702,7 +1702,7 @@ export default function Admin() {
                       variant="secondary"
                     >
                       {playersIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {playersIngesting ? "Normalizing Players..." : "Normalize Player Data"}
+                      {playersIngesting ? "Ingesting Players..." : "Ingest Sleeper Players"}
                     </Button>
 
                     {playersResult && (
@@ -1747,7 +1747,7 @@ export default function Admin() {
                       className="w-full sm:w-auto"
                     >
                       {sleeperFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {sleeperFetching ? "Fetching Projections..." : "Fetch Sleeper Projections"}
+                      {sleeperFetching ? "Normalizing..." : "Normalize Player Data"}
                     </Button>
 
                     {sleeperResult && (
