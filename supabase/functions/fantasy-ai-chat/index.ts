@@ -204,7 +204,7 @@ ${contextParts.join('\n')}
 DATASET RULES (CRITICAL):
 1. For START/SIT questions → Use ONLY get_start_sit_data tool to query player_pool_v2 table
 2. For TRADE questions → Use ONLY get_trade_data tool to query player_rankings table
-3. For TRADE TARGET questions → Use get_league_positional_strengths AND get_league_rosters together
+3. For TRADE TARGET questions → Use ONLY suggest_trade_targets tool (it does all the heavy analysis)
 4. NEVER mix datasets or reference unavailable data
 5. ALWAYS call the appropriate tool immediately - fuzzy matching will find players by partial names
 6. NEVER ask users for full player names or teams - just use what they provide
@@ -212,7 +212,7 @@ DATASET RULES (CRITICAL):
 QUESTION DETECTION:
 - START/SIT keywords: "start", "sit", "bench", "flex", "play", "lineup", "who should I", "better play"
 - TRADE keywords: "trade", "deal", "value", "offer", "worth", "accept", "swap"
-- TRADE TARGET keywords: "who should I target", "trade suggestions", "players to target", "trade for", "strengthen my team"
+- TRADE TARGET keywords: "who should I target", "trade suggestions", "players to target", "trade for", "strengthen my team", "upgrade position"
 
 PLAYER NAME HANDLING:
 - Accept ANY player name format: "Waddle", "Jaylen Waddle", "waddle", etc.
@@ -240,14 +240,14 @@ RESPONSE FORMAT:
    - Reason: One sentence about ROS value and position depth
 
 3. TRADE TARGET suggestions:
-   - When asked "who should I target" or similar:
-     1. First call get_league_positional_strengths to see all teams' positional rankings
-     2. Then call get_league_rosters to see which specific players each team has
-     3. Analyze the data:
-        - Find teams that are STRONG (rank 1-3) at positions where you're WEAK (rank 8-12)
-        - Find teams that are WEAK (rank 8-12) at positions where you're STRONG (rank 1-3)
-        - These are your ideal trade partners
-     4. Suggest 2-3 specific players with this format:
+   - When asked "who should I target" or similar, call suggest_trade_targets tool
+   - The tool returns pre-analyzed strategic trade suggestions with:
+     * Specific target players to acquire
+     * Specific players to offer
+     * Team IDs for both sides
+     * Trade values, projections, and positional rankings
+     * Strategic rationale for each trade
+   - Format the response conversationally, highlighting:
         "Target [Player Name] (Trade Value: XX) from [Team Name] — They're ranked #X at [Position] (strong) while you're ranked #Y (weak). You could offer [Your Player] (Trade Value: XX) where you're strong and they need help."
    - Use trade values to ensure fairness (aim for deals within 10-15 points total value)
    - Focus on mutually beneficial deals where both teams improve their weaknesses
@@ -311,26 +311,14 @@ RULES:
       {
         type: "function",
         function: {
-          name: "get_league_positional_strengths",
-          description: "Get positional strength rankings for all teams in the league. Shows which teams are strong/weak at each position (QB, RB, WR, TE). Use this to identify trade opportunities.",
-          parameters: {
-            type: "object",
-            properties: {},
-            required: []
-          }
-        }
-      },
-      {
-        type: "function",
-        function: {
-          name: "get_league_rosters",
-          description: "Get rosters for all teams in the league with player trade values. Optionally filter by position (QB, RB, WR, TE). Use this to see which specific players are available on each team.",
+          name: "suggest_trade_targets",
+          description: "Get AI-powered trade suggestions based on your team's strengths/weaknesses and league dynamics. Automatically identifies best trade targets and packages. Optionally filter by position to upgrade (QB, RB, WR, TE).",
           parameters: {
             type: "object",
             properties: {
               position: {
                 type: "string",
-                description: "Optional: Filter to specific position (QB, RB, WR, TE)",
+                description: "Optional: Focus on upgrading a specific position (QB, RB, WR, TE)",
                 enum: ["QB", "RB", "WR", "TE"]
               }
             },
@@ -594,121 +582,40 @@ RULES:
                     WARNING: "trade_value_score and projected_ppg are DIFFERENT numbers - do not confuse them!",
                     data_source: 'player_rankings'
                   };
-                } else if (funcName === 'get_league_positional_strengths') {
-                  // Get positional strengths for all teams in the league
-                  const { data: strengths } = await supabase
-                    .from('team_positional_strengths')
-                    .select('team_id, position, pss, rank, z_score, delta_vs_median')
-                    .eq('league_id', leagueId)
-                    .order('position')
-                    .order('rank');
-
-                  if (!strengths || strengths.length === 0) {
-                    toolResult = {
-                      error: 'Positional strength data not yet computed for this league. The system needs to calculate team strengths first.',
-                      data_source: 'team_positional_strengths'
-                    };
-                  } else {
-                    // Create concise summary - top 3 and bottom 3 per position
-                    const byPosition: Record<string, any[]> = {};
-                    strengths.forEach(s => {
-                      if (!byPosition[s.position]) byPosition[s.position] = [];
-                      byPosition[s.position].push({
-                        team: s.team_id,
-                        rank: s.rank,
-                        pss: Math.round(s.pss * 10) / 10
-                      });
-                    });
-                    
-                    const summary: Record<string, any> = {};
-                    Object.keys(byPosition).forEach(pos => {
-                      const teams = byPosition[pos];
-                      summary[pos] = {
-                        strongest: teams.slice(0, 3),
-                        weakest: teams.slice(-3).reverse()
-                      };
-                    });
-                    
-                    // Add user's team strengths
-                    const userStrengths = strengths
-                      .filter(s => s.team_id === userTeamId)
-                      .map(s => ({ 
-                        position: s.position, 
-                        rank: s.rank, 
-                        pss: Math.round(s.pss * 10) / 10 
-                      }));
-
-                    toolResult = {
-                      your_team: userStrengths,
-                      league_summary: summary,
-                      note: 'Lower rank = stronger. Target teams strong where you are weak.',
-                      data_source: 'team_positional_strengths'
-                    };
-                  }
-                } else if (funcName === 'get_league_rosters') {
-                  // Check if specific position requested
-                  let targetPos: string | null = null;
-                  if (args.position) {
-                    targetPos = args.position.toUpperCase();
-                  }
+                } else if (funcName === 'suggest_trade_targets') {
+                  // Call the backend function that does all the heavy analysis
+                  const targetPos = args.position ? args.position.toUpperCase() : null;
                   
-                  // Get all team rosters
-                  let query = supabase
-                    .from('roster_snapshots')
-                    .select('team_id, player_id, player_name, position, team')
-                    .eq('league_id', leagueId);
+                  console.log('Calling suggest-trade-targets backend:', { leagueId, targetPos });
                   
-                  // Filter by position if specified
-                  if (targetPos) {
-                    query = query.eq('position', targetPos);
-                  }
-                  
-                  const { data: rosters } = await query.order('team_id');
-
-                  if (!rosters || rosters.length === 0) {
-                    toolResult = {
-                      error: targetPos ? `No ${targetPos} data available` : 'No roster data available',
-                      data_source: 'roster_snapshots'
-                    };
-                  } else {
-                    // Get trade values for filtered players
-                    const playerNames = [...new Set(rosters.map(r => r.player_name))];
-                    const { data: rankings } = await supabase
-                      .from('player_rankings')
-                      .select('player_name, trade_value, avg_projected_ppg_ros, position, team')
-                      .eq('season', currentSeason)
-                      .in('player_name', playerNames);
-
-                    const rankingsMap = new Map(
-                      rankings?.map(r => [r.player_name, r]) || []
-                    );
-
-                    // Group by team and enrich with trade values
-                    const teamRosters: Record<string, any[]> = {};
-                    for (const player of rosters) {
-                      if (!teamRosters[player.team_id]) {
-                        teamRosters[player.team_id] = [];
+                  const { data: suggestions, error: suggestError } = await supabase.functions.invoke(
+                    'suggest-trade-targets',
+                    {
+                      body: { 
+                        leagueId,
+                        targetPosition: targetPos
                       }
-                      const ranking = rankingsMap.get(player.player_name);
-                      teamRosters[player.team_id].push({
-                        name: player.player_name,
-                        position: player.position,
-                        value: ranking?.trade_value || 0,
-                        ppg: ranking ? Math.round((ranking.avg_projected_ppg_ros || 0) * 10) / 10 : 0
-                      });
                     }
-                    
-                    // Only keep top 5 players per team by value to reduce size
-                    Object.keys(teamRosters).forEach(teamId => {
-                      teamRosters[teamId].sort((a, b) => b.value - a.value);
-                      teamRosters[teamId] = teamRosters[teamId].slice(0, 5);
-                    });
-
+                  );
+                  
+                  if (suggestError) {
+                    console.error('Error from suggest-trade-targets:', suggestError);
                     toolResult = {
-                      position_filter: targetPos || 'all',
-                      top_players: teamRosters,
-                      note: 'value=trade chart score, ppg=projected points/game. Showing top 5 per team.',
-                      data_source: 'roster_snapshots+player_rankings'
+                      error: 'Failed to generate trade suggestions. Please try again.',
+                      data_source: 'suggest-trade-targets'
+                    };
+                  } else if (!suggestions || suggestions.suggestions?.length === 0) {
+                    toolResult = {
+                      message: suggestions?.error || 'No trade suggestions available. Positional strength data may need to be computed first.',
+                      data_source: 'suggest-trade-targets'
+                    };
+                  } else {
+                    toolResult = {
+                      suggestions: suggestions.suggestions,
+                      target_positions: suggestions.target_positions,
+                      user_team_id: suggestions.user_team_id,
+                      note: 'Pre-analyzed strategic trade suggestions based on positional strengths and weaknesses',
+                      data_source: 'suggest-trade-targets'
                     };
                   }
                 }

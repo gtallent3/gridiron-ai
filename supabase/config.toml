@@ -137,3 +137,6 @@ verify_jwt = false
 
 [functions.compute-player-pool]
 verify_jwt = false
+
+[functions.suggest-trade-targets]
+verify_jwt = true
