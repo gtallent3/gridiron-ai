@@ -11,6 +11,19 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Helper to normalize player names for fuzzy matching
+  const normalizeName = (name?: string) => {
+    if (!name) return '';
+    return name
+      .toLowerCase()
+      .replace(/\./g, '')
+      .replace(/['’]/g, '')
+      .replace(/-/g, ' ')
+      .replace(/\b(jr|sr|ii|iii|iv)\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+
   try {
     const authHeader = req.headers.get('authorization');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -108,7 +121,7 @@ serve(async (req) => {
 
     const tvwMap = new Map<string, { trade_value: number; projected_ppg: number }>();
     (tvw || []).forEach(r => {
-      const key = `${(r.player_name || '').toLowerCase()}|${r.position || ''}`;
+      const key = `${normalizeName(r.player_name)}|${(r.position || '').toUpperCase()}`;
       if (!tvwMap.has(key)) {
         tvwMap.set(key, {
           trade_value: Number(r.trade_value) || 0,
@@ -127,7 +140,7 @@ serve(async (req) => {
       let trade_value = ranking?.trade_value || 0;
       let projected_ppg = ranking?.avg_projected_ppg_ros || 0;
       if (!trade_value || trade_value === 0) {
-        const key = `${(r.player_name || '').toLowerCase()}|${r.position || ''}`;
+        const key = `${normalizeName(r.player_name)}|${(r.position || '').toUpperCase()}`;
         const tv = tvwMap.get(key);
         if (tv) {
           trade_value = tv.trade_value || trade_value;
@@ -288,15 +301,16 @@ serve(async (req) => {
         const namePosToTeam = new Map<string, string>();
         for (const [teamId, roster] of teamRosters.entries()) {
           for (const p of roster) {
-            const key = `${(p.player_name || '').toLowerCase()}|${p.position || ''}`;
+            const key = `${normalizeName(p.player_name)}|${(p.position || '').toUpperCase()}`;
             if (!namePosToTeam.has(key)) namePosToTeam.set(key, teamId);
           }
         }
         const topTvw = (tvw || [])
-          .filter(r => targetPositions.includes(r.position || ''))
-          .slice(0, 50);
+          .filter(r => targetPositions.includes((r.position || '').toUpperCase()))
+          .sort((a, b) => Number(b.trade_value) - Number(a.trade_value))
+          .slice(0, 100);
         for (const r of topTvw) {
-          const key = `${(r.player_name || '').toLowerCase()}|${r.position || ''}`;
+          const key = `${normalizeName(r.player_name)}|${(r.position || '').toUpperCase()}`;
           const teamId = namePosToTeam.get(key);
           if (!teamId || teamId === userTeamId) continue;
           const trade_value = Number(r.trade_value) || 0;
