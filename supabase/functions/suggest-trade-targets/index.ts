@@ -99,6 +99,24 @@ serve(async (req) => {
 
     const rankingsMap = new Map(rankings?.map(r => [r.player_id, r]) || []);
 
+    // Fallback map by name+position from trade_value_weekly to handle ID mismatches
+    const { data: tvw } = await supabase
+      .from('trade_value_weekly')
+      .select('player_name, position, trade_value, meta_proj_ros_ppg')
+      .order('trade_value', { ascending: false })
+      .limit(2000);
+
+    const tvwMap = new Map<string, { trade_value: number; projected_ppg: number }>();
+    (tvw || []).forEach(r => {
+      const key = `${(r.player_name || '').toLowerCase()}|${r.position || ''}`;
+      if (!tvwMap.has(key)) {
+        tvwMap.set(key, {
+          trade_value: Number(r.trade_value) || 0,
+          projected_ppg: Number(r.meta_proj_ros_ppg) || 0,
+        });
+      }
+    });
+
     // Organize rosters by team
     const teamRosters = new Map<string, any[]>();
     rosters.forEach(r => {
@@ -106,12 +124,22 @@ serve(async (req) => {
         teamRosters.set(r.team_id, []);
       }
       const ranking = rankingsMap.get(r.player_id);
+      let trade_value = ranking?.trade_value || 0;
+      let projected_ppg = ranking?.avg_projected_ppg_ros || 0;
+      if (!trade_value || trade_value === 0) {
+        const key = `${(r.player_name || '').toLowerCase()}|${r.position || ''}`;
+        const tv = tvwMap.get(key);
+        if (tv) {
+          trade_value = tv.trade_value || trade_value;
+          projected_ppg = tv.projected_ppg || projected_ppg;
+        }
+      }
       teamRosters.get(r.team_id)!.push({
         player_id: r.player_id,
         player_name: r.player_name,
         position: r.position,
-        trade_value: ranking?.trade_value || 0,
-        projected_ppg: ranking?.avg_projected_ppg_ros || 0
+        trade_value,
+        projected_ppg
       });
     });
 
