@@ -49,116 +49,114 @@ serve(async (req) => {
       });
     }
 
-    // Define background task function
-    async function ingestAllPlayers() {
-      console.log("Starting Sleeper player ingestion");
+    // Fetch and ingest players
+    console.log("Starting Sleeper player ingestion");
 
-      try {
-        // Fetch all players from Sleeper API
-        const response = await fetch("https://api.sleeper.app/v1/players/nfl");
-        if (!response.ok) {
-          console.error(`Sleeper API returned ${response.status}: ${response.statusText}`);
-          return;
-        }
+    try {
+      // Fetch all players from Sleeper API
+      const response = await fetch("https://api.sleeper.app/v1/players/nfl");
+      if (!response.ok) {
+        throw new Error(`Sleeper API returned ${response.status}: ${response.statusText}`);
+      }
 
-        const data = await response.json();
-        console.log(`Fetched player data, type: ${typeof data}, is object: ${data && typeof data === 'object'}`);
+      const data = await response.json();
+      console.log(`Fetched player data, type: ${typeof data}, is object: ${data && typeof data === 'object'}`);
 
-        // Sleeper returns players as object with player_id as keys
-        const playerEntries = Object.entries(data);
-        console.log(`Total players from API: ${playerEntries.length}`);
+      // Sleeper returns players as object with player_id as keys
+      const playerEntries = Object.entries(data);
+      console.log(`Total players from API: ${playerEntries.length}`);
 
-        // Transform to normalized format
-        const players = playerEntries
-          .map(([sleeperId, player]: [string, any]) => {
-            // Only include active NFL players with names and positions
-            if (!player.player_id || !player.full_name || player.sport !== 'nfl' || (!player.position && !player.fantasy_positions?.[0])) {
-              return null;
-            }
-
-            // Normalize and validate position
-            const rawPos = String(player.position || player.fantasy_positions?.[0] || '').toUpperCase();
-            const normalizedPos = rawPos === 'DEF' ? 'DST' : rawPos;
-            const allowedPositions = new Set(['QB','RB','WR','TE','K','DST','DL','DE','DT','LB','DB','CB','S','IDP']);
-            if (!allowedPositions.has(normalizedPos)) {
-              return null;
-            }
-
-            return {
-              player_id: `sleeper_${sleeperId}`, // Prefix to avoid conflicts
-              sleeper_id: sleeperId,
-              player_name: player.full_name || (player.first_name && player.last_name ? player.first_name + ' ' + player.last_name : player.full_name),
-              position: normalizedPos,
-              team: player.team || null,
-              espn_id: player.espn_id?.toString() || null,
-              yahoo_id: player.yahoo_id?.toString() || null,
-              stats: {
-                age: player.age,
-                number: player.number,
-                college: player.college,
-                height: player.height,
-                weight: player.weight,
-                years_exp: player.years_exp,
-                status: player.status,
-                injury_status: player.injury_status,
-              },
-            };
-          })
-          .filter(Boolean);
-
-        console.log(`Prepared ${players.length} valid players for upsert`);
-
-        // Upsert in chunks to avoid memory/CPU issues
-        const chunkSize = 500;
-        let totalSaved = 0;
-
-        for (let i = 0; i < players.length; i += chunkSize) {
-          const chunk = players.slice(i, i + chunkSize);
-          
-          const { error: upsertError, count } = await supabase
-            .from("normalized_players")
-            .upsert(chunk, {
-              onConflict: "player_id",
-              count: 'exact'
-            });
-
-          if (upsertError) {
-            console.error(`Chunk ${Math.floor(i / chunkSize) + 1} error:`, upsertError);
-          } else {
-            totalSaved += chunk.length;
-            console.log(`Processed chunk ${Math.floor(i / chunkSize) + 1} (${chunk.length} players). Total processed: ${totalSaved}`);
+      // Transform to normalized format
+      const players = playerEntries
+        .map(([sleeperId, player]: [string, any]) => {
+          // Only include active NFL players with names and positions
+          if (!player.player_id || !player.full_name || player.sport !== 'nfl' || (!player.position && !player.fantasy_positions?.[0])) {
+            return null;
           }
 
-          // Yield to event loop
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          // Normalize and validate position
+          const rawPos = String(player.position || player.fantasy_positions?.[0] || '').toUpperCase();
+          const normalizedPos = rawPos === 'DEF' ? 'DST' : rawPos;
+          const allowedPositions = new Set(['QB','RB','WR','TE','K','DST','DL','DE','DT','LB','DB','CB','S','IDP']);
+          if (!allowedPositions.has(normalizedPos)) {
+            return null;
+          }
+
+          return {
+            player_id: `sleeper_${sleeperId}`, // Prefix to avoid conflicts
+            sleeper_id: sleeperId,
+            player_name: player.full_name || (player.first_name && player.last_name ? player.first_name + ' ' + player.last_name : player.full_name),
+            position: normalizedPos,
+            team: player.team || null,
+            espn_id: player.espn_id?.toString() || null,
+            yahoo_id: player.yahoo_id?.toString() || null,
+            stats: {
+              age: player.age,
+              number: player.number,
+              college: player.college,
+              height: player.height,
+              weight: player.weight,
+              years_exp: player.years_exp,
+              status: player.status,
+              injury_status: player.injury_status,
+            },
+          };
+        })
+        .filter(Boolean);
+
+      console.log(`Prepared ${players.length} valid players for upsert`);
+
+      // Upsert in chunks to avoid memory/CPU issues
+      const chunkSize = 500;
+      let totalSaved = 0;
+
+      for (let i = 0; i < players.length; i += chunkSize) {
+        const chunk = players.slice(i, i + chunkSize);
+        
+        const { error: upsertError, count } = await supabase
+          .from("normalized_players")
+          .upsert(chunk, {
+            onConflict: "player_id",
+            count: 'exact'
+          });
+
+        if (upsertError) {
+          console.error(`Chunk ${Math.floor(i / chunkSize) + 1} error:`, upsertError);
+        } else {
+          totalSaved += chunk.length;
+          console.log(`Processed chunk ${Math.floor(i / chunkSize) + 1} (${chunk.length} players). Total processed: ${totalSaved}`);
         }
 
-        console.log(`Completed: Processed ${totalSaved} players (upserted to normalized_players - updates existing, inserts new)`);
-      } catch (error) {
-        console.error("Ingestion error:", error);
+        // Yield to event loop
+        await new Promise((resolve) => setTimeout(resolve, 0));
       }
-    }
 
-    // Start background task
-    // @ts-ignore - EdgeRuntime is available in Deno Deploy
-    if (typeof EdgeRuntime !== 'undefined' && EdgeRuntime.waitUntil) {
-      // @ts-ignore
-      EdgeRuntime.waitUntil(ingestAllPlayers());
-    } else {
-      // Fallback for local testing
-      ingestAllPlayers().catch(err => console.error('Background task error:', err));
+      console.log(`Completed: Processed ${totalSaved} players (upserted to normalized_players - updates existing, inserts new)`);
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          message: `Successfully processed ${totalSaved} players`,
+          totalProcessed: totalSaved,
+          totalFromApi: playerEntries.length
+        }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    } catch (error) {
+      console.error("Ingestion error:", error);
+      return new Response(
+        JSON.stringify({ 
+          error: error instanceof Error ? error.message : "Unknown error",
+          success: false 
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
-
-    // Return immediate response
-    return new Response(
-      JSON.stringify({
-        success: true,
-        message: "Started ingesting Sleeper players. Check logs for progress.",
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
   } catch (error) {
     console.error("Error:", error);
     return new Response(
