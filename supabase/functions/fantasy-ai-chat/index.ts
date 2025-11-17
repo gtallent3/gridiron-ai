@@ -91,7 +91,8 @@ serve(async (req) => {
         );
       }
       
-      if (msg.content.length > MAX_MESSAGE_LENGTH) {
+      // Only validate user message length, assistant messages can be longer
+      if (msg.role === 'user' && msg.content.length > MAX_MESSAGE_LENGTH) {
         return new Response(
           JSON.stringify({ error: `Message is too long. Please limit to ${MAX_MESSAGE_LENGTH} characters.` }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
