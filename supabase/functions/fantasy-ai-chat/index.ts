@@ -393,6 +393,16 @@ RULES:
           if (toolCalls.length > 0) {
             console.log('Processing tool calls:', toolCalls);
             
+            const toolMessages: any[] = [];
+            
+            // Add assistant's tool call message
+            toolMessages.push({
+              role: 'assistant',
+              content: fullContent || null,
+              tool_calls: toolCalls
+            });
+            
+            // Execute tools and collect results
             for (const toolCall of toolCalls) {
               const funcName = toolCall.function.name;
               const args = JSON.parse(toolCall.function.arguments);
@@ -463,10 +473,77 @@ RULES:
                   }
                 }
 
+                // Add tool result message
+                toolMessages.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify(toolResult)
+                });
+
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'tool_result', name: funcName, result: toolResult })}\n\n`));
               } catch (error) {
                 console.error(`Error executing tool ${funcName}:`, error);
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'tool_error', name: funcName, error: String(error) })}\n\n`));
+                
+                // Add error result
+                toolMessages.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: JSON.stringify({ error: String(error) })
+                });
+              }
+            }
+            
+            // Make second AI call with tool results to get final answer
+            console.log('Making second AI call with tool results');
+            const secondAiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${lovableApiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'google/gemini-2.5-flash',
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  ...messages,
+                  ...toolMessages
+                ],
+                stream: true,
+              }),
+            });
+            
+            if (secondAiResponse.ok) {
+              const secondReader = secondAiResponse.body?.getReader();
+              let secondBuffer = '';
+              
+              while (true) {
+                const { done, value } = await secondReader!.read();
+                if (done) break;
+
+                secondBuffer += decoder.decode(value, { stream: true });
+                const lines = secondBuffer.split('\n');
+                secondBuffer = lines.pop() || '';
+
+                for (const line of lines) {
+                  if (!line.trim() || line.startsWith(':')) continue;
+                  if (!line.startsWith('data: ')) continue;
+
+                  const data = line.slice(6);
+                  if (data === '[DONE]') continue;
+
+                  try {
+                    const parsed = JSON.parse(data);
+                    const delta = parsed.choices?.[0]?.delta;
+
+                    if (delta?.content) {
+                      fullContent += delta.content;
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: delta.content })}\n\n`));
+                    }
+                  } catch (e) {
+                    console.error('Error parsing second AI response:', e);
+                  }
+                }
               }
             }
           }
