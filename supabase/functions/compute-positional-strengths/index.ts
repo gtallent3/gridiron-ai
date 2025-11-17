@@ -30,7 +30,7 @@ const BENCH_DEPTH: Record<string, number> = {
 const POSITION_WEIGHTS: Record<string, number[]> = {
   RB: [4.00, 2.50, 1.80, 0.15],  // Top RB heavily weighted (starters + flex)
   WR: [4.00, 2.50, 1.80, 0.15],  // Top WR heavily weighted (starters + flex)
-  QB: [6.00, 0.10],              // Best QB VERY heavily weighted (single starter position)
+  QB: [6.00, 0.03, 0.0],         // Best QB VERY heavily weighted, backup minimal, 3rd string worthless
   TE: [5.50, 0.10],              // Best TE VERY heavily weighted (single starter position)
   K: [2.00],                     // Best kicker only
   DST: [2.00],                   // Best defense only
