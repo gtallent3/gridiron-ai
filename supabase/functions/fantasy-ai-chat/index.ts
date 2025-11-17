@@ -228,8 +228,16 @@ RESPONSE FORMAT:
 
 2. TRADE answers:
    - Format: "Trade Verdict: [Accept/Decline]"
+   - CRITICAL: When showing individual player values, ALWAYS use this EXACT format:
+     "[Player Name] (Trade Value: [trade_value field], Proj ROS PPG: [avg_projected_ppg_ros field])"
+   - NEVER use projected PPG as trade value - these are DIFFERENT metrics
    - Show: "Side A Total: XX.X | Side B Total: XX.X"
    - Reason: One sentence about ROS value and position depth
+
+FORMATTING RULES:
+- NEVER use asterisks (*) for emphasis or formatting
+- Use clear, plain text without markdown bold syntax
+- Keep responses professional and easy to read
 
 RULES:
 - Default to current week (${currentWeek}) unless user specifies otherwise
