@@ -202,7 +202,59 @@ serve(async (req) => {
       }
     }
 
-    // Sort by strategic fit and value fairness
+    // If nothing found with strict criteria, apply a relaxed fallback to avoid empty results
+    if (suggestions.length === 0) {
+      console.log('No suggestions from strict criteria, applying relaxed fallback targeting top players');
+      const candidateTargets: any[] = [];
+      for (const [teamId, roster] of teamRosters.entries()) {
+        if (teamId === userTeamId) continue;
+        for (const p of roster) {
+          if (targetPositions.includes(p.position) && p.trade_value > 10) {
+            candidateTargets.push({ ...p, teamId });
+          }
+        }
+      }
+      candidateTargets.sort((a, b) => b.trade_value - a.trade_value);
+      const topTargets = candidateTargets.slice(0, 8);
+      for (const target of topTargets) {
+        const offer = userRoster
+          .filter(p => p.trade_value > 0)
+          .sort((a, b) => Math.abs(a.trade_value - target.trade_value) - Math.abs(b.trade_value - target.trade_value))[0];
+        if (offer) {
+          const targetPosStrength = userStrengthMap.get(target.position);
+          const teamStrengths = strengths.filter(s => s.team_id === target.teamId);
+          const theirPosStrength = teamStrengths.find(s => s.position === offer.position);
+          suggestions.push({
+            target_player: {
+              name: target.player_name,
+              position: target.position,
+              trade_value: Math.round(target.trade_value * 10) / 10,
+              projected_ppg: Math.round(target.projected_ppg * 10) / 10
+            },
+            offer_player: {
+              name: offer.player_name,
+              position: offer.position,
+              trade_value: Math.round(offer.trade_value * 10) / 10,
+              projected_ppg: Math.round(offer.projected_ppg * 10) / 10
+            },
+            target_team_id: target.teamId,
+            your_position_rank: targetPosStrength?.rank || 0,
+            your_position_z_score: targetPosStrength ? Math.round(targetPosStrength.z_score * 100) / 100 : 0,
+            their_position_rank: theirPosStrength?.rank || 0,
+            their_position_z_score: theirPosStrength ? Math.round(theirPosStrength.z_score * 100) / 100 : 0,
+            value_difference: Math.round((target.trade_value - offer.trade_value) * 10) / 10,
+            strategic_fit: {
+              improves_your_weakness: targetPosStrength ? targetPosStrength.rank >= 6 : false,
+              addresses_their_weakness: theirPosStrength ? theirPosStrength.rank >= 6 : false,
+              trading_from_your_strength: tradeablePositions.includes(offer.position)
+            },
+            rationale: `Fallback: Trade ${offer.player_name} for ${target.player_name} to improve ${target.position}.`
+          });
+        }
+      }
+    }
+
+    // Final sort by strategic fit and value fairness
     suggestions.sort((a, b) => {
       // Prioritize improving weaknesses
       if (a.strategic_fit.improves_your_weakness && !b.strategic_fit.improves_your_weakness) return -1;
