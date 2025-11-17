@@ -205,10 +205,18 @@ DATASET RULES (CRITICAL):
 1. For START/SIT questions → Use ONLY get_start_sit_data tool to query player_pool_v2 table
 2. For TRADE questions → Use ONLY get_trade_data tool to query player_rankings table
 3. NEVER mix datasets or reference unavailable data
+4. ALWAYS call the appropriate tool immediately - fuzzy matching will find players by partial names
+5. NEVER ask users for full player names or teams - just use what they provide
 
 QUESTION DETECTION:
 - START/SIT keywords: "start", "sit", "bench", "flex", "play", "lineup", "who should I", "better play"
 - TRADE keywords: "trade", "deal", "value", "offer", "worth", "accept", "swap"
+
+PLAYER NAME HANDLING:
+- Accept ANY player name format: "Waddle", "Jaylen Waddle", "waddle", etc.
+- Fuzzy matching system will find the correct player automatically
+- If user says "Start?Sit Waddle and Hill" → Call tool with ["Waddle", "Hill"]
+- NEVER respond with "I need full names" - the system handles partial names
 
 RESPONSE FORMAT:
 1. START/SIT answers:
@@ -415,62 +423,117 @@ RULES:
                   const week = args.week || currentWeek;
                   const playerNames = args.player_names || [];
 
-                  // Query player_pool_v2 for projections
-                  const { data: poolData, error: poolError } = await supabase
-                    .from('player_pool_v2')
-                    .select('player_name, position, team, projected_fp, bye_week, opponent')
-                    .eq('week', week)
-                    .eq('season', currentSeason)
-                    .in('player_name', playerNames.map((n: string) => n.trim()));
-
-                  if (poolError) {
-                    console.error('Error fetching player pool data:', poolError);
-                    toolResult = { error: 'Failed to fetch player data' };
-                  } else {
-                    // Filter out bye week players and format data
-                    const validPlayers = (poolData || [])
-                      .filter((p: any) => !p.bye_week)
-                      .map((p: any) => ({
-                        player_name: p.player_name,
-                        position: p.position,
-                        team: p.team,
-                        projected_fp: p.projected_fp || 0,
-                        opponent: p.opponent
-                      }));
-
-                    toolResult = {
-                      week,
-                      players: validPlayers,
-                      data_source: 'player_pool_v2'
-                    };
+                  // Use fuzzy matching to find players by name
+                  const foundPlayers: any[] = [];
+                  for (const inputName of playerNames) {
+                    const nameTrimmed = inputName.trim();
+                    
+                    // Try exact match first
+                    let { data: exactMatch } = await supabase
+                      .from('player_pool_v2')
+                      .select('player_name, position, team, projected_fp, bye_week, opponent')
+                      .eq('week', week)
+                      .eq('season', currentSeason)
+                      .ilike('player_name', nameTrimmed)
+                      .limit(1)
+                      .single();
+                    
+                    if (exactMatch) {
+                      foundPlayers.push(exactMatch);
+                      continue;
+                    }
+                    
+                    // Fuzzy match: split input into parts and match each
+                    const nameParts = nameTrimmed.toLowerCase().split(/\s+/);
+                    let query = supabase
+                      .from('player_pool_v2')
+                      .select('player_name, position, team, projected_fp, bye_week, opponent')
+                      .eq('week', week)
+                      .eq('season', currentSeason);
+                    
+                    // Match all name parts using ILIKE
+                    for (const part of nameParts) {
+                      query = query.ilike('player_name', `%${part}%`);
+                    }
+                    
+                    const { data: fuzzyMatches } = await query.limit(3);
+                    
+                    if (fuzzyMatches && fuzzyMatches.length > 0) {
+                      // Take the first match (best match)
+                      foundPlayers.push(fuzzyMatches[0]);
+                    }
                   }
-                } else if (funcName === 'get_trade_data') {
-                  const playerNames = args.player_names || [];
 
-                  // Query player_rankings for ROS values
-                  const { data: rankingsData, error: rankingsError } = await supabase
-                    .from('player_rankings')
-                    .select('player_name, position, team, trade_value, avg_projected_ppg_ros')
-                    .eq('season', currentSeason)
-                    .in('player_name', playerNames.map((n: string) => n.trim()));
-
-                  if (rankingsError) {
-                    console.error('Error fetching player rankings:', rankingsError);
-                    toolResult = { error: 'Failed to fetch trade value data' };
-                  } else {
-                    const players = (rankingsData || []).map((p: any) => ({
+                  // Filter out bye week players and format data
+                  const validPlayers = foundPlayers
+                    .filter((p: any) => !p.bye_week)
+                    .map((p: any) => ({
                       player_name: p.player_name,
                       position: p.position,
                       team: p.team,
-                      trade_value: p.trade_value || 0,
-                      avg_projected_ppg_ros: p.avg_projected_ppg_ros || 0
+                      projected_fp: p.projected_fp || 0,
+                      opponent: p.opponent
                     }));
 
-                    toolResult = {
-                      players,
-                      data_source: 'player_rankings'
-                    };
+                  toolResult = {
+                    week,
+                    players: validPlayers,
+                    data_source: 'player_pool_v2'
+                  };
+                } else if (funcName === 'get_trade_data') {
+                  const playerNames = args.player_names || [];
+
+                  // Use fuzzy matching to find players by name
+                  const foundPlayers: any[] = [];
+                  for (const inputName of playerNames) {
+                    const nameTrimmed = inputName.trim();
+                    
+                    // Try exact match first
+                    let { data: exactMatch } = await supabase
+                      .from('player_rankings')
+                      .select('player_name, position, team, trade_value, avg_projected_ppg_ros')
+                      .eq('season', currentSeason)
+                      .ilike('player_name', nameTrimmed)
+                      .limit(1)
+                      .single();
+                    
+                    if (exactMatch) {
+                      foundPlayers.push(exactMatch);
+                      continue;
+                    }
+                    
+                    // Fuzzy match: split input into parts and match each
+                    const nameParts = nameTrimmed.toLowerCase().split(/\s+/);
+                    let query = supabase
+                      .from('player_rankings')
+                      .select('player_name, position, team, trade_value, avg_projected_ppg_ros')
+                      .eq('season', currentSeason);
+                    
+                    // Match all name parts using ILIKE
+                    for (const part of nameParts) {
+                      query = query.ilike('player_name', `%${part}%`);
+                    }
+                    
+                    const { data: fuzzyMatches } = await query.limit(3);
+                    
+                    if (fuzzyMatches && fuzzyMatches.length > 0) {
+                      // Take the first match (best match)
+                      foundPlayers.push(fuzzyMatches[0]);
+                    }
                   }
+
+                  const players = foundPlayers.map((p: any) => ({
+                    player_name: p.player_name,
+                    position: p.position,
+                    team: p.team,
+                    trade_value: p.trade_value || 0,
+                    avg_projected_ppg_ros: p.avg_projected_ppg_ros || 0
+                  }));
+
+                  toolResult = {
+                    players,
+                    data_source: 'player_rankings'
+                  };
                 }
 
                 // Add tool result message
