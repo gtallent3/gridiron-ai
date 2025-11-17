@@ -422,7 +422,8 @@ For lineup analysis: You have the full roster with projections above. Recommend 
                     body: { 
                       player1Name: args.player1Name, 
                       player2Name: args.player2Name,
-                      week: args.week || currentWeek
+                      week: args.week || currentWeek,
+                      season: currentSeason
                     }
                   });
                   toolResult = compareResponse.data;
