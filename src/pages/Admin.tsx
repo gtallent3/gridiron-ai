@@ -590,7 +590,16 @@ export default function Admin() {
         body: {}
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Edge function error:', error);
+        throw error;
+      }
+
+      console.log('Received data from edge function:', data);
+      
+      if (!data || !data.success) {
+        throw new Error(data?.error || 'Unknown error occurred');
+      }
 
       setPlayersResult(data);
       toast({
@@ -598,6 +607,7 @@ export default function Admin() {
         description: `Processed ${data.totalProcessed || 0} players from ${data.totalFromApi || 0} API records`,
       });
     } catch (error: any) {
+      console.error('Ingestion error:', error);
       toast({
         title: "Ingestion Error",
         description: error.message || "Failed to ingest players",
