@@ -581,6 +581,11 @@ export default function Admin() {
     setPlayersResult(null);
     
     try {
+      toast({
+        title: "Starting Player Ingestion",
+        description: "Fetching player data from Sleeper API...",
+      });
+
       const { data, error } = await supabase.functions.invoke('ingest-sleeper-players', {
         body: {}
       });
@@ -589,8 +594,8 @@ export default function Admin() {
 
       setPlayersResult(data);
       toast({
-        title: "Player Ingestion Started",
-        description: data.message || "Check logs for progress",
+        title: "Player Ingestion Complete ✅",
+        description: `Saved ${data.saved || 0} players to database`,
       });
     } catch (error: any) {
       toast({
@@ -610,6 +615,11 @@ export default function Admin() {
     setSleeperResult(null);
     
     try {
+      toast({
+        title: "Starting Projection Fetch",
+        description: "Fetching weekly projections from Sleeper API...",
+      });
+
       const { data, error } = await supabase.functions.invoke('fetch-sleeper-projections', {
         body: {}
       });
@@ -618,8 +628,8 @@ export default function Admin() {
 
       setSleeperResult(data);
       toast({
-        title: "Projections Fetched",
-        description: data.message || "Check logs for progress",
+        title: "Projections Fetched ✅",
+        description: `Processed ${data.recordsProcessed || 0} projection records`,
       });
     } catch (error: any) {
       toast({
@@ -639,6 +649,11 @@ export default function Admin() {
     setNflResult(null);
     
     try {
+      toast({
+        title: "Starting NFL Data Fetch",
+        description: "Fetching actual fantasy points for season 2025...",
+      });
+
       const { data, error } = await supabase.functions.invoke('ingest-nfl-fantasy-points', {
         body: { season: 2025 }
       });
@@ -647,8 +662,8 @@ export default function Admin() {
 
       setNflResult(data);
       toast({
-        title: "NFL Data Fetched",
-        description: data.message || `Processed ${data.records_processed || 0} records`,
+        title: "NFL Data Fetched ✅",
+        description: `Processed ${data.records_processed || 0} player-week records`,
       });
     } catch (error: any) {
       toast({
@@ -668,6 +683,11 @@ export default function Admin() {
     setTeamSchedulesResult(null);
     
     try {
+      toast({
+        title: "Starting Schedule Ingestion",
+        description: "Processing NFL team schedules for season 2025...",
+      });
+
       const { data, error } = await supabase.functions.invoke('ingest-team-schedules', {
         body: { season: 2025 }
       });
@@ -676,8 +696,8 @@ export default function Admin() {
 
       setTeamSchedulesResult(data);
       toast({
-        title: "Team Schedules Ingested",
-        description: `Processed ${data.records || 0} schedule records`,
+        title: "Team Schedules Ingested ✅",
+        description: `Processed ${data.records || 0} matchup records`,
       });
     } catch (error: any) {
       toast({
@@ -697,6 +717,11 @@ export default function Admin() {
     setPlayerPoolResult(null);
     
     try {
+      toast({
+        title: "Starting Player Pool Computation",
+        description: "Consolidating player data from multiple sources...",
+      });
+
       const { data, error } = await supabase.functions.invoke('compute-player-pool', {
         body: {}
       });
@@ -705,7 +730,7 @@ export default function Admin() {
 
       setPlayerPoolResult(data);
       toast({
-        title: "Player Pool Computed",
+        title: "Player Pool Computed ✅",
         description: `Inserted ${data.recordsInserted || 0} records for season ${data.season}`,
       });
     } catch (error: any) {
@@ -829,19 +854,19 @@ export default function Admin() {
     setComputingDefRankings(true);
     try {
       toast({
-        title: "Computing",
-        description: "Computing defensive rankings...",
+        title: "Starting Defensive Rankings",
+        description: "Analyzing defensive performance by position...",
       });
       
-      const { error } = await supabase.functions.invoke('compute-defensive-rankings', {
+      const { data, error } = await supabase.functions.invoke('compute-defensive-rankings', {
         body: { season: 2025 },
       });
 
       if (error) throw error;
       
       toast({
-        title: "Success",
-        description: "Defensive rankings computed successfully",
+        title: "Defensive Rankings Complete ✅",
+        description: `Ranked ${data?.rankedTeams || 'all'} teams across positions`,
       });
     } catch (error: any) {
       console.error('Error computing rankings:', error);
@@ -862,19 +887,19 @@ export default function Admin() {
     setComputingTeamSos(true);
     try {
       toast({
-        title: "Computing",
-        description: "Computing team SOS rankings...",
+        title: "Starting SOS Computation",
+        description: "Calculating strength of schedule for all teams...",
       });
       
-      const { error } = await supabase.functions.invoke('compute-team-sos', {
+      const { data, error } = await supabase.functions.invoke('compute-team-sos', {
         body: { season: 2025, currentWeek: 10 },
       });
 
       if (error) throw error;
       
       toast({
-        title: "Success",
-        description: "Team SOS rankings computed successfully",
+        title: "Team SOS Complete ✅",
+        description: `Computed ROS and Playoff SOS for ${data?.teamsProcessed || 'all'} teams`,
       });
     } catch (error: any) {
       console.error('Error computing team SOS:', error);
@@ -894,12 +919,17 @@ export default function Admin() {
   const handleComputePlayerRankings = async () => {
     setComputingPlayerRankings(true);
     try {
-      const { error } = await supabase.functions.invoke("compute-player-rankings");
+      toast({
+        title: "Starting Player Rankings",
+        description: "Computing player rankings from pool data...",
+      });
+
+      const { data, error } = await supabase.functions.invoke("compute-player-rankings");
       if (error) throw error;
       
       toast({
-        title: "Success",
-        description: "Player rankings computed successfully",
+        title: "Player Rankings Complete ✅",
+        description: `Ranked ${data?.playersRanked || 'all'} players across positions`,
       });
     } catch (error: any) {
       console.error("Error computing rankings:", error);
@@ -919,12 +949,17 @@ export default function Admin() {
   const handleComputeTradeValues = async () => {
     setComputingTradeValues(true);
     try {
+      toast({
+        title: "Starting Trade Value Computation",
+        description: "Calculating trade values based on player rankings...",
+      });
+
       const { data, error } = await supabase.functions.invoke("compute-trade-value-index");
       if (error) throw error;
       
       toast({
-        title: "Success",
-        description: data?.message || "Trade values computed successfully",
+        title: "Trade Values Complete ✅",
+        description: `Computed values for ${data?.playersProcessed || 'all'} players`,
       });
     } catch (error: any) {
       console.error("Error computing trade values:", error);
