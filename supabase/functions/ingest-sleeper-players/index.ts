@@ -115,24 +115,25 @@ serve(async (req) => {
         for (let i = 0; i < players.length; i += chunkSize) {
           const chunk = players.slice(i, i + chunkSize);
           
-          const { error: upsertError } = await supabase
+          const { error: upsertError, count } = await supabase
             .from("normalized_players")
             .upsert(chunk, {
               onConflict: "player_id",
+              count: 'exact'
             });
 
           if (upsertError) {
             console.error(`Chunk ${Math.floor(i / chunkSize) + 1} error:`, upsertError);
           } else {
             totalSaved += chunk.length;
-            console.log(`Saved chunk ${Math.floor(i / chunkSize) + 1} (${chunk.length} players). Total: ${totalSaved}`);
+            console.log(`Processed chunk ${Math.floor(i / chunkSize) + 1} (${chunk.length} players). Total processed: ${totalSaved}`);
           }
 
           // Yield to event loop
           await new Promise((resolve) => setTimeout(resolve, 0));
         }
 
-        console.log(`Completed: Saved ${totalSaved} players to normalized_players`);
+        console.log(`Completed: Processed ${totalSaved} players (upserted to normalized_players - updates existing, inserts new)`);
       } catch (error) {
         console.error("Ingestion error:", error);
       }
