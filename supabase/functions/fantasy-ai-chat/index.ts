@@ -228,15 +228,13 @@ RESPONSE FORMAT:
 
 2. TRADE answers:
    - Format: "Trade Verdict: [Accept/Decline]"
-   - CRITICAL DATA FIELDS - The tool returns TWO DIFFERENT numbers with EXPLICIT field names:
-     * TRADE_VALUE_FROM_DATABASE: The player's calculated fantasy trade value (0-100 scale) - USE THIS FOR "Trade Value"
-     * PROJECTED_PPG_ROS_FROM_DATABASE: The player's projected points per game - USE THIS FOR "Proj ROS PPG"
-   - When showing player data, use EXACT format:
-     "[Player Name] (Trade Value: [TRADE_VALUE_FROM_DATABASE], Proj ROS PPG: [PROJECTED_PPG_ROS_FROM_DATABASE])"
-   - EXAMPLE: Tool returns {player_name: "Brock Bowers", TRADE_VALUE_FROM_DATABASE: 50.0, PROJECTED_PPG_ROS_FROM_DATABASE: 16.4}
-     You MUST write: "Brock Bowers (Trade Value: 50.0, Proj ROS PPG: 16.4)"
-     NEVER write: "Brock Bowers (Trade Value: 16.4, Proj ROS PPG: 16.4)"
-   - Show: "Side A Total: XX.X | Side B Total: XX.X"
+   - CRITICAL: Tool returns object with "trade_value_score" and "projected_ppg" - THESE ARE DIFFERENT NUMBERS!
+   - Display format: "[Player Name] (Trade Value: [use trade_value_score], Proj ROS PPG: [use projected_ppg])"
+   - VALIDATION: Trade Value is typically 0-100, PPG is typically 5-25. If they're the same, YOU MADE AN ERROR!
+   - Example: {player_name: "Brock Bowers", trade_value_score: 50.0, projected_ppg: 16.4}
+     CORRECT: "Brock Bowers (Trade Value: 50.0, Proj ROS PPG: 16.4)"
+     WRONG: "Brock Bowers (Trade Value: 16.4, Proj ROS PPG: 16.4)" ← DO NOT DO THIS!
+   - Show totals: "Side A Total: XX.X | Side B Total: XX.X" (sum trade_value_score for each side)
    - Reason: One sentence about ROS value and position depth
 
 FORMATTING RULES:
@@ -281,7 +279,7 @@ RULES:
         type: "function",
         function: {
           name: "get_trade_data",
-          description: "Get rest-of-season values for trade evaluation from player_rankings table. Returns TWO DIFFERENT fields with EXPLICIT names: 'TRADE_VALUE_FROM_DATABASE' (the player's fantasy trade value, 0-100 scale - use this for Trade Value) and 'PROJECTED_PPG_ROS_FROM_DATABASE' (projected points per game - use this for Proj ROS PPG). NEVER use the same number for both fields!",
+          description: "Get player data for trades. Returns object with 'trade_value_score' (0-100 scale, use for Trade Value) and 'projected_ppg' (points per game, use for Proj ROS PPG). These are ALWAYS different numbers!",
           parameters: {
             type: "object",
             properties: {
@@ -542,12 +540,13 @@ RULES:
                     player_name: p.player_name,
                     position: p.position,
                     team: p.team,
-                    TRADE_VALUE_FROM_DATABASE: p.trade_value || 0,
-                    PROJECTED_PPG_ROS_FROM_DATABASE: p.avg_projected_ppg_ros || 0
+                    trade_value_score: p.trade_value || 0,
+                    projected_ppg: p.avg_projected_ppg_ros || 0
                   }));
 
                   toolResult = {
                     players,
+                    WARNING: "trade_value_score and projected_ppg are DIFFERENT numbers - do not confuse them!",
                     data_source: 'player_rankings'
                   };
                 }
