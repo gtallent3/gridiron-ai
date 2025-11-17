@@ -122,13 +122,13 @@ export function StartSitRecommendations({ starters, bench, onSubstitution }: Sta
               <Sparkles className="h-5 w-5 text-primary" />
               AI Start/Sit Recommendations
             </CardTitle>
-            <CardDescription className="flex flex-wrap items-center gap-2 text-sm">
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               Optimize your lineup with AI-powered suggestions
               <Badge variant="outline" className="text-xs flex items-center gap-1">
                 <Coins className="h-3 w-3" />
                 1 token
               </Badge>
-            </CardDescription>
+            </div>
           </div>
           <Button 
             onClick={analyzeLineup} 
