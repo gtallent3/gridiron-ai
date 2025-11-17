@@ -594,8 +594,8 @@ export default function Admin() {
 
       setPlayersResult(data);
       toast({
-        title: "Player Ingestion Complete ✅",
-        description: `Saved ${data.saved || 0} players to database`,
+        title: "Player Ingestion Started ✅",
+        description: "Processing in background. Check function logs for progress and final count.",
       });
     } catch (error: any) {
       toast({
