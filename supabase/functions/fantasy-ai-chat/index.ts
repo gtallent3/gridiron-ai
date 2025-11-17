@@ -696,6 +696,14 @@ RULES:
             
             // Make second AI call with tool results to get final answer
             console.log('Making second AI call with tool results');
+            const finalMessages = [
+              { role: 'system', content: systemPrompt },
+              ...messages,
+              ...toolMessages
+            ];
+            console.log('Second call message count:', finalMessages.length);
+            console.log('Tool messages being sent:', JSON.stringify(toolMessages, null, 2));
+            
             const secondAiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
               method: 'POST',
               headers: {
@@ -704,14 +712,12 @@ RULES:
               },
               body: JSON.stringify({
                 model: 'google/gemini-2.5-flash',
-                messages: [
-                  { role: 'system', content: systemPrompt },
-                  ...messages,
-                  ...toolMessages
-                ],
+                messages: finalMessages,
                 stream: true,
               }),
             });
+            
+            console.log('Second AI response status:', secondAiResponse.status);
             
             if (!secondAiResponse.ok) {
               const errorText = await secondAiResponse.text();
@@ -720,13 +726,20 @@ RULES:
               fullContent = errorMessage;
               controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: errorMessage })}\n\n`));
             } else {
+              console.log('Second AI response OK, starting to read stream...');
               const secondReader = secondAiResponse.body?.getReader();
               let secondBuffer = '';
+              let chunkCount = 0;
+              let contentReceived = false;
               
               while (true) {
                 const { done, value } = await secondReader!.read();
-                if (done) break;
+                if (done) {
+                  console.log('Second AI stream done. Chunks received:', chunkCount, 'Content received:', contentReceived);
+                  break;
+                }
 
+                chunkCount++;
                 secondBuffer += decoder.decode(value, { stream: true });
                 const lines = secondBuffer.split('\n');
                 secondBuffer = lines.pop() || '';
@@ -743,13 +756,21 @@ RULES:
                     const delta = parsed.choices?.[0]?.delta;
 
                     if (delta?.content) {
+                      contentReceived = true;
                       fullContent += delta.content;
                       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: delta.content })}\n\n`));
                     }
                   } catch (e) {
-                    console.error('Error parsing second AI response:', e);
+                    console.error('Error parsing second AI response:', e, 'Line:', line);
                   }
                 }
+              }
+              
+              if (!contentReceived) {
+                console.error('No content received from second AI call!');
+                const fallbackMessage = 'I analyzed your league data but had trouble formatting the response. Let me try a different approach - can you be more specific about which position you want to upgrade?';
+                fullContent = fallbackMessage;
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: fallbackMessage })}\n\n`));
               }
             }
           }
