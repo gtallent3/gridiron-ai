@@ -228,9 +228,14 @@ RESPONSE FORMAT:
 
 2. TRADE answers:
    - Format: "Trade Verdict: [Accept/Decline]"
-   - CRITICAL: When showing individual player values, ALWAYS use this EXACT format:
-     "[Player Name] (Trade Value: [trade_value field], Proj ROS PPG: [avg_projected_ppg_ros field])"
-   - NEVER use projected PPG as trade value - these are DIFFERENT metrics
+   - CRITICAL DATA FIELDS - These are TWO DIFFERENT numbers from the database:
+     * trade_value: The player's calculated fantasy trade value (usually 0-100 scale)
+     * avg_projected_ppg_ros: The player's projected fantasy points per game rest of season
+   - When showing player data, ALWAYS use this EXACT format with the ACTUAL VALUES from the tool result:
+     "[Player Name] (Trade Value: [USE trade_value FIELD], Proj ROS PPG: [USE avg_projected_ppg_ros FIELD])"
+   - EXAMPLE: If tool returns {player_name: "Josh Allen", trade_value: 85.2, avg_projected_ppg_ros: 23.5}
+     You MUST write: "Josh Allen (Trade Value: 85.2, Proj ROS PPG: 23.5)"
+     NOT: "Josh Allen (Trade Value: 23.5, Proj ROS PPG: 23.5)"
    - Show: "Side A Total: XX.X | Side B Total: XX.X"
    - Reason: One sentence about ROS value and position depth
 
@@ -276,7 +281,7 @@ RULES:
         type: "function",
         function: {
           name: "get_trade_data",
-          description: "Get rest-of-season values for trade evaluation from player_rankings table",
+          description: "Get rest-of-season values for trade evaluation from player_rankings table. Returns TWO DIFFERENT numeric fields for each player: 'trade_value' (calculated fantasy trade value, typically 0-100 scale) and 'avg_projected_ppg_ros' (projected fantasy points per game rest of season). These are DIFFERENT numbers - do not confuse them!",
           parameters: {
             type: "object",
             properties: {
