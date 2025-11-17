@@ -196,85 +196,78 @@ serve(async (req) => {
       );
     });
 
-    const systemPrompt = `You are an expert fantasy football AI assistant with deep knowledge of player performance, trade values, and lineup optimization.
+    const systemPrompt = `You are an expert fantasy football AI assistant. You MUST follow these strict rules:
 
+CONTEXT:
 ${contextParts.join('\n')}
 
-Your role:
-- Provide actionable fantasy advice based on current projections and trade values
-- Help evaluate trades using the analyze_trade tool
-- For lineup/start-sit questions, analyze the roster data provided above and make recommendations based on projections, matchups, and injury status
-- Suggest position improvements using the find_position_upgrade tool
-- Compare two specific players using the compare_players tool when users ask to compare Player A vs Player B
-- Keep responses concise and data-driven
-- Always reference specific player projections and trade values when making recommendations
+DATASET RULES (CRITICAL):
+1. For START/SIT questions → Use ONLY get_start_sit_data tool to query player_pool_v2 table
+2. For TRADE questions → Use ONLY get_trade_data tool to query player_rankings table
+3. NEVER mix datasets or reference unavailable data
 
-For lineup analysis: You have the full roster with projections above. Recommend lineup changes by comparing starters vs bench players with higher projections, considering bye weeks and injuries.`;
+QUESTION DETECTION:
+- START/SIT keywords: "start", "sit", "bench", "flex", "play", "lineup", "who should I", "better play"
+- TRADE keywords: "trade", "deal", "value", "offer", "worth", "accept", "swap"
+
+RESPONSE FORMAT:
+1. START/SIT answers:
+   - Format: "Start [Player Name]"
+   - Show: "Week X Projections — Player A: X.X pts | Player B: X.X pts"
+   - Reason: One short sentence explaining the difference
+   - If difference <1.0 pts: "Close call — start [player] slightly ahead"
+   - If difference >2.0 pts: "Start [player] confidently this week"
+
+2. TRADE answers:
+   - Format: "Trade Verdict: [Accept/Decline]"
+   - Show: "Side A Total: XX.X | Side B Total: XX.X"
+   - Reason: One sentence about ROS value and position depth
+
+RULES:
+- Default to current week (${currentWeek}) unless user specifies otherwise
+- Exclude players marked OUT or on bye week
+- Be direct and concise - no generic responses
+- If no data found: "No projection data available for one or more players"
+- Always call the appropriate tool based on question type`;
 
     const tools = [
       {
         type: "function",
         function: {
-          name: "analyze_trade",
-          description: "Evaluate a trade proposal using comprehensive trade value analysis",
+          name: "get_start_sit_data",
+          description: "Get current week projections for start/sit decisions from player_pool_v2 table",
           parameters: {
             type: "object",
             properties: {
-              teamAPlayers: {
+              player_names: {
                 type: "array",
-                description: "Array of player IDs that Team A is giving up",
+                description: "Array of player names to compare",
                 items: { type: "string" }
-              },
-              teamBPlayers: {
-                type: "array",
-                description: "Array of player IDs that Team B is giving up",
-                items: { type: "string" }
-              }
-            },
-            required: ["teamAPlayers", "teamBPlayers"]
-          }
-        }
-      },
-      {
-        type: "function",
-        function: {
-          name: "find_position_upgrade",
-          description: "Find trade opportunities to improve a specific position",
-          parameters: {
-            type: "object",
-            properties: {
-              position: {
-                type: "string",
-                description: "Position to upgrade (QB, RB, WR, or TE)",
-                enum: ["QB", "RB", "WR", "TE"]
-              }
-            },
-            required: ["position"]
-          }
-        }
-      },
-      {
-        type: "function",
-        function: {
-          name: "compare_players",
-          description: "Compare two specific players for start/sit decisions",
-          parameters: {
-            type: "object",
-            properties: {
-              player1Name: {
-                type: "string",
-                description: "Name of the first player"
-              },
-              player2Name: {
-                type: "string",
-                description: "Name of the second player"
               },
               week: {
                 type: "number",
-                description: "Week number (optional)"
+                description: "Week number (defaults to current week)"
               }
             },
-            required: ["player1Name", "player2Name"]
+            required: ["player_names"]
+          }
+        }
+      },
+      {
+        type: "function",
+        function: {
+          name: "get_trade_data",
+          description: "Get rest-of-season values for trade evaluation from player_rankings table",
+          parameters: {
+            type: "object",
+            properties: {
+              player_names: {
+                type: "array",
+                description: "Array of all players involved in the trade",
+                items: { type: "string" }
+              }
+            },
+            required: ["player_names"]
           }
         }
       }
@@ -396,6 +389,7 @@ For lineup analysis: You have the full roster with projections above. Recommend 
             }
           }
 
+          // Process tool calls if any
           if (toolCalls.length > 0) {
             console.log('Processing tool calls:', toolCalls);
             
@@ -407,26 +401,66 @@ For lineup analysis: You have the full roster with projections above. Recommend 
 
               let toolResult;
               try {
-                if (funcName === 'analyze_trade') {
-                  const tradeResponse = await supabase.functions.invoke('evaluate-trade-v3', {
-                    body: { leagueId, teamAPlayers: args.teamAPlayers, teamBPlayers: args.teamBPlayers }
-                  });
-                  toolResult = tradeResponse.data;
-                } else if (funcName === 'find_position_upgrade') {
-                  const upgradeResponse = await supabase.functions.invoke('improve-position', {
-                    body: { leagueId, position: args.position }
-                  });
-                  toolResult = upgradeResponse.data;
-                } else if (funcName === 'compare_players') {
-                  const compareResponse = await supabase.functions.invoke('analyze-start-sit', {
-                    body: { 
-                      player1Name: args.player1Name, 
-                      player2Name: args.player2Name,
-                      week: args.week || currentWeek,
-                      season: currentSeason
-                    }
-                  });
-                  toolResult = compareResponse.data;
+                if (funcName === 'get_start_sit_data') {
+                  const week = args.week || currentWeek;
+                  const playerNames = args.player_names || [];
+
+                  // Query player_pool_v2 for projections
+                  const { data: poolData, error: poolError } = await supabase
+                    .from('player_pool_v2')
+                    .select('player_name, position, team, projected_fp, bye_week, opponent')
+                    .eq('week', week)
+                    .eq('season', currentSeason)
+                    .in('player_name', playerNames.map((n: string) => n.trim()));
+
+                  if (poolError) {
+                    console.error('Error fetching player pool data:', poolError);
+                    toolResult = { error: 'Failed to fetch player data' };
+                  } else {
+                    // Filter out bye week players and format data
+                    const validPlayers = (poolData || [])
+                      .filter((p: any) => !p.bye_week)
+                      .map((p: any) => ({
+                        player_name: p.player_name,
+                        position: p.position,
+                        team: p.team,
+                        projected_fp: p.projected_fp || 0,
+                        opponent: p.opponent
+                      }));
+
+                    toolResult = {
+                      week,
+                      players: validPlayers,
+                      data_source: 'player_pool_v2'
+                    };
+                  }
+                } else if (funcName === 'get_trade_data') {
+                  const playerNames = args.player_names || [];
+
+                  // Query player_rankings for ROS values
+                  const { data: rankingsData, error: rankingsError } = await supabase
+                    .from('player_rankings')
+                    .select('player_name, position, team, trade_value, avg_projected_ppg_ros')
+                    .eq('season', currentSeason)
+                    .in('player_name', playerNames.map((n: string) => n.trim()));
+
+                  if (rankingsError) {
+                    console.error('Error fetching player rankings:', rankingsError);
+                    toolResult = { error: 'Failed to fetch trade value data' };
+                  } else {
+                    const players = (rankingsData || []).map((p: any) => ({
+                      player_name: p.player_name,
+                      position: p.position,
+                      team: p.team,
+                      trade_value: p.trade_value || 0,
+                      avg_projected_ppg_ros: p.avg_projected_ppg_ros || 0
+                    }));
+
+                    toolResult = {
+                      players,
+                      data_source: 'player_rankings'
+                    };
+                  }
                 }
 
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'tool_result', name: funcName, result: toolResult })}\n\n`));
