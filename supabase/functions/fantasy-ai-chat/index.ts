@@ -595,6 +595,9 @@ RULES:
                       body: { 
                         leagueId,
                         targetPosition: targetPos
+                      },
+                      headers: {
+                        Authorization: authHeader,
                       }
                     }
                   );
@@ -644,13 +647,35 @@ RULES:
             
             // Make second AI call with tool results to get final answer
             console.log('Making second AI call with tool results');
+            // Compact tool messages to avoid exceeding model input size limits
+            const MAX_TOOL_TOTAL = 1500;
+            const MAX_TOOL_PER = 800;
+            const compactToolMessages = toolMessages.map((m) => {
+              let c = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+              if (c.length > MAX_TOOL_PER) c = c.slice(0, MAX_TOOL_PER) + '... [truncated]';
+              return { ...m, content: c };
+            });
+            // Enforce total cap across all tool messages
+            let running = 0;
+            for (const m of compactToolMessages) {
+              if (running >= MAX_TOOL_TOTAL) {
+                m.content = '';
+                continue;
+              }
+              if (running + m.content.length > MAX_TOOL_TOTAL) {
+                m.content = m.content.slice(0, MAX_TOOL_TOTAL - running) + '...';
+                running = MAX_TOOL_TOTAL;
+              } else {
+                running += m.content.length;
+              }
+            }
             const finalMessages = [
               { role: 'system', content: systemPrompt },
               ...messages,
-              ...toolMessages
+              ...compactToolMessages
             ];
             console.log('Second call message count:', finalMessages.length);
-            console.log('Tool messages being sent:', JSON.stringify(toolMessages, null, 2));
+            console.log('Tool messages being sent:', JSON.stringify(compactToolMessages, null, 2));
             
             const secondAiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
               method: 'POST',
