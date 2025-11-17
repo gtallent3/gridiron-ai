@@ -713,7 +713,13 @@ RULES:
               }),
             });
             
-            if (secondAiResponse.ok) {
+            if (!secondAiResponse.ok) {
+              const errorText = await secondAiResponse.text();
+              console.error('Second AI call failed:', secondAiResponse.status, errorText);
+              const errorMessage = 'Sorry, I had trouble generating a response after analyzing the data. Please try asking again.';
+              fullContent = errorMessage;
+              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: errorMessage })}\n\n`));
+            } else {
               const secondReader = secondAiResponse.body?.getReader();
               let secondBuffer = '';
               
