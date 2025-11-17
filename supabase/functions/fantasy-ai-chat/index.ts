@@ -151,21 +151,24 @@ serve(async (req) => {
       contextParts.push(`User's Team: ${userTeam.team_name}`);
       contextParts.push(`Record: ${userTeam.wins || 0}-${userTeam.losses || 0}${userTeam.ties ? `-${userTeam.ties}` : ''}`);
       
-      const roster = userTeam.roster || {};
-      const starters = roster.starters || [];
-      const bench = roster.bench || [];
+      const roster = Array.isArray(userTeam.roster) ? userTeam.roster : [];
+      
+      // Separate starters from bench based on slot positions
+      // Slots 0-15 are typically starters, 20+ are bench
+      const starters = roster.filter((p: any) => p.slot < 20);
+      const bench = roster.filter((p: any) => p.slot >= 20);
       
       if (starters.length > 0) {
         contextParts.push(`\nStarting Lineup (${starters.length}):`);
         starters.forEach((p: any) => {
-          contextParts.push(`- ${p.player_name} (${p.position}, ${p.team || 'FA'}) - Proj: ${p.projected_points?.toFixed(1) || 'N/A'} pts`);
+          contextParts.push(`- ${p.player_name} (${p.position}, ${p.team || 'FA'}) - Proj: ${p.projected || 'N/A'} pts`);
         });
       }
       
       if (bench.length > 0) {
         contextParts.push(`\nBench (${bench.length}):`);
         bench.forEach((p: any) => {
-          contextParts.push(`- ${p.player_name} (${p.position}, ${p.team || 'FA'}) - Proj: ${p.projected_points?.toFixed(1) || 'N/A'} pts`);
+          contextParts.push(`- ${p.player_name} (${p.position}, ${p.team || 'FA'}) - Proj: ${p.projected || 'N/A'} pts`);
         });
       }
     }
