@@ -260,7 +260,7 @@ serve(async (req) => {
               team: teamAbbrev,
               season: currentSeason,
               week,
-              source: 'espn_projection',
+              source: 'composite',
               projected_fp: typeof weekProjection?.appliedTotal === 'number' ? weekProjection.appliedTotal : null,
               passing_yards: rawStats ? (parseFloat(rawStats['95']) || null) : null, // INTs
               passing_tds: rawStats ? (parseFloat(rawStats['99']) || null) : null, // sacks
@@ -402,7 +402,7 @@ serve(async (req) => {
             team: teamAbbrev,
             season: currentSeason,
             week,
-            source: 'espn_projection',
+            source: 'composite',
             projected_fp: typeof weekProjection?.appliedTotal === 'number' ? weekProjection.appliedTotal : null,
             passing_yards: rawStats ? (parseFloat(rawStats['95']) || null) : null,
             passing_tds: rawStats ? (parseFloat(rawStats['99']) || null) : null,
