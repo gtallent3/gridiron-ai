@@ -233,21 +233,22 @@ serve(async (req) => {
     // If nothing found with strict criteria, apply a relaxed fallback to avoid empty results
     if (suggestions.length === 0) {
       console.log('No suggestions from strict criteria, applying relaxed fallback targeting top players');
-      const candidateTargets: any[] = [];
+      // Fallback A: use players from teamRosters with non-zero trade values
+      const candidateTargetsA: any[] = [];
       for (const [teamId, roster] of teamRosters.entries()) {
         if (teamId === userTeamId) continue;
         for (const p of roster) {
-          if (targetPositions.includes(p.position) && p.trade_value > 10) {
-            candidateTargets.push({ ...p, teamId });
+          if (targetPositions.includes(p.position) && (p.trade_value || 0) > 10) {
+            candidateTargetsA.push({ ...p, teamId });
           }
         }
       }
-      candidateTargets.sort((a, b) => b.trade_value - a.trade_value);
-      const topTargets = candidateTargets.slice(0, 8);
-      for (const target of topTargets) {
+      candidateTargetsA.sort((a, b) => b.trade_value - a.trade_value);
+      const topTargetsA = candidateTargetsA.slice(0, 8);
+      for (const target of topTargetsA) {
         const offer = userRoster
-          .filter(p => p.trade_value > 0)
-          .sort((a, b) => Math.abs(a.trade_value - target.trade_value) - Math.abs(b.trade_value - target.trade_value))[0];
+          .filter(p => (p.trade_value || 0) > 0)
+          .sort((a, b) => Math.abs((a.trade_value || 0) - target.trade_value) - Math.abs((b.trade_value || 0) - target.trade_value))[0];
         if (offer) {
           const targetPosStrength = userStrengthMap.get(target.position);
           const teamStrengths = strengths.filter(s => s.team_id === target.teamId);
@@ -256,28 +257,85 @@ serve(async (req) => {
             target_player: {
               name: target.player_name,
               position: target.position,
-              trade_value: Math.round(target.trade_value * 10) / 10,
-              projected_ppg: Math.round(target.projected_ppg * 10) / 10
+              trade_value: Math.round((target.trade_value || 0) * 10) / 10,
+              projected_ppg: Math.round((target.projected_ppg || 0) * 10) / 10
             },
             offer_player: {
               name: offer.player_name,
               position: offer.position,
-              trade_value: Math.round(offer.trade_value * 10) / 10,
-              projected_ppg: Math.round(offer.projected_ppg * 10) / 10
+              trade_value: Math.round((offer.trade_value || 0) * 10) / 10,
+              projected_ppg: Math.round((offer.projected_ppg || 0) * 10) / 10
             },
             target_team_id: target.teamId,
             your_position_rank: targetPosStrength?.rank || 0,
             your_position_z_score: targetPosStrength ? Math.round(targetPosStrength.z_score * 100) / 100 : 0,
             their_position_rank: theirPosStrength?.rank || 0,
             their_position_z_score: theirPosStrength ? Math.round(theirPosStrength.z_score * 100) / 100 : 0,
-            value_difference: Math.round((target.trade_value - offer.trade_value) * 10) / 10,
+            value_difference: Math.round(((target.trade_value || 0) - (offer.trade_value || 0)) * 10) / 10,
             strategic_fit: {
               improves_your_weakness: targetPosStrength ? targetPosStrength.rank >= 6 : false,
               addresses_their_weakness: theirPosStrength ? theirPosStrength.rank >= 6 : false,
               trading_from_your_strength: tradeablePositions.includes(offer.position)
             },
-            rationale: `Fallback: Trade ${offer.player_name} for ${target.player_name} to improve ${target.position}.`
+            rationale: `Fallback A: Trade ${offer.player_name} for ${target.player_name} to improve ${target.position}.`
           });
+        }
+      }
+
+      // Fallback B: if still empty, build targets from trade_value_weekly and map to league rosters by name+position
+      if (suggestions.length === 0) {
+        console.log('Fallback A produced no results, applying Fallback B from trade_value_weekly');
+        const namePosToTeam = new Map<string, string>();
+        for (const [teamId, roster] of teamRosters.entries()) {
+          for (const p of roster) {
+            const key = `${(p.player_name || '').toLowerCase()}|${p.position || ''}`;
+            if (!namePosToTeam.has(key)) namePosToTeam.set(key, teamId);
+          }
+        }
+        const topTvw = (tvw || [])
+          .filter(r => targetPositions.includes(r.position || ''))
+          .slice(0, 50);
+        for (const r of topTvw) {
+          const key = `${(r.player_name || '').toLowerCase()}|${r.position || ''}`;
+          const teamId = namePosToTeam.get(key);
+          if (!teamId || teamId === userTeamId) continue;
+          const trade_value = Number(r.trade_value) || 0;
+          const projected_ppg = Number(r.meta_proj_ros_ppg) || 0;
+          if (trade_value <= 10) continue;
+          const offer = userRoster
+            .filter(p => (p.trade_value || 0) > 0)
+            .sort((a, b) => Math.abs((a.trade_value || 0) - trade_value) - Math.abs((b.trade_value || 0) - trade_value))[0];
+          if (!offer) continue;
+          const targetPosStrength = userStrengthMap.get(r.position || '');
+          const teamStrengths = strengths.filter(s => s.team_id === teamId);
+          const theirPosStrength = teamStrengths.find(s => s.position === offer.position);
+          suggestions.push({
+            target_player: {
+              name: r.player_name,
+              position: r.position,
+              trade_value: Math.round(trade_value * 10) / 10,
+              projected_ppg: Math.round(projected_ppg * 10) / 10
+            },
+            offer_player: {
+              name: offer.player_name,
+              position: offer.position,
+              trade_value: Math.round((offer.trade_value || 0) * 10) / 10,
+              projected_ppg: Math.round((offer.projected_ppg || 0) * 10) / 10
+            },
+            target_team_id: teamId,
+            your_position_rank: targetPosStrength?.rank || 0,
+            your_position_z_score: targetPosStrength ? Math.round(targetPosStrength.z_score * 100) / 100 : 0,
+            their_position_rank: theirPosStrength?.rank || 0,
+            their_position_z_score: theirPosStrength ? Math.round(theirPosStrength.z_score * 100) / 100 : 0,
+            value_difference: Math.round((trade_value - (offer.trade_value || 0)) * 10) / 10,
+            strategic_fit: {
+              improves_your_weakness: targetPosStrength ? targetPosStrength.rank >= 6 : false,
+              addresses_their_weakness: theirPosStrength ? theirPosStrength.rank >= 6 : false,
+              trading_from_your_strength: tradeablePositions.includes(offer.position)
+            },
+            rationale: `Fallback B: Trade ${offer.player_name} for ${r.player_name} to improve ${r.position}.`
+          });
+          if (suggestions.length >= 10) break;
         }
       }
     }

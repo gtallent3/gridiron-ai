@@ -610,7 +610,7 @@ RULES:
                     };
                   } else if (!suggestions || suggestions.suggestions?.length === 0) {
                     toolResult = {
-                      message: suggestions?.error || 'No trade suggestions available. Positional strength data may need to be computed first.',
+                      message: suggestions?.error || 'No matching trade suggestions found for this position right now.',
                       data_source: 'suggest-trade-targets'
                     };
                   } else {
