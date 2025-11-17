@@ -26,18 +26,18 @@ const BENCH_DEPTH: Record<string, number> = {
   DST: 0,
 };
 
-// Position-specific weight vectors (heavy starter emphasis)
+// Position-specific weight vectors (heavily emphasize top player, especially QB/TE)
 const POSITION_WEIGHTS: Record<string, number[]> = {
-  RB: [2.50, 2.00, 1.50, 0.10],  // Top 3 RBs heavily weighted (starters + flex)
-  WR: [2.50, 2.00, 1.50, 0.10],  // Top 3 WRs heavily weighted (starters + flex)
-  QB: [3.00, 0.10],              // Best QB heavily weighted, backup minimal
-  TE: [2.50, 0.10],              // Best TE heavily weighted, backup minimal
-  K: [1.50],                     // Best kicker only
-  DST: [1.50],                   // Best defense only
+  RB: [4.00, 2.50, 1.80, 0.15],  // Top RB heavily weighted (starters + flex)
+  WR: [4.00, 2.50, 1.80, 0.15],  // Top WR heavily weighted (starters + flex)
+  QB: [6.00, 0.10],              // Best QB VERY heavily weighted (single starter position)
+  TE: [5.50, 0.10],              // Best TE VERY heavily weighted (single starter position)
+  K: [2.00],                     // Best kicker only
+  DST: [2.00],                   // Best defense only
 };
 
-// FLEX weights for leftover RB/WR/TE
-const FLEX_WEIGHTS = [0.90, 0.50];
+// FLEX weights for leftover RB/WR/TE (emphasize best FLEX option)
+const FLEX_WEIGHTS = [1.50, 0.60];
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
