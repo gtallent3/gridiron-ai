@@ -158,6 +158,10 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
         return;
       }
 
+      // Deduct token before streaming
+      await deductToken("ai_assistant", `Question: ${input.substring(0, 50)}...`);
+
+      // Start SSE streaming
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fantasy-ai-chat`,
         {
@@ -180,17 +184,59 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
         throw new Error("Failed to get AI response");
       }
 
-      const data = await response.json();
-      
-      // Deduct token after successful response
-      await deductToken("ai_assistant", `Question: ${input.substring(0, 50)}...`);
-      
-      const aiResponse: Message = {
-        role: "assistant",
-        content: data.message,
-        expanded: false,
-      };
-      setMessages((prev) => [...prev, aiResponse]);
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let assistantContent = '';
+
+      while (true) {
+        const { done, value } = await reader!.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim() || line.startsWith(':')) continue;
+          if (!line.startsWith('data: ')) continue;
+
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') {
+            setIsTyping(false);
+            continue;
+          }
+
+          try {
+            const parsed = JSON.parse(data);
+
+            if (parsed.type === 'content') {
+              assistantContent += parsed.content;
+              
+              setMessages(prev => {
+                const last = prev[prev.length - 1];
+                if (last?.role === 'assistant') {
+                  return prev.map((m, i) => 
+                    i === prev.length - 1 
+                      ? { ...m, content: assistantContent }
+                      : m
+                  );
+                }
+                return [...prev, { role: 'assistant', content: assistantContent }];
+              });
+            } else if (parsed.type === 'tool_call') {
+              console.log('Tool call:', parsed.name, parsed.args);
+            } else if (parsed.type === 'tool_result') {
+              console.log('Tool result:', parsed.name, parsed.result);
+            } else if (parsed.type === 'tool_error') {
+              console.error('Tool error:', parsed.name, parsed.error);
+            }
+          } catch (e) {
+            console.error('Error parsing SSE data:', e);
+          }
+        }
+      }
+
     } catch (error) {
       console.error("Error getting AI response:", error);
       const errorMessage: Message = {
@@ -198,7 +244,6 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
         content: "Sorry, I encountered an error. Please try again.",
       };
       setMessages((prev) => [...prev, errorMessage]);
-    } finally {
       setIsTyping(false);
     }
   };
@@ -323,18 +368,18 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleQuickAction("waiver")}
+                onClick={() => handleQuickAction("upgrade")}
                 className="text-xs"
               >
-                Waiver Advice
+                Position Upgrade
               </Button>
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleQuickAction("projection")}
+                onClick={() => handleQuickAction("compare")}
                 className="text-xs"
               >
-                Weekly Projection
+                Compare Players
               </Button>
             </div>
           </div>
