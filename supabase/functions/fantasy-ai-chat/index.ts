@@ -235,7 +235,10 @@ RULES:
 - Default to current week (${currentWeek}) unless user specifies otherwise
 - Exclude players marked OUT or on bye week
 - Be direct and concise - no generic responses
-- If no data found: "No projection data available for one or more players"
+- MISSING DATA HANDLING:
+  * If ONE player has projections and the other doesn't: State "[Player without data] is not projected any points this week. Start [Player with data] who is projected X.X points."
+  * If BOTH players have no projections: State "Neither player is projected any points this week, making a data-based recommendation impossible."
+  * If ALL players have projections: Provide normal comparison
 - Always call the appropriate tool based on question type`;
 
     const tools = [
