@@ -324,10 +324,16 @@ RULES:
         type: "function",
         function: {
           name: "get_league_rosters",
-          description: "Get complete rosters for all teams in the league with player trade values. Use this to see which specific players are available on each team.",
+          description: "Get rosters for all teams in the league with player trade values. Optionally filter by position (QB, RB, WR, TE). Use this to see which specific players are available on each team.",
           parameters: {
             type: "object",
-            properties: {},
+            properties: {
+              position: {
+                type: "string",
+                description: "Optional: Filter to specific position (QB, RB, WR, TE)",
+                enum: ["QB", "RB", "WR", "TE"]
+              }
+            },
             required: []
           }
         }
@@ -603,42 +609,69 @@ RULES:
                       data_source: 'team_positional_strengths'
                     };
                   } else {
-                    // Group by team for easier analysis
-                    const teamStrengths: Record<string, any[]> = {};
-                    for (const strength of strengths) {
-                      if (!teamStrengths[strength.team_id]) {
-                        teamStrengths[strength.team_id] = [];
-                      }
-                      teamStrengths[strength.team_id].push({
-                        position: strength.position,
-                        rank: strength.rank,
-                        pss: strength.pss,
-                        z_score: strength.z_score,
-                        delta_vs_median: strength.delta_vs_median
+                    // Create concise summary - top 3 and bottom 3 per position
+                    const byPosition: Record<string, any[]> = {};
+                    strengths.forEach(s => {
+                      if (!byPosition[s.position]) byPosition[s.position] = [];
+                      byPosition[s.position].push({
+                        team: s.team_id,
+                        rank: s.rank,
+                        pss: Math.round(s.pss * 10) / 10
                       });
-                    }
+                    });
+                    
+                    const summary: Record<string, any> = {};
+                    Object.keys(byPosition).forEach(pos => {
+                      const teams = byPosition[pos];
+                      summary[pos] = {
+                        strongest: teams.slice(0, 3),
+                        weakest: teams.slice(-3).reverse()
+                      };
+                    });
+                    
+                    // Add user's team strengths
+                    const userStrengths = strengths
+                      .filter(s => s.team_id === userTeamId)
+                      .map(s => ({ 
+                        position: s.position, 
+                        rank: s.rank, 
+                        pss: Math.round(s.pss * 10) / 10 
+                      }));
 
                     toolResult = {
-                      team_strengths: teamStrengths,
-                      explanation: 'Lower rank = stronger position. PSS is Positional Strength Score. Z-score shows standard deviations from mean.',
+                      your_team: userStrengths,
+                      league_summary: summary,
+                      note: 'Lower rank = stronger. Target teams strong where you are weak.',
                       data_source: 'team_positional_strengths'
                     };
                   }
                 } else if (funcName === 'get_league_rosters') {
-                  // Get all team rosters with player rankings
-                  const { data: rosters } = await supabase
+                  // Check if specific position requested
+                  let targetPos: string | null = null;
+                  if (args.position) {
+                    targetPos = args.position.toUpperCase();
+                  }
+                  
+                  // Get all team rosters
+                  let query = supabase
                     .from('roster_snapshots')
                     .select('team_id, player_id, player_name, position, team')
-                    .eq('league_id', leagueId)
-                    .order('team_id');
+                    .eq('league_id', leagueId);
+                  
+                  // Filter by position if specified
+                  if (targetPos) {
+                    query = query.eq('position', targetPos);
+                  }
+                  
+                  const { data: rosters } = await query.order('team_id');
 
                   if (!rosters || rosters.length === 0) {
                     toolResult = {
-                      error: 'No roster data available for this league',
+                      error: targetPos ? `No ${targetPos} data available` : 'No roster data available',
                       data_source: 'roster_snapshots'
                     };
                   } else {
-                    // Get trade values for all players
+                    // Get trade values for filtered players
                     const playerNames = [...new Set(rosters.map(r => r.player_name))];
                     const { data: rankings } = await supabase
                       .from('player_rankings')
@@ -658,16 +691,23 @@ RULES:
                       }
                       const ranking = rankingsMap.get(player.player_name);
                       teamRosters[player.team_id].push({
-                        player_name: player.player_name,
+                        name: player.player_name,
                         position: player.position,
-                        team: player.team,
-                        trade_value: ranking?.trade_value || 0,
-                        projected_ppg: ranking?.avg_projected_ppg_ros || 0
+                        value: ranking?.trade_value || 0,
+                        ppg: ranking ? Math.round((ranking.avg_projected_ppg_ros || 0) * 10) / 10 : 0
                       });
                     }
+                    
+                    // Only keep top 5 players per team by value to reduce size
+                    Object.keys(teamRosters).forEach(teamId => {
+                      teamRosters[teamId].sort((a, b) => b.value - a.value);
+                      teamRosters[teamId] = teamRosters[teamId].slice(0, 5);
+                    });
 
                     toolResult = {
-                      team_rosters: teamRosters,
+                      position_filter: targetPos || 'all',
+                      top_players: teamRosters,
+                      note: 'value=trade chart score, ppg=projected points/game. Showing top 5 per team.',
                       data_source: 'roster_snapshots+player_rankings'
                     };
                   }
