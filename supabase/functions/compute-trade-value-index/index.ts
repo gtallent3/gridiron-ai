@@ -70,8 +70,8 @@ serve(async (req) => {
       targetAvg: number;  // desired average for topN after scaling
     }> = {
       QB: { wProj: 0.50, wActual: 0.50, sosMult: 0.12, sosPlayoffMult: 0.20, scarcity: 1.10, posMax: 50,  topN: 20, targetAvg: 20 },
-      RB: { wProj: 0.30, wActual: 0.70, sosMult: 0.10, sosPlayoffMult: 0.17, scarcity: 1.35, posMax: 110, topN: 30, targetAvg: 36 },
-      WR: { wProj: 0.40, wActual: 0.60, sosMult: 0.06, sosPlayoffMult: 0.10, scarcity: 0.95, posMax: 90,  topN: 30, targetAvg: 27 },
+      RB: { wProj: 0.30, wActual: 0.70, sosMult: 0.10, sosPlayoffMult: 0.17, scarcity: 1.45, posMax: 110, topN: 30, targetAvg: 36 },
+      WR: { wProj: 0.40, wActual: 0.60, sosMult: 0.06, sosPlayoffMult: 0.10, scarcity: 1.05, posMax: 90,  topN: 30, targetAvg: 27 },
       TE: { wProj: 0.60, wActual: 0.40, sosMult: 0.04, sosPlayoffMult: 0.06, scarcity: 1.25, posMax: 50,  topN: 20, targetAvg: 20 },
     };
 
@@ -110,15 +110,24 @@ serve(async (req) => {
       const last3 = Number(p.actual_last3_ppg ?? 0);
       const season = Number(p.actual_season_ppg ?? 0);
       const actualWeighted = (last3 * 0.60) + (season * 0.40);
+      const projectedROS = Number(p.avg_projected_ppg_ros ?? 0);
+      
+      // Detect injury/returning scenario: low recent actual but decent projections
+      // In this case, weight projections more heavily to avoid undervaluing returning players
+      let wProj = cfg.wProj;
+      let wActual = cfg.wActual;
+      if (last3 < 3 && projectedROS > 8) {
+        // Likely injured/returning - trust projections more
+        wProj = 0.75;
+        wActual = 0.25;
+      }
       
       // If no last 3 week data, fallback to avg_actual_ppg
       const finalActual = (last3 === 0 && season === 0) 
         ? Number(p.avg_actual_ppg ?? 0) 
         : actualWeighted;
 
-      const baseline =
-        (Number(p.avg_projected_ppg_ros ?? 0) * cfg.wProj) +
-        (finalActual * cfg.wActual);
+      const baseline = (projectedROS * wProj) + (finalActual * wActual);
 
       // Debug log first 3 players with weighted actuals
       if (debugSampleCount < 3 && last3 > 0) {
