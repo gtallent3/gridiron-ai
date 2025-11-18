@@ -2054,6 +2054,17 @@ export type Database = {
         Args: { p_league_id: string; p_platform: string; p_user_id: string }
         Returns: Json
       }
+      get_player_actuals: {
+        Args: { p_current_week: number; p_season: number }
+        Returns: {
+          actual_fp: number
+          canonical_player_id: string
+          player_name: string
+          position: string
+          team: string
+          week: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
