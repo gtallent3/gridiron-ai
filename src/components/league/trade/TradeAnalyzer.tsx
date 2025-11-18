@@ -78,7 +78,7 @@ export function TradeAnalyzer({ league, userTeam }: TradeAnalyzerProps) {
   const checkPlayerDataStatus = async () => {
     try {
       const { data, error } = await supabase
-        .from('trade_value_weekly')
+        .from('player_rankings')
         .select('updated_at', { count: 'exact' })
         .order('updated_at', { ascending: false })
         .limit(1);
