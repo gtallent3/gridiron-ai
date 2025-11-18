@@ -76,8 +76,8 @@ serve(async (req) => {
     };
 
     // Low-PPG reduction: if avg_projected_ppg_ros < threshold, scale down
-    const LOW_PPG_THRESHOLD = Number(Deno.env.get("LOW_PPG_THRESHOLD") ?? 8);
-    const LOW_PPG_FACTOR = Number(Deno.env.get("LOW_PPG_FACTOR") ?? 0.25);
+    const LOW_PPG_THRESHOLD = Number(Deno.env.get("LOW_PPG_THRESHOLD") ?? 7);
+    const LOW_PPG_FACTOR = Number(Deno.env.get("LOW_PPG_FACTOR") ?? 0.35);
 
     // Bye week adjustments
     const BYE_DONE_BOOST = Number(Deno.env.get("BYE_DONE_BOOST") ?? 1.05);
@@ -156,6 +156,7 @@ serve(async (req) => {
       position: string;
       team: string | null;
       raw_value: number;
+      avg_projected_ppg_ros: number;
     };
 
     const rawRows: RawOut[] = [];
@@ -195,7 +196,27 @@ serve(async (req) => {
         position: p.position,
         team: p.team,
         raw_value: Number(raw.toFixed(6)),
+        avg_projected_ppg_ros: Number(p.avg_projected_ppg_ros ?? 0),
       });
+    }
+
+    // Apply soft floor before normalization to reduce minimum-value clustering
+    for (const pos of Object.keys(POS_CONF)) {
+      const list = rawRows.filter(r => r.position === pos);
+      if (list.length === 0) continue;
+
+      const posRepl = replPPG[pos] ?? 0;
+      const nonzeroRawValues = list.map(r => r.raw_value).filter(v => v > 0);
+      
+      if (nonzeroRawValues.length > 0) {
+        const minNonzeroRaw = Math.min(...nonzeroRawValues);
+        
+        for (const r of list) {
+          if (r.raw_value === 0 && r.avg_projected_ppg_ros >= (posRepl - 1.0)) {
+            r.raw_value = 0.5 * minNonzeroRaw;
+          }
+        }
+      }
     }
 
     // Normalize/scaling per position
