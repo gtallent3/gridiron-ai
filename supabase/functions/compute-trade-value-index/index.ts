@@ -15,6 +15,7 @@ serve(async (req) => {
 
   try {
     console.log("Starting Trade Value Index (VORP-based) computation...");
+    console.log("Using weighted actual PPG: 60% last 3 weeks + 40% season excluding last 3");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -99,6 +100,7 @@ serve(async (req) => {
     };
 
     const rows: Array<Row & { baseline: number }> = [];
+    let debugSampleCount = 0;
     for (const p of rankings as Row[]) {
       if (!p.player_name || !p.position) continue;
       const cfg = POS_CONF[p.position];
@@ -117,6 +119,12 @@ serve(async (req) => {
       const baseline =
         (Number(p.avg_projected_ppg_ros ?? 0) * cfg.wProj) +
         (finalActual * cfg.wActual);
+
+      // Debug log first 3 players with weighted actuals
+      if (debugSampleCount < 3 && last3 > 0) {
+        console.log(`Weighted actual sample - ${p.player_name}: last3=${last3.toFixed(2)}, season=${season.toFixed(2)}, weighted=${actualWeighted.toFixed(2)}, final=${finalActual.toFixed(2)}`);
+        debugSampleCount++;
+      }
 
       rows.push({ ...p, baseline });
     }
