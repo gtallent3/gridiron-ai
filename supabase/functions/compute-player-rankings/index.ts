@@ -55,24 +55,6 @@ serve(async (req) => {
     currentWeek = (latestActualWeek > 0 ? latestActualWeek : 0) + 1;
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek} (latestV2Week: ${latestV2Week}, latestNflWeek: ${latestNflWeek})`);
 
-    // Fetch actuals from player_pool_v2 (actual_fp)
-    // Use lte to include the current week if it has actual data
-    // Explicitly exclude kickers (K) from rankings
-    // Filter out null actual_fp AND filter out zero/negative values which indicate no actual data
-    const { data: actualsData, error: actualsError } = await supabase
-      .from('player_pool_v2')
-      .select('canonical_player_id, player_name, position, team, week, actual_fp')
-      .eq('season', season)
-      .not('actual_fp', 'is', null)
-      .gt('actual_fp', 0)
-      .lte('week', currentWeek)
-      .in('position', ['QB', 'RB', 'WR', 'TE'])
-      .not('team', 'is', null)
-      .order('canonical_player_id', { ascending: true })
-      .order('week', { ascending: true });
-
-    if (actualsError) throw actualsError;
-
     // Fetch projections from player_pool_v2 (projected_fp)
     // Explicitly exclude kickers (K) from rankings
     const { data: projectionsData, error: projectionsError } = await supabase
@@ -113,29 +95,25 @@ serve(async (req) => {
 
     const pageSize = 1000;
 
-    // Collect ALL actuals with pagination (default range cap is 1000)
-    let actuals = actualsData || [];
-    if (actuals.length === pageSize) {
-      let from = pageSize;
-      while (true) {
-        const { data: more, error: moreErr } = await supabase
-          .from('player_pool_v2')
-          .select('canonical_player_id, player_name, position, team, week, actual_fp')
-          .eq('season', season)
-          .not('actual_fp', 'is', null)
-          .gt('actual_fp', 0)
-          .lte('week', currentWeek)
-          .in('position', ['QB','RB','WR','TE'])
-          .not('team', 'is', null)
-          .order('canonical_player_id', { ascending: true })
-          .order('week', { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (moreErr) throw moreErr;
-        if (!more || more.length === 0) break;
-        actuals = actuals.concat(more as any);
-        if (more.length < pageSize) break;
-        from += pageSize;
-      }
+    // Collect ALL actuals with pagination using deduplicated function
+    let actuals: any[] = [];
+    const batchSize = 10000;
+    let offset = 0;
+    
+    while (true) {
+      const { data: batch, error: batchErr } = await supabase
+        .rpc('get_player_actuals', {
+          p_season: season,
+          p_current_week: currentWeek
+        })
+        .range(offset, offset + batchSize - 1);
+      
+      if (batchErr) throw batchErr;
+      if (!batch || batch.length === 0) break;
+      
+      actuals = actuals.concat(batch);
+      if (batch.length < batchSize) break;
+      offset += batchSize;
     }
 
     // Collect ALL projections with pagination
