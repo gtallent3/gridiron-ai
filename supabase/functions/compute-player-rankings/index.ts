@@ -55,6 +55,8 @@ serve(async (req) => {
     currentWeek = (latestActualWeek > 0 ? latestActualWeek : 0) + 1;
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek} (latestV2Week: ${latestV2Week}, latestNflWeek: ${latestNflWeek})`);
 
+    const pageSize = 1000;
+
     // Fetch actuals from nfl_fantasy_points
     const { data: nflActualsData, error: nflActualsError } = await supabase
       .from('nfl_fantasy_points')
@@ -83,13 +85,25 @@ serve(async (req) => {
 
     if (projectionsError) throw projectionsError;
 
-    // Fetch canonical_players to map nfl_id to canonical_player_id
-    const { data: canonicalPlayersData, error: canonicalError } = await supabase
-      .from('canonical_players')
-      .select('id, nfl_id, player_name, position')
-      .not('nfl_id', 'is', null);
-
-    if (canonicalError) throw canonicalError;
+    // Fetch ALL canonical_players with pagination to map nfl_id to canonical_player_id
+    let canonicalPlayersData: any[] = [];
+    let canonicalFrom = 0;
+    while (true) {
+      const { data: batch, error: canonicalError } = await supabase
+        .from('canonical_players')
+        .select('id, nfl_id, player_name, position')
+        .not('nfl_id', 'is', null)
+        .range(canonicalFrom, canonicalFrom + pageSize - 1);
+      
+      if (canonicalError) throw canonicalError;
+      if (!batch || batch.length === 0) break;
+      
+      canonicalPlayersData = canonicalPlayersData.concat(batch);
+      if (batch.length < pageSize) break;
+      canonicalFrom += pageSize;
+    }
+    
+    console.log(`Fetched ${canonicalPlayersData.length} canonical players with nfl_id`);
 
     // Create lookup map: nfl_id -> canonical_player_id
     const nflIdToCanonical = new Map<string, string>();
@@ -129,8 +143,6 @@ serve(async (req) => {
       if (row.canonical_player_id) return row.canonical_player_id;
       return `${normalizeName(row.player_name)}:${row.position}`;
     };
-
-    const pageSize = 1000;
 
     // Collect ALL actuals from nfl_fantasy_points with pagination
     let nflActuals = nflActualsData || [];
