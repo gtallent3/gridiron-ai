@@ -55,6 +55,19 @@ serve(async (req) => {
     currentWeek = (latestActualWeek > 0 ? latestActualWeek : 0) + 1;
     console.log(`Computing player rankings for season ${season}, current week: ${currentWeek} (latestV2Week: ${latestV2Week}, latestNflWeek: ${latestNflWeek})`);
 
+    // Fetch actuals from nfl_fantasy_points
+    const { data: nflActualsData, error: nflActualsError } = await supabase
+      .from('nfl_fantasy_points')
+      .select('player_id, player_name, position, team, week, fantasy_points_ppr, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds')
+      .eq('season', season)
+      .lte('week', currentWeek)
+      .in('position', ['QB', 'RB', 'WR', 'TE'])
+      .not('team', 'is', null)
+      .order('player_id', { ascending: true })
+      .order('week', { ascending: true });
+
+    if (nflActualsError) throw nflActualsError;
+
     // Fetch projections from player_pool_v2 (projected_fp)
     // Explicitly exclude kickers (K) from rankings
     const { data: projectionsData, error: projectionsError } = await supabase
@@ -69,6 +82,22 @@ serve(async (req) => {
       .order('week', { ascending: true });
 
     if (projectionsError) throw projectionsError;
+
+    // Fetch canonical_players to map nfl_id to canonical_player_id
+    const { data: canonicalPlayersData, error: canonicalError } = await supabase
+      .from('canonical_players')
+      .select('id, nfl_id, player_name, position')
+      .not('nfl_id', 'is', null);
+
+    if (canonicalError) throw canonicalError;
+
+    // Create lookup map: nfl_id -> canonical_player_id
+    const nflIdToCanonical = new Map<string, string>();
+    for (const cp of canonicalPlayersData || []) {
+      if (cp.nfl_id) {
+        nflIdToCanonical.set(cp.nfl_id, cp.id);
+      }
+    }
 
     // Normalize player name by removing suffixes
     const normalizeName = (name: string): string => {
@@ -95,26 +124,38 @@ serve(async (req) => {
 
     const pageSize = 1000;
 
-    // Collect ALL actuals with pagination using deduplicated function
-    let actuals: any[] = [];
-    const batchSize = 10000;
-    let offset = 0;
-    
-    while (true) {
-      const { data: batch, error: batchErr } = await supabase
-        .rpc('get_player_actuals', {
-          p_season: season,
-          p_current_week: currentWeek
-        })
-        .range(offset, offset + batchSize - 1);
-      
-      if (batchErr) throw batchErr;
-      if (!batch || batch.length === 0) break;
-      
-      actuals = actuals.concat(batch);
-      if (batch.length < batchSize) break;
-      offset += batchSize;
+    // Collect ALL actuals from nfl_fantasy_points with pagination
+    let nflActuals = nflActualsData || [];
+    if (nflActuals.length === pageSize) {
+      let from = pageSize;
+      while (true) {
+        const { data: more, error: moreErr } = await supabase
+          .from('nfl_fantasy_points')
+          .select('player_id, player_name, position, team, week, fantasy_points_ppr, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds')
+          .eq('season', season)
+          .lte('week', currentWeek)
+          .in('position', ['QB', 'RB', 'WR', 'TE'])
+          .not('team', 'is', null)
+          .order('player_id', { ascending: true })
+          .order('week', { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (moreErr) throw moreErr;
+        if (!more || more.length === 0) break;
+        nflActuals = nflActuals.concat(more as any);
+        if (more.length < pageSize) break;
+        from += pageSize;
+      }
     }
+
+    // Map nfl_fantasy_points to actuals with canonical_player_id
+    const actuals = nflActuals.map((nfl: any) => ({
+      canonical_player_id: nflIdToCanonical.get(nfl.player_id) || null,
+      player_name: nfl.player_name,
+      position: nfl.position,
+      team: normalizeTeam(nfl.team),
+      week: nfl.week,
+      actual_fp: Number(nfl.fantasy_points_ppr || 0)
+    })).filter(a => a.canonical_player_id); // Only include players with canonical mapping
 
     // Collect ALL projections with pagination
     let projections = projectionsData || [];
