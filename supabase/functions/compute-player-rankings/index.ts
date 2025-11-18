@@ -181,18 +181,21 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Fetched ${actuals.length} actuals and ${projections.length} projections from player_pool_v2`);
+    console.log(`Fetched ${actuals.length} actuals from nfl_fantasy_points and ${projections.length} projections from player_pool_v2`);
     
-    // Debug: Check Henderson's raw data
-    const hendersonActuals = actuals.filter((a: any) => a.player_name?.includes('Henderson') && a.position === 'RB');
-    if (hendersonActuals.length > 0) {
-      console.log('DEBUG Henderson raw actuals from fetch:', JSON.stringify(hendersonActuals.map((a: any) => ({
-        canonical_id: a.canonical_player_id,
-        name: a.player_name,
-        week: a.week,
-        actual_fp: a.actual_fp,
-        team: a.team
-      }))));
+    // Debug: Check specific players' raw data
+    const debugPlayers = ['Justin Jefferson', 'Michael Pittman', 'TreVeyon Henderson'];
+    for (const playerName of debugPlayers) {
+      const playerActuals = actuals.filter((a: any) => a.player_name?.includes(playerName.split(' ')[1]));
+      if (playerActuals.length > 0) {
+        console.log(`DEBUG ${playerName} raw actuals:`, JSON.stringify(playerActuals.slice(0, 3).map((a: any) => ({
+          canonical_id: a.canonical_player_id,
+          name: a.player_name,
+          week: a.week,
+          actual_fp: a.actual_fp,
+          team: a.team
+        }))));
+      }
     }
 
     // Fetch bye weeks from player_pool_v2 (where bye_week=true), with pagination and only relevant positions
@@ -286,6 +289,7 @@ serve(async (req) => {
       if (!playerActuals.has(key)) playerActuals.set(key, []);
       playerActuals.get(key)!.push(act);
     }
+    console.log(`Grouped ${playerActuals.size} unique players with actuals`);
 
     // Compute rankings for all players
     const rankings = [] as any[];
@@ -332,23 +336,20 @@ serve(async (req) => {
         anomalySamples.push({ player: playerInfo.player_name, position: playerInfo.position, team: playerInfo.team, projs: projs.map(p => ({ week: p.week, pts: Number(p.projected_fp || 0) })) });
       }
 
-      // Targeted debug for TreVeyon Henderson
-      if (playerInfo.player_name === 'TreVeyon Henderson' || playerInfo.player_name.includes('Henderson')) {
-        console.log('DEBUG TreVeyon Henderson', JSON.stringify({
-          currentWeek,
-          last3Weeks,
-          acts: acts.map((a: any) => ({ week: a.week, actual_fp: Number(a.actual_fp || 0) })),
-          validActs: validActs.map((a: any) => ({ week: a.week, actual_fp: Number(a.actual_fp || 0) })),
-          last3Acts: last3Acts.map((a: any) => ({ week: a.week, actual_fp: Number(a.actual_fp || 0) })),
-          totalLast3Pts,
-          actualLast3Ppg,
-          seasonActs: seasonActs.map((a: any) => ({ week: a.week, actual_fp: Number(a.actual_fp || 0) })),
-          totalSeasonPts,
-          actualSeasonPpg,
-          avgActualPpg,
-          avgProjectedPpgRos,
-          key: playerKey,
+      // Targeted debug for specific players
+      const isDebugPlayer = ['Jefferson', 'Pittman', 'Henderson'].some(n => playerInfo.player_name.includes(n));
+      if (isDebugPlayer) {
+        console.log(`DEBUG ${playerInfo.player_name}:`, JSON.stringify({
+          playerKey,
           canonical_id: playerInfo.player_id,
+          currentWeek,
+          acts_count: acts.length,
+          acts_sample: acts.slice(0, 2).map((a: any) => ({ week: a.week, actual_fp: a.actual_fp })),
+          projs_count: projs.length,
+          avgActualPpg,
+          actualLast3Ppg,
+          actualSeasonPpg,
+          avgProjectedPpgRos
         }));
       }
 
