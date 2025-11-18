@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3?target=deno";
 import { z } from "https://deno.land/x/zod@v3.22.4/mod.ts";
 
 // Helper function to normalize player names for matching
