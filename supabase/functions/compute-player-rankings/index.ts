@@ -279,6 +279,17 @@ serve(async (req) => {
       const totalActualPts = validActs.reduce((sum, a) => sum + Number(a.actual_fp || 0), 0);
       const avgActualPpg = validActs.length > 0 ? totalActualPts / validActs.length : 0;
 
+      // Calculate last 3 weeks actual PPG (weeks: currentWeek-3, currentWeek-2, currentWeek-1)
+      const last3Weeks = [currentWeek - 3, currentWeek - 2, currentWeek - 1];
+      const last3Acts = validActs.filter((a: any) => last3Weeks.includes(a.week));
+      const totalLast3Pts = last3Acts.reduce((sum, a) => sum + Number(a.actual_fp || 0), 0);
+      const actualLast3Ppg = last3Acts.length > 0 ? totalLast3Pts / last3Acts.length : 0;
+
+      // Calculate season PPG excluding last 3 weeks
+      const seasonActs = validActs.filter((a: any) => !last3Weeks.includes(a.week));
+      const totalSeasonPts = seasonActs.reduce((sum, a) => sum + Number(a.actual_fp || 0), 0);
+      const actualSeasonPpg = seasonActs.length > 0 ? totalSeasonPts / seasonActs.length : 0;
+
       // Debug counts
       if (projs.length > 0) debugCounts.withProjs++; else debugCounts.noProjs++;
       if (validProjs.length > 0) debugCounts.withNonZeroProjs++;
@@ -316,6 +327,8 @@ serve(async (req) => {
         team: playerInfo.team,
         avg_projected_ppg_ros: avgProjectedPpgRos,
         avg_actual_ppg: avgActualPpg,
+        actual_last3_ppg: actualLast3Ppg,
+        actual_season_ppg: actualSeasonPpg,
         bye_week: byeWeek,
         ros_sos_rank: rosSosRank,
         playoff_sos_rank: playoffSosRank,

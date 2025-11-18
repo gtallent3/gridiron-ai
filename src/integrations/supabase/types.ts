@@ -874,6 +874,8 @@ export type Database = {
       }
       player_rankings: {
         Row: {
+          actual_last3_ppg: number | null
+          actual_season_ppg: number | null
           avg_actual_ppg: number
           avg_projected_ppg_ros: number
           bye_week: number | null
@@ -890,6 +892,8 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          actual_last3_ppg?: number | null
+          actual_season_ppg?: number | null
           avg_actual_ppg?: number
           avg_projected_ppg_ros?: number
           bye_week?: number | null
@@ -906,6 +910,8 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          actual_last3_ppg?: number | null
+          actual_season_ppg?: number | null
           avg_actual_ppg?: number
           avg_projected_ppg_ros?: number
           bye_week?: number | null
