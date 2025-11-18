@@ -1666,66 +1666,6 @@ export type Database = {
         }
         Relationships: []
       }
-      trade_value_weekly: {
-        Row: {
-          created_at: string | null
-          current_week: number
-          id: string
-          meta_bye_adj: number | null
-          meta_proj_ros_ppg: number | null
-          meta_recent_ppg: number | null
-          meta_season_ppg: number | null
-          meta_sos_po_rank: number | null
-          meta_sos_reg_rank: number | null
-          player_id: string
-          player_name: string
-          position: string
-          raw_value: number
-          snapshot_date: string
-          team: string | null
-          trade_value: number
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          current_week: number
-          id?: string
-          meta_bye_adj?: number | null
-          meta_proj_ros_ppg?: number | null
-          meta_recent_ppg?: number | null
-          meta_season_ppg?: number | null
-          meta_sos_po_rank?: number | null
-          meta_sos_reg_rank?: number | null
-          player_id: string
-          player_name: string
-          position: string
-          raw_value?: number
-          snapshot_date?: string
-          team?: string | null
-          trade_value?: number
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          current_week?: number
-          id?: string
-          meta_bye_adj?: number | null
-          meta_proj_ros_ppg?: number | null
-          meta_recent_ppg?: number | null
-          meta_season_ppg?: number | null
-          meta_sos_po_rank?: number | null
-          meta_sos_reg_rank?: number | null
-          player_id?: string
-          player_name?: string
-          position?: string
-          raw_value?: number
-          snapshot_date?: string
-          team?: string | null
-          trade_value?: number
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       trade_values: {
         Row: {
           bye_week: number | null
