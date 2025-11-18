@@ -58,11 +58,13 @@ serve(async (req) => {
     // Fetch actuals from player_pool_v2 (actual_fp)
     // Use lte to include the current week if it has actual data
     // Explicitly exclude kickers (K) from rankings
+    // Filter out null actual_fp AND filter out zero/negative values which indicate no actual data
     const { data: actualsData, error: actualsError } = await supabase
       .from('player_pool_v2')
       .select('canonical_player_id, player_name, position, team, week, actual_fp')
       .eq('season', season)
       .not('actual_fp', 'is', null)
+      .gt('actual_fp', 0)
       .lte('week', currentWeek)
       .in('position', ['QB', 'RB', 'WR', 'TE'])
       .not('team', 'is', null)
@@ -121,6 +123,7 @@ serve(async (req) => {
           .select('canonical_player_id, player_name, position, team, week, actual_fp')
           .eq('season', season)
           .not('actual_fp', 'is', null)
+          .gt('actual_fp', 0)
           .lte('week', currentWeek)
           .in('position', ['QB','RB','WR','TE'])
           .not('team', 'is', null)
