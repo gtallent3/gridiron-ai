@@ -91,6 +91,8 @@ serve(async (req) => {
       team: string | null;
       avg_projected_ppg_ros: number | null;
       avg_actual_ppg: number | null;
+      actual_last3_ppg: number | null;
+      actual_season_ppg: number | null;
       ros_sos_rank: number | null;
       playoff_sos_rank: number | null;
       bye_week: number | null;
@@ -102,9 +104,19 @@ serve(async (req) => {
       const cfg = POS_CONF[p.position];
       if (!cfg) continue;
 
+      // Calculate weighted actual PPG: 60% last 3 weeks, 40% season (excluding last 3)
+      const last3 = Number(p.actual_last3_ppg ?? 0);
+      const season = Number(p.actual_season_ppg ?? 0);
+      const actualWeighted = (last3 * 0.60) + (season * 0.40);
+      
+      // If no last 3 week data, fallback to avg_actual_ppg
+      const finalActual = (last3 === 0 && season === 0) 
+        ? Number(p.avg_actual_ppg ?? 0) 
+        : actualWeighted;
+
       const baseline =
         (Number(p.avg_projected_ppg_ros ?? 0) * cfg.wProj) +
-        (Number(p.avg_actual_ppg ?? 0) * cfg.wActual);
+        (finalActual * cfg.wActual);
 
       rows.push({ ...p, baseline });
     }
