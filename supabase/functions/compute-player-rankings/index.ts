@@ -98,6 +98,14 @@ serve(async (req) => {
         nflIdToCanonical.set(cp.nfl_id, cp.id);
       }
     }
+    
+    // Debug: Check if specific players are in the map
+    console.log('DEBUG nflIdToCanonical map size:', nflIdToCanonical.size);
+    console.log('DEBUG Jefferson mapping:', {
+      'Justin Jefferson (00-0036322)': nflIdToCanonical.get('00-0036322'),
+      'Michael Pittman (00-0036252)': nflIdToCanonical.get('00-0036252'),
+      'TreVeyon Henderson (00-0039163)': nflIdToCanonical.get('00-0039163')
+    });
 
     // Normalize player name by removing suffixes
     const normalizeName = (name: string): string => {
@@ -148,14 +156,26 @@ serve(async (req) => {
     }
 
     // Map nfl_fantasy_points to actuals with canonical_player_id
-    const actuals = nflActuals.map((nfl: any) => ({
+    const actualsBeforeFilter = nflActuals.map((nfl: any) => ({
       canonical_player_id: nflIdToCanonical.get(nfl.player_id) || null,
       player_name: nfl.player_name,
       position: nfl.position,
       team: normalizeTeam(nfl.team),
       week: nfl.week,
-      actual_fp: Number(nfl.fantasy_points_ppr || 0)
-    })).filter(a => a.canonical_player_id); // Only include players with canonical mapping
+      actual_fp: Number(nfl.fantasy_points_ppr || 0),
+      nfl_player_id: nfl.player_id // For debugging
+    }));
+    
+    // Debug: Check specific players before filtering
+    const jeffersonBefore = actualsBeforeFilter.filter(a => a.player_name.includes('Jefferson'));
+    console.log('DEBUG Jefferson actuals before filter:', JSON.stringify(jeffersonBefore.slice(0, 5).map(a => ({
+      name: a.player_name,
+      nfl_id: a.nfl_player_id,
+      canonical_id: a.canonical_player_id,
+      week: a.week
+    }))));
+    
+    const actuals = actualsBeforeFilter.filter(a => a.canonical_player_id); // Only include players with canonical mapping
 
     // Collect ALL projections with pagination
     let projections = projectionsData || [];
