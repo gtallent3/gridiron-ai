@@ -104,6 +104,7 @@ serve(async (req) => {
             rec_yd: toNum(stats?.rec_yd),
             rec_td: toInt(stats?.rec_td),
             raw_stats: stats ?? {},
+            bye_week: false, // Default to false, will be updated if no opponent found
           };
           });
         } else if (data && typeof data === 'object') {
@@ -125,6 +126,7 @@ serve(async (req) => {
             rec_yd: toNum(stats?.rec_yd),
             rec_td: toInt(stats?.rec_td),
             raw_stats: stats ?? {},
+            bye_week: false, // Default to false, will be updated if no opponent found
           }));
         }
 
