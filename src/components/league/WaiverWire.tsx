@@ -60,7 +60,7 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
 
   useEffect(() => {
     fetchWaiverPlayers();
-  }, [league.id, userTeam, allTeams]);
+  }, [league.id]);
 
   const fetchWaiverPlayers = async () => {
     try {
@@ -71,11 +71,18 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
       const currentSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
       const currentWeek = league.current_week || 1;
 
-      // Extract all rostered canonical_player_ids from all teams
+      // Fetch ALL teams in this specific league to get complete roster data
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('user_teams')
+        .select('roster')
+        .eq('league_id', league.id);
+
+      if (teamsError) throw teamsError;
+
+      // Extract all rostered canonical_player_ids from ALL teams in the league
       const rosteredPlayerIds = new Set<string>();
       
-      const teams = [userTeam, ...allTeams].filter(Boolean);
-      teams.forEach((team) => {
+      (teamsData || []).forEach((team) => {
         const roster = Array.isArray(team?.roster) ? team.roster : [];
         roster.forEach((player: any) => {
           if (player.canonical_player_id) {
@@ -83,6 +90,8 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
           }
         });
       });
+
+      console.log(`Found ${rosteredPlayerIds.size} rostered players across ${teamsData?.length} teams`);
 
       // Fetch available players from player_pool_v2
       const { data, error } = await supabase
