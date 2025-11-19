@@ -71,7 +71,7 @@ serve(async (req) => {
     }> = {
       QB: { wProj: 0.50, wActual: 0.50, sosMult: 0.12, sosPlayoffMult: 0.20, scarcity: 1.10, posMax: 50,  topN: 20, targetAvg: 20 },
       RB: { wProj: 0.30, wActual: 0.70, sosMult: 0.10, sosPlayoffMult: 0.17, scarcity: 1.45, posMax: 110, topN: 30, targetAvg: 36 },
-      WR: { wProj: 0.40, wActual: 0.60, sosMult: 0.06, sosPlayoffMult: 0.10, scarcity: 1.05, posMax: 90,  topN: 30, targetAvg: 27 },
+      WR: { wProj: 0.40, wActual: 0.60, sosMult: 0.06, sosPlayoffMult: 0.10, scarcity: 1.05, posMax: 100, topN: 30, targetAvg: 38 },
       TE: { wProj: 0.60, wActual: 0.40, sosMult: 0.04, sosPlayoffMult: 0.06, scarcity: 1.25, posMax: 50,  topN: 20, targetAvg: 20 },
     };
 
