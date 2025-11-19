@@ -80,18 +80,26 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
       if (teamsError) throw teamsError;
 
       // Extract all rostered canonical_player_ids from ALL teams in the league
-      const rosteredPlayerIds = new Set<string>();
+      const rosteredCanonicalIds = new Set<string>();
+      const rosteredEspnIds = new Set<string>();
+      const rosteredNames = new Set<string>();
       
       (teamsData || []).forEach((team) => {
         const roster = Array.isArray(team?.roster) ? team.roster : [];
         roster.forEach((player: any) => {
-          if (player.canonical_player_id) {
-            rosteredPlayerIds.add(player.canonical_player_id);
+          if (player?.canonical_player_id) {
+            rosteredCanonicalIds.add(String(player.canonical_player_id));
+          }
+          if (player?.espn_id != null) {
+            rosteredEspnIds.add(String(player.espn_id));
+          }
+          if (player?.player_name) {
+            rosteredNames.add(String(player.player_name).toLowerCase().trim());
           }
         });
       });
 
-      console.log(`Found ${rosteredPlayerIds.size} rostered players across ${teamsData?.length} teams`);
+      console.log(`Found ${rosteredCanonicalIds.size} rostered players across ${teamsData?.length} teams`);
 
       // Fetch available players from player_pool_v2
       const { data, error } = await supabase
@@ -102,7 +110,8 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
           position,
           team,
           projected_fp,
-          canonical_players!inner(id, player_name, position, team)
+          raw_source_ids,
+          canonical_players!inner(id, player_name, position, team, espn_id)
         `)
         .eq('season', currentSeason)
         .eq('week', currentWeek)
@@ -113,17 +122,32 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
 
       if (error) throw error;
 
-      // Filter out rostered players and map to WaiverPlayer format
+      // Filter out rostered players using multiple identifiers and map to WaiverPlayer format
       const availablePlayers = (data || [])
-        .filter(p => !rosteredPlayerIds.has(p.canonical_player_id))
-        .map(p => ({
+        .filter((p: any) => {
+          const canonicalId = p.canonical_player_id ? String(p.canonical_player_id) : null;
+          const rawSourceIds = (p as any).raw_source_ids as any;
+          const canonicalPlayers = (p as any).canonical_players as any;
+
+          const rawEspnId = rawSourceIds?.espn_id ?? rawSourceIds?.espn ?? canonicalPlayers?.espn_id;
+          const espnId = rawEspnId != null ? String(rawEspnId) : null;
+
+          const playerName = (p.player_name || canonicalPlayers?.player_name || '').toLowerCase().trim();
+
+          const isRosteredByCanonical = canonicalId !== null && rosteredCanonicalIds.has(canonicalId);
+          const isRosteredByEspn = espnId !== null && rosteredEspnIds.has(espnId);
+          const isRosteredByName = playerName !== '' && rosteredNames.has(playerName);
+
+          return !(isRosteredByCanonical || isRosteredByEspn || isRosteredByName);
+        })
+        .map((p: any) => ({
           id: p.canonical_player_id,
           name: p.player_name || p.canonical_players?.player_name || 'Unknown',
           position: p.position,
           team: p.team || 'FA',
           projected: typeof p.projected_fp === 'number' ? Number(p.projected_fp.toFixed(1)) : 0,
         }))
-        .filter(p => p.projected > 0);
+        .filter((p: WaiverPlayer) => p.projected > 0);
 
       setWaiverPlayers(availablePlayers);
     } catch (error) {
