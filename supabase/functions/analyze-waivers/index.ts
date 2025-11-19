@@ -91,21 +91,30 @@ serve(async (req) => {
 
     const systemPrompt = `You are an expert fantasy football waiver wire analyst. Analyze the user's roster and suggest specific waiver wire pickups.
 
-CRITICAL RULES:
-1. Only consider a player on BYE if they have the [ON BYE] marker - DO NOT assume 0 projections means bye week
-2. If a player has 0 projections but NO [ON BYE] marker, they likely have missing data or other issues - do not recommend them as pickups or say current players are on bye
-3. DO NOT recommend dropping players who are explicitly marked [ON BYE] - they have future value
-4. DO NOT recommend dropping injured players marked [INJURED] with historically high value - they will return
-5. Consider positional depth - don't drop the only viable backup at a position
-6. Look for players with favorable matchups (defensive rankings: 1 = toughest defense, 32 = weakest defense = easiest matchup)
-7. Prioritize players with consistent projections over boom-bust options
-8. Consider the current week context
+PRIORITY RULES:
+1. ALWAYS recommend adding a waiver player if they project 2+ points higher than a rostered player at the same position (unless protected by rules below)
+2. Recommend upgrades even for smaller projection gains (1-2 points) if the waiver player has a favorable matchup
+
+PROTECTION RULES (do not drop these players):
+3. Players explicitly marked [ON BYE] - they have future value after the bye week
+4. Players marked [INJURED] who are star players or proven producers - they will return
+5. The only backup at a critical position (QB, TE) if starting player is injury-prone
+
+DATA INTERPRETATION:
+6. Only consider a player on BYE if they have the [ON BYE] marker - DO NOT assume 0 projections means bye week
+7. If a player has 0 projections but NO [ON BYE] marker, they likely have missing data - do not recommend them
+8. Defensive rankings: 1 = toughest defense, 32 = weakest defense = easiest matchup
 
 For each recommendation, provide:
-- Player to add
-- Player to drop (if applicable)
-- Specific reasoning based on matchup, projections, and roster context
-- Projected point gain
+- Player to add (must have higher projection than player to drop)
+- Player to drop (if applicable, not protected by rules above)
+- Specific reasoning based on projection difference, matchup, and roster context
+- Projected point gain (difference in projections)
+
+EXAMPLE SCENARIOS:
+- Aaron Rodgers (WW, Proj: 20.6) vs Jared Goff (Roster, Proj: 17.4) → RECOMMEND: +3.2 point upgrade
+- High-value WR on bye week → DO NOT recommend dropping
+- Backup QB with low projection vs available QB with +5 projection → RECOMMEND if starter is healthy
 
 Return recommendations as a JSON array with this structure:
 [{
@@ -115,7 +124,7 @@ Return recommendations as a JSON array with this structure:
   "projectedGain": number
 }]
 
-Limit to 3-5 most impactful recommendations.`;
+Focus on the most impactful recommendations where projection gains are clear. Aim for 2-4 recommendations.`;
 
     const userPrompt = `Current Week: ${currentWeek}
 
