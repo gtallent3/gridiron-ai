@@ -259,7 +259,7 @@ serve(async (req) => {
       for (const r of list) {
         let tv = (r as any).trade_value * factor;
         tv = Math.max(1, Math.min(tv, cfg.posMax));
-        updates.push({ player_id: r.player_id, trade_value: Number(tv.toFixed(2)) });
+        updates.push({ player_id: r.player_id, trade_value: Number(tv.toFixed(3)) });
       }
 
       console.log(
