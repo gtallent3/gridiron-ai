@@ -333,7 +333,7 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-0">
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -343,23 +343,32 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
               <p>No {selectedPosition === 'ALL' ? '' : selectedPosition + ' '}players available{waiverPlayers.length === 0 ? '. Try resyncing your league from the home page.' : ' for this position.'}</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {filteredPlayers.filter(p => p && p.name).map(player => (
-                <div key={player.id} className="space-y-2">
-                <PlayerCard player={player} readOnly />
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={() => handleAddPlayer(player)} 
-                    size="sm" 
-                    className="flex-1"
-                    variant="outline"
-                  >
-                    <Plus className="mr-1 h-3 w-3" />
-                    Add
-                  </Button>
-                </div>
-                </div>
-              ))}
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b bg-muted/50">
+                  <tr>
+                    <th className="text-left p-3 font-medium">Player</th>
+                    <th className="text-center p-3 font-medium">Pos</th>
+                    <th className="text-center p-3 font-medium">Team</th>
+                    <th className="text-right p-3 font-medium">Projected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPlayers.filter(p => p && p.name).map((player, index) => (
+                    <tr 
+                      key={player.id} 
+                      className={`border-b hover:bg-muted/30 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
+                    >
+                      <td className="p-3 font-medium">{player.name}</td>
+                      <td className="p-3 text-center">
+                        <Badge variant="outline">{player.position}</Badge>
+                      </td>
+                      <td className="p-3 text-center text-muted-foreground">{player.team}</td>
+                      <td className="p-3 text-right font-semibold">{player.projected}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </CardContent>
