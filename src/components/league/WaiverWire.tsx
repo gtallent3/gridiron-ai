@@ -128,7 +128,7 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
         .not('projected_fp', 'is', null)
         .not('position', 'in', '(K,D/ST)')
         .order('projected_fp', { ascending: false })
-        .limit(200);
+        .limit(500);
 
       if (error) throw error;
 
