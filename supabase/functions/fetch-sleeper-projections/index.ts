@@ -279,22 +279,32 @@ serve(async (req) => {
         // Ensure final team normalization for all records (e.g., LAR -> LA)
         projections = projections.map(p => ({ ...p, team: normalizeTeam(p.team) }));
 
-        // Insert in smaller chunks to avoid CPU timeouts
+        // Delete existing records for this week/season to ensure clean update
+        const { error: deleteError } = await supabase
+          .from("sleeper_projections")
+          .delete()
+          .eq("week", week)
+          .eq("season", season);
+
+        if (deleteError) {
+          console.error(`Week ${week}: Delete error:`, deleteError);
+        } else {
+          console.log(`Week ${week}: Deleted existing records for clean update`);
+        }
+
+        // Insert fresh records in smaller chunks to avoid CPU timeouts
         const chunkSize = 500;
         for (let i = 0; i < projections.length; i += chunkSize) {
           const chunk = projections.slice(i, i + chunkSize);
           const { error: insertError } = await supabase
             .from("sleeper_projections")
-            .upsert(chunk, { 
-              onConflict: "player_id,week,season",
-              ignoreDuplicates: false // Ensure existing records are updated with new data
-            });
+            .insert(chunk);
 
           if (insertError) {
-            console.error(`Week ${week}: Upsert chunk ${Math.floor(i / chunkSize) + 1} error:`, insertError);
+            console.error(`Week ${week}: Insert chunk ${Math.floor(i / chunkSize) + 1} error:`, insertError);
           } else {
             totalSaved += chunk.length;
-            console.log(`Week ${week}: Saved chunk ${Math.floor(i / chunkSize) + 1} (${chunk.length})`);
+            console.log(`Week ${week}: Inserted chunk ${Math.floor(i / chunkSize) + 1} (${chunk.length})`);
           }
 
           // Yield to event loop to avoid long CPU blocks
