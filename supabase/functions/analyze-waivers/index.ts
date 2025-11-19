@@ -103,7 +103,12 @@ PROTECTION RULES (do not drop these players):
 DATA INTERPRETATION:
 6. Only consider a player on BYE if they have the [ON BYE] marker - DO NOT assume 0 projections means bye week
 7. If a player has 0 projections but NO [ON BYE] marker, they likely have missing data - do not recommend them
-8. Defensive rankings: 1 = toughest defense, 32 = weakest defense = easiest matchup
+8. Defensive rankings (CRITICAL - READ CAREFULLY):
+   - Ranking 1 = TOUGHEST/BEST defense (HARDEST matchup for offense)
+   - Ranking 32 = EASIEST/WORST defense (BEST matchup for offense)
+   - Example: "32nd ranked defense" = the WEAKEST defense = GREAT matchup
+   - Example: "1st ranked defense" = the STRONGEST defense = TOUGH matchup
+   - NEVER say "32nd toughest" - 32nd is the EASIEST, not toughest!
 
 For each recommendation, provide:
 - Player to add (must have higher projection than player to drop)
