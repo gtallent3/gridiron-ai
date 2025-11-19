@@ -286,7 +286,8 @@ serve(async (req) => {
           const { error: insertError } = await supabase
             .from("sleeper_projections")
             .upsert(chunk, { 
-              onConflict: "player_id,week,season"
+              onConflict: "player_id,week,season",
+              ignoreDuplicates: false // Ensure existing records are updated with new data
             });
 
           if (insertError) {
