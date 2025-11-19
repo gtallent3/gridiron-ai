@@ -49,6 +49,16 @@ type WaiverPlayer = {
   };
 };
 
+const normalizePlayerName = (name: string | null | undefined): string => {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .replace(/[.,']/g, '')
+    .replace(/\s+(jr|sr|ii|iii|iv|v)\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
   const { toast } = useToast();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -94,7 +104,7 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
             rosteredEspnIds.add(String(player.espn_id));
           }
           if (player?.player_name) {
-            rosteredNames.add(String(player.player_name).toLowerCase().trim());
+            rosteredNames.add(normalizePlayerName(player.player_name));
           }
         });
       });
@@ -132,7 +142,7 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
           const rawEspnId = rawSourceIds?.espn_id ?? rawSourceIds?.espn ?? canonicalPlayers?.espn_id;
           const espnId = rawEspnId != null ? String(rawEspnId) : null;
 
-          const playerName = (p.player_name || canonicalPlayers?.player_name || '').toLowerCase().trim();
+          const playerName = normalizePlayerName(p.player_name || canonicalPlayers?.player_name);
 
           const isRosteredByCanonical = canonicalId !== null && rosteredCanonicalIds.has(canonicalId);
           const isRosteredByEspn = espnId !== null && rosteredEspnIds.has(espnId);
