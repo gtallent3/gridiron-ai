@@ -228,7 +228,7 @@ serve(async (req) => {
       }
     }
 
-    // Normalize/scaling per position
+    // Normalize/scaling per position with power function to spread mid-tier
     const updates: Array<{ player_id: string; trade_value: number }> = [];
     for (const pos of Object.keys(POS_CONF)) {
       const cfg = POS_CONF[pos];
@@ -245,9 +245,15 @@ serve(async (req) => {
         (r as any).norm = (r.raw_value - minV) / range;
       }
 
-      // Scale to [1..posMax]
+      // Apply power function to spread mid-tier (0.65 expands middle, compresses extremes)
+      // This gives more differentiation in the 5-25 range
       for (const r of list) {
-        (r as any).trade_value = 1 + (r as any).norm * (cfg.posMax - 1);
+        (r as any).norm_adjusted = Math.pow((r as any).norm, 0.65);
+      }
+
+      // Scale to [1..posMax] using adjusted normalization
+      for (const r of list) {
+        (r as any).trade_value = 1 + (r as any).norm_adjusted * (cfg.posMax - 1);
       }
 
       // Calibrate the top N to target average
@@ -263,7 +269,7 @@ serve(async (req) => {
       }
 
       console.log(
-        `[${pos}] min=${minV.toFixed(3)} max=${maxV.toFixed(3)} → calibrated top${cfg.topN} to avg≈${cfg.targetAvg}`,
+        `[${pos}] min=${minV.toFixed(3)} max=${maxV.toFixed(3)} → calibrated top${cfg.topN} to avg≈${cfg.targetAvg} (power=0.65)`,
       );
     }
 
