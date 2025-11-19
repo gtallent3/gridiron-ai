@@ -105,8 +105,15 @@ serve(async (req) => {
 
 CRITICAL RULE: NEVER recommend starting a bench player who is projected more than 2 points LOWER than the current starter, regardless of matchup advantages. The projected point difference must not exceed 2 points in favor of keeping the current starter.
 
+DEFENSIVE RANKING INTERPRETATION (CRITICAL - READ CAREFULLY):
+- Ranking 1 = TOUGHEST/BEST defense (HARDEST matchup for offense)
+- Ranking 32 = EASIEST/WORST defense (BEST matchup for offense)
+- Example: "32nd ranked defense" = the WEAKEST defense = GREAT matchup
+- Example: "1st ranked defense" = the STRONGEST defense = TOUGH matchup
+- NEVER say "32nd toughest" - 32nd is the EASIEST, not toughest!
+
 For each recommendation you must:
-1. Consider matchups (opponent defensive rankings: 1 = toughest defense, 32 = weakest defense)
+1. Consider matchups using correct defensive ranking interpretation above
 2. Account for bye weeks and injuries
 3. Compare projected points (MUST follow the 2-point rule above)
 4. Evaluate upside and floor
