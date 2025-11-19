@@ -32,20 +32,51 @@ serve(async (req) => {
   try {
     const { roster, waiverPlayers, currentWeek } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Prepare roster summary
-    const rosterSummary = roster.map((p: any) => ({
-      name: p.player_name || p.name,
-      position: p.position,
-      projected: p.projected_fp || p.projected || 0,
-      byeWeek: isTeamOnBye(p.team, currentWeek),
-      isInjured: p.injury_status && p.injury_status !== 'ACTIVE',
-      team: p.team
-    }));
+    // Fetch accurate projections for roster players from sleeper_projections
+    const rosterPlayerIds = roster
+      .map((p: any) => p.sleeper_id)
+      .filter((id: string) => id);
+
+    let projectionsMap = new Map<string, number>();
+    
+    if (rosterPlayerIds.length > 0 && SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      const projResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/sleeper_projections?player_id=in.(${rosterPlayerIds.join(',')})&week=eq.${currentWeek}&season=eq.2025&select=player_id,pts_ppr`,
+        {
+          headers: {
+            'apikey': SUPABASE_SERVICE_ROLE_KEY,
+            'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          }
+        }
+      );
+      
+      if (projResponse.ok) {
+        const projections = await projResponse.json();
+        projections.forEach((proj: any) => {
+          projectionsMap.set(proj.player_id, proj.pts_ppr || 0);
+        });
+      }
+    }
+
+    // Prepare roster summary with accurate projections
+    const rosterSummary = roster.map((p: any) => {
+      const accurateProjection = p.sleeper_id ? projectionsMap.get(p.sleeper_id) : null;
+      return {
+        name: p.player_name || p.name,
+        position: p.position,
+        projected: accurateProjection ?? (p.projected_fp || p.projected || 0),
+        byeWeek: isTeamOnBye(p.team, currentWeek),
+        isInjured: p.injury_status && p.injury_status !== 'ACTIVE',
+        team: p.team
+      };
+    });
 
     // Take top waiver players by position
     const topWaiverPlayers = waiverPlayers.slice(0, 50).map((p: any) => ({
