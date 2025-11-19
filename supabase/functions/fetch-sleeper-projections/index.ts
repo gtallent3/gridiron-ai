@@ -280,31 +280,44 @@ serve(async (req) => {
         projections = projections.map(p => ({ ...p, team: normalizeTeam(p.team) }));
 
         // Delete existing records for this week/season to ensure clean update
-        const { error: deleteError } = await supabase
+        console.log(`Week ${week}: About to delete existing records for season ${season}`);
+        const { error: deleteError, count: deleteCount } = await supabase
           .from("sleeper_projections")
-          .delete()
+          .delete({ count: 'exact' })
           .eq("week", week)
           .eq("season", season);
 
         if (deleteError) {
           console.error(`Week ${week}: Delete error:`, deleteError);
         } else {
-          console.log(`Week ${week}: Deleted existing records for clean update`);
+          console.log(`Week ${week}: Deleted ${deleteCount} existing records for clean update`);
+        }
+        
+        console.log(`Week ${week}: About to insert ${projections.length} fresh projections`);
+        // Log a sample projection for debugging
+        const sampleProjection = projections.find(p => p.player_id === '10232');
+        if (sampleProjection) {
+          console.log(`Week ${week}: Michael Wilson (10232) projection:`, JSON.stringify({
+            pts_ppr: sampleProjection.pts_ppr,
+            rec_yd: sampleProjection.rec_yd,
+            raw_stats_pts_ppr: sampleProjection.raw_stats?.pts_ppr
+          }));
         }
 
         // Insert fresh records in smaller chunks to avoid CPU timeouts
         const chunkSize = 500;
         for (let i = 0; i < projections.length; i += chunkSize) {
           const chunk = projections.slice(i, i + chunkSize);
-          const { error: insertError } = await supabase
+          const { error: insertError, count: insertCount } = await supabase
             .from("sleeper_projections")
-            .insert(chunk);
+            .insert(chunk, { count: 'exact' });
 
           if (insertError) {
             console.error(`Week ${week}: Insert chunk ${Math.floor(i / chunkSize) + 1} error:`, insertError);
+            console.error(`Week ${week}: First failed record:`, JSON.stringify(chunk[0]));
           } else {
             totalSaved += chunk.length;
-            console.log(`Week ${week}: Inserted chunk ${Math.floor(i / chunkSize) + 1} (${chunk.length})`);
+            console.log(`Week ${week}: Inserted chunk ${Math.floor(i / chunkSize) + 1} (${insertCount ?? chunk.length} records)`);
           }
 
           // Yield to event loop to avoid long CPU blocks
