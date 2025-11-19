@@ -42,10 +42,13 @@ type WaiverPlayer = {
   position: string;
   team: string;
   projected: number;
+  opponent?: string;
+  oppDefRank?: number;
+  byeWeek?: boolean;
   recommendation?: {
     reasoning: string;
     projectedGain: number;
-    dropPlayer: string;
+    dropPlayer: string | null;
   };
 };
 
@@ -120,6 +123,9 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
           position,
           team,
           projected_fp,
+          opponent,
+          opponent_def_rank,
+          bye_week,
           raw_source_ids,
           canonical_players!inner(id, player_name, position, team, espn_id)
         `)
@@ -155,6 +161,9 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
           name: p.player_name || p.canonical_players?.player_name || 'Unknown',
           position: p.position,
           team: p.team || 'FA',
+          opponent: p.opponent || 'N/A',
+          oppDefRank: p.opponent_def_rank,
+          byeWeek: p.bye_week || false,
           projected: typeof p.projected_fp === 'number' ? Number(p.projected_fp.toFixed(1)) : 0,
         }))
         .filter((p: WaiverPlayer) => p.projected > 0);
@@ -179,30 +188,58 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
     : waiverPlayers.filter(p => p.position === selectedPosition);
 
   const analyzeWaivers = async () => {
+    if (!userTeam?.roster) {
+      toast({
+        title: "Error",
+        description: "Could not load your roster for analysis",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsAnalyzing(true);
     
-    // Simulate AI analysis
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Mock AI recommendations
-    const aiRecommendations = [
-      {
-        ...waiverPlayers[0],
-        recommendation: {
-          reasoning: "Nico Collins has elite target share (32%) and faces a weak secondary. Projected +4.8 pts over Drake London.",
-          projectedGain: 4.8,
-          dropPlayer: "Drake London"
-        }
-      }
-    ];
-    
-    setRecommendations(aiRecommendations);
-    setIsAnalyzing(false);
-    
-    toast({
-      title: "Waiver Analysis Complete",
-      description: `Found ${aiRecommendations.length} recommendation${aiRecommendations.length !== 1 ? 's' : ''}`,
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('analyze-waivers', {
+        body: {
+          roster: userTeam.roster,
+          waiverPlayers: waiverPlayers,
+          currentWeek: league.current_week,
+        },
+      });
+
+      if (error) throw error;
+
+      const aiRecommendations = (data.recommendations || []).map((rec: any) => {
+        const player = waiverPlayers.find(p => p.name === rec.playerToAdd);
+        if (!player) return null;
+        
+        return {
+          ...player,
+          recommendation: {
+            reasoning: rec.reasoning,
+            projectedGain: rec.projectedGain || 0,
+            dropPlayer: rec.playerToDrop,
+          }
+        };
+      }).filter(Boolean);
+
+      setRecommendations(aiRecommendations);
+      
+      toast({
+        title: "Waiver Analysis Complete",
+        description: `Found ${aiRecommendations.length} recommendation${aiRecommendations.length !== 1 ? 's' : ''}`,
+      });
+    } catch (error) {
+      console.error('Error analyzing waivers:', error);
+      toast({
+        title: "Analysis Failed",
+        description: "Could not complete waiver analysis. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   const handleAddPlayer = (player: WaiverPlayer) => {
@@ -285,12 +322,18 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
                               {player.recommendation.reasoning}
                             </p>
                             <div className="flex items-center gap-2 text-sm">
-                              <span className="text-green-500 font-semibold">
-                                +{player.recommendation.projectedGain} pts projected
-                              </span>
-                              <span className="text-muted-foreground">•</span>
+                              {player.recommendation.projectedGain > 0 && (
+                                <>
+                                  <span className="text-green-500 font-semibold">
+                                    +{player.recommendation.projectedGain} pts projected
+                                  </span>
+                                  <span className="text-muted-foreground">•</span>
+                                </>
+                              )}
                               <span className="text-muted-foreground">
-                                Drop: {player.recommendation.dropPlayer}
+                                {player.recommendation.dropPlayer 
+                                  ? `Drop: ${player.recommendation.dropPlayer}`
+                                  : 'Consider adding to roster'}
                               </span>
                             </div>
                           </>
@@ -350,6 +393,8 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
                     <th className="text-left p-3 font-medium">Player</th>
                     <th className="text-center p-3 font-medium">Pos</th>
                     <th className="text-center p-3 font-medium">Team</th>
+                    <th className="text-center p-3 font-medium">Matchup</th>
+                    <th className="text-center p-3 font-medium">Def Rank</th>
                     <th className="text-right p-3 font-medium">Projected</th>
                   </tr>
                 </thead>
@@ -359,11 +404,36 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
                       key={player.id} 
                       className={`border-b hover:bg-muted/30 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
                     >
-                      <td className="p-3 font-medium">{player.name}</td>
+                      <td className="p-3 font-medium">
+                        {player.name}
+                        {player.byeWeek && (
+                          <Badge variant="secondary" className="ml-2 text-xs">BYE</Badge>
+                        )}
+                      </td>
                       <td className="p-3 text-center">
                         <Badge variant="outline">{player.position}</Badge>
                       </td>
                       <td className="p-3 text-center text-muted-foreground">{player.team}</td>
+                      <td className="p-3 text-center text-muted-foreground">
+                        {player.byeWeek ? '-' : `vs ${player.opponent}`}
+                      </td>
+                      <td className="p-3 text-center">
+                        {player.byeWeek ? (
+                          <span className="text-muted-foreground">-</span>
+                        ) : player.oppDefRank ? (
+                          <Badge 
+                            variant={
+                              player.oppDefRank <= 10 ? "default" : 
+                              player.oppDefRank <= 20 ? "secondary" : 
+                              "outline"
+                            }
+                          >
+                            #{player.oppDefRank}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">N/A</span>
+                        )}
+                      </td>
                       <td className="p-3 text-right font-semibold">{player.projected}</td>
                     </tr>
                   ))}

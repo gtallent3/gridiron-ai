@@ -137,3 +137,6 @@ verify_jwt = false
 
 [functions.suggest-trade-targets]
 verify_jwt = true
+
+[functions.analyze-waivers]
+verify_jwt = true
