@@ -336,6 +336,8 @@ export default function LeagueDashboard() {
           <TabsContent value="waiver" className="mt-4 sm:mt-6">
             <WaiverWire 
               league={league}
+              userTeam={userTeam}
+              allTeams={allTeams}
             />
           </TabsContent>
 

@@ -19,10 +19,21 @@ import {
 
 type League = {
   id: string;
+  current_week: number;
+  scoring_type: string;
+};
+
+type Team = {
+  id: string;
+  team_id: string;
+  team_name: string;
+  roster: any;
 };
 
 type WaiverWireProps = {
   league: League;
+  userTeam: Team | null;
+  allTeams: Team[];
 };
 
 type WaiverPlayer = {
@@ -38,7 +49,7 @@ type WaiverPlayer = {
   };
 };
 
-export function WaiverWire({ league }: WaiverWireProps) {
+export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
   const { toast } = useToast();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [recommendations, setRecommendations] = useState<WaiverPlayer[]>([]);
@@ -48,47 +59,63 @@ export function WaiverWire({ league }: WaiverWireProps) {
 
   useEffect(() => {
     fetchWaiverPlayers();
-  }, [league.id]);
+  }, [league.id, userTeam, allTeams]);
 
   const fetchWaiverPlayers = async () => {
     try {
       setIsLoading(true);
       
-      // Get current season and week
+      // Get current season
       const now = new Date();
       const currentSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-      
-      const { data: leagueData } = await supabase
-        .from('connected_leagues')
-        .select('current_week')
-        .eq('id', league.id)
-        .single();
-      
-      const currentWeek = leagueData?.current_week || 1;
+      const currentWeek = league.current_week || 1;
 
+      // Extract all rostered canonical_player_ids from all teams
+      const rosteredPlayerIds = new Set<string>();
+      
+      const teams = [userTeam, ...allTeams].filter(Boolean);
+      teams.forEach((team) => {
+        const roster = Array.isArray(team?.roster) ? team.roster : [];
+        roster.forEach((player: any) => {
+          if (player.canonical_player_id) {
+            rosteredPlayerIds.add(player.canonical_player_id);
+          }
+        });
+      });
+
+      // Fetch available players from player_pool_v2
       const { data, error } = await supabase
-        .from('projected_player_stats')
-        .select('player_id, player_name, position, team, projected_fp, waiver_status, percent_owned, season, week')
+        .from('player_pool_v2')
+        .select(`
+          canonical_player_id,
+          player_name,
+          position,
+          team,
+          projected_fp,
+          canonical_players!inner(id, player_name, position, team)
+        `)
         .eq('season', currentSeason)
         .eq('week', currentWeek)
-        .in('waiver_status', ['FREEAGENT', 'WAIVERS'])
         .not('projected_fp', 'is', null)
+        .not('position', 'in', '(K,D/ST)')
         .order('projected_fp', { ascending: false })
-        .limit(50);
+        .limit(200);
 
       if (error) throw error;
 
-      const mapped = (data || [])
-        .filter(p => p && p.player_name && p.position && (p.projected_fp ?? 0) > 0)
+      // Filter out rostered players and map to WaiverPlayer format
+      const availablePlayers = (data || [])
+        .filter(p => !rosteredPlayerIds.has(p.canonical_player_id))
         .map(p => ({
-          id: p.player_id,
-          name: p.player_name,
+          id: p.canonical_player_id,
+          name: p.player_name || p.canonical_players?.player_name || 'Unknown',
           position: p.position,
           team: p.team || 'FA',
-          projected: typeof p.projected_fp === 'number' ? Number(p.projected_fp) : 0,
-        }));
+          projected: typeof p.projected_fp === 'number' ? Number(p.projected_fp.toFixed(1)) : 0,
+        }))
+        .filter(p => p.projected > 0);
 
-      setWaiverPlayers(mapped);
+      setWaiverPlayers(availablePlayers);
     } catch (error) {
       console.error('Error fetching waiver players:', error);
       toast({
