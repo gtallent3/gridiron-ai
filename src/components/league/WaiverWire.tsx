@@ -56,6 +56,7 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
   const [selectedAction, setSelectedAction] = useState<{ type: 'add' | 'drop', player: WaiverPlayer } | null>(null);
   const [waiverPlayers, setWaiverPlayers] = useState<WaiverPlayer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedPosition, setSelectedPosition] = useState<string>('ALL');
 
   useEffect(() => {
     fetchWaiverPlayers();
@@ -127,6 +128,12 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
       setIsLoading(false);
     }
   };
+
+  const positions = ['ALL', 'QB', 'RB', 'WR', 'TE'];
+  
+  const filteredPlayers = selectedPosition === 'ALL' 
+    ? waiverPlayers 
+    : waiverPlayers.filter(p => p.position === selectedPosition);
 
   const analyzeWaivers = async () => {
     setIsAnalyzing(true);
@@ -264,21 +271,37 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Available Free Agents</CardTitle>
-          <CardDescription>Top projected available players</CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Available Free Agents</CardTitle>
+              <CardDescription>Top projected available players</CardDescription>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {positions.map((pos) => (
+                <Button
+                  key={pos}
+                  variant={selectedPosition === pos ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedPosition(pos)}
+                >
+                  {pos}
+                </Button>
+              ))}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : waiverPlayers.length === 0 ? (
+          ) : filteredPlayers.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
-              <p>No waiver players available. Try resyncing your league from the home page.</p>
+              <p>No {selectedPosition === 'ALL' ? '' : selectedPosition + ' '}players available{waiverPlayers.length === 0 ? '. Try resyncing your league from the home page.' : ' for this position.'}</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {waiverPlayers.filter(p => p && p.name).map(player => (
+              {filteredPlayers.filter(p => p && p.name).map(player => (
                 <div key={player.id} className="space-y-2">
                 <PlayerCard player={player} readOnly />
                 <div className="flex gap-2">
