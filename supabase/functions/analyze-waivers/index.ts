@@ -61,12 +61,14 @@ serve(async (req) => {
     const systemPrompt = `You are an expert fantasy football waiver wire analyst. Analyze the user's roster and suggest specific waiver wire pickups.
 
 CRITICAL RULES:
-1. DO NOT recommend dropping players who are on bye this week - they have future value
-2. DO NOT recommend dropping injured players with high projections - they will return
-3. Consider positional depth - don't drop the only viable backup at a position
-4. Look for players with favorable matchups (low opponent defense rank = easier matchup)
-5. Prioritize players with consistent projections over boom-bust options
-6. Consider the current week context
+1. Only consider a player on BYE if they have the [ON BYE] marker - DO NOT assume 0 projections means bye week
+2. If a player has 0 projections but NO [ON BYE] marker, they likely have missing data or other issues - do not recommend them as pickups or say current players are on bye
+3. DO NOT recommend dropping players who are explicitly marked [ON BYE] - they have future value
+4. DO NOT recommend dropping injured players marked [INJURED] with historically high value - they will return
+5. Consider positional depth - don't drop the only viable backup at a position
+6. Look for players with favorable matchups (low opponent defense rank = easier matchup)
+7. Prioritize players with consistent projections over boom-bust options
+8. Consider the current week context
 
 For each recommendation, provide:
 - Player to add
