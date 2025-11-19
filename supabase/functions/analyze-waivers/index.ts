@@ -97,7 +97,7 @@ CRITICAL RULES:
 3. DO NOT recommend dropping players who are explicitly marked [ON BYE] - they have future value
 4. DO NOT recommend dropping injured players marked [INJURED] with historically high value - they will return
 5. Consider positional depth - don't drop the only viable backup at a position
-6. Look for players with favorable matchups (low opponent defense rank = easier matchup)
+6. Look for players with favorable matchups (defensive rankings: 1 = toughest defense, 32 = weakest defense = easiest matchup)
 7. Prioritize players with consistent projections over boom-bust options
 8. Consider the current week context
 
