@@ -57,7 +57,7 @@ serve(async (req) => {
     // Replacement indices (0-based ranking within a position after sorting by baseline desc)
     const REPL_IDX_QB = Number(Deno.env.get("REPL_IDX_QB") ?? 12);
     const REPL_IDX_RB = Number(Deno.env.get("REPL_IDX_RB") ?? 24);
-    const REPL_IDX_WR = Number(Deno.env.get("REPL_IDX_WR") ?? 30);
+    const REPL_IDX_WR = Number(Deno.env.get("REPL_IDX_WR") ?? 36);
     const REPL_IDX_TE = Number(Deno.env.get("REPL_IDX_TE") ?? 12);
 
     // Position-specific multipliers, scarcity, caps, calibration targets
@@ -109,7 +109,7 @@ serve(async (req) => {
       // Calculate weighted actual PPG: 60% last 3 weeks, 40% season (excluding last 3)
       const last3 = Number(p.actual_last3_ppg ?? 0);
       const season = Number(p.actual_season_ppg ?? 0);
-      const actualWeighted = (last3 * 0.60) + (season * 0.40);
+      const actualWeighted = (last3 * 0.45) + (season * 0.55);
       const projectedROS = Number(p.avg_projected_ppg_ros ?? 0);
       
       // Detect injury/returning scenario: low recent actual but decent projections
