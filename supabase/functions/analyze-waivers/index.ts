@@ -5,6 +5,25 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// 2025-26 NFL Bye Week Schedule
+const byeWeekSchedule2025 = new Map<string, number>([
+  ['ATL', 5], ['CHI', 5], ['GB', 5], ['PIT', 5],
+  ['HOU', 6], ['MIN', 6],
+  ['BAL', 7], ['BUF', 7],
+  ['ARI', 8], ['DET', 8], ['JAX', 8], ['LV', 8], ['LA', 8], ['SEA', 8],
+  ['CLE', 9], ['NYJ', 9], ['PHI', 9], ['TB', 9],
+  ['CIN', 10], ['DAL', 10], ['KC', 10], ['TEN', 10],
+  ['IND', 11], ['NO', 11],
+  ['DEN', 12], ['LAC', 12], ['MIA', 12], ['WAS', 12],
+  ['CAR', 14], ['NE', 14], ['NYG', 14], ['SF', 14],
+]);
+
+function isTeamOnBye(team: string | undefined | null, week: number): boolean {
+  if (!team) return false;
+  const teamBye = byeWeekSchedule2025.get(team);
+  return teamBye === week;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -23,7 +42,7 @@ serve(async (req) => {
       name: p.player_name || p.name,
       position: p.position,
       projected: p.projected_fp || p.projected || 0,
-      byeWeek: p.bye_week || p.byeWeek || false,
+      byeWeek: isTeamOnBye(p.team, currentWeek),
       isInjured: p.injury_status && p.injury_status !== 'ACTIVE',
       team: p.team
     }));
@@ -36,7 +55,7 @@ serve(async (req) => {
       opponent: p.opponent,
       projected: p.projected,
       oppDefRank: p.oppDefRank,
-      byeWeek: p.byeWeek
+      byeWeek: isTeamOnBye(p.team, currentWeek)
     }));
 
     const systemPrompt = `You are an expert fantasy football waiver wire analyst. Analyze the user's roster and suggest specific waiver wire pickups.
