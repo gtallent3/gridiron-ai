@@ -113,14 +113,34 @@ serve(async (req) => {
     
     if (defError) throw defError;
     
-    // Build lookup map: "opponent_position_week" -> rank
+    // Build lookup maps:
+    // 1. Exact week match: "opponent_position_week" -> rank
+    // 2. Average across all weeks: "opponent_position" -> avgRank (for future weeks)
     const defRankMap = new Map<string, number>();
+    const defRankAvgMap = new Map<string, number>();
+    const defRankCountMap = new Map<string, { sum: number; count: number }>();
+    
     (defensiveRankings || []).forEach((dr: any) => {
-      const key = `${dr.team}_${dr.position}_${dr.week}`;
-      defRankMap.set(key, dr.rank);
+      const weekKey = `${dr.team}_${dr.position}_${dr.week}`;
+      const avgKey = `${dr.team}_${dr.position}`;
+      
+      defRankMap.set(weekKey, dr.rank);
+      
+      // Accumulate for average calculation
+      if (!defRankCountMap.has(avgKey)) {
+        defRankCountMap.set(avgKey, { sum: 0, count: 0 });
+      }
+      const acc = defRankCountMap.get(avgKey)!;
+      acc.sum += dr.rank;
+      acc.count += 1;
     });
     
-    console.log(`Loaded ${defensiveRankings?.length || 0} defensive rankings`);
+    // Calculate averages for projected defensive difficulty
+    defRankCountMap.forEach((acc, key) => {
+      defRankAvgMap.set(key, Math.round(acc.sum / acc.count));
+    });
+    
+    console.log(`Loaded ${defensiveRankings?.length || 0} defensive rankings with ${defRankAvgMap.size} position averages`);
 
     let sleeperInserted = 0;
     let nflInserted = 0;
@@ -163,8 +183,15 @@ serve(async (req) => {
           const normalizedOpp = proj.opponent ? normalizeTeam(proj.opponent) : null;
           let defRank: number | null = null;
           if (normalizedOpp && proj.position) {
+            // Try exact week match first
             const defKey = `${normalizedOpp}_${proj.position}_${proj.week}`;
             defRank = defRankMap.get(defKey) ?? null;
+            
+            // If no exact match (future week), use season average as projected difficulty
+            if (defRank === null) {
+              const avgKey = `${normalizedOpp}_${proj.position}`;
+              defRank = defRankAvgMap.get(avgKey) ?? null;
+            }
           }
           
           poolRecords.push({
@@ -255,6 +282,7 @@ serve(async (req) => {
           const normalizedOpp = actual.opponent ? normalizeTeam(actual.opponent) : null;
           let defRank: number | null = null;
           if (normalizedOpp && actual.position) {
+            // For actuals, only use exact week match (no averaging needed)
             const defKey = `${normalizedOpp}_${actual.position}_${actual.week}`;
             defRank = defRankMap.get(defKey) ?? null;
           }
