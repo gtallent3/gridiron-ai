@@ -565,6 +565,7 @@ serve(async (req) => {
           week: pool.week,
           season: pool.season,
           opponent: pool.opponent,
+          opponent_def_rank: pool.opponent_def_rank,
           source: pool.source || 'player_pool_v2',
           source_type: sourceType,
           fantasy_points: calculatedPoints,
