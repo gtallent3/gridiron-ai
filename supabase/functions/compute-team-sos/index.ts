@@ -73,7 +73,20 @@ Deno.serve(async (req) => {
 
     // Calculate SOS for each team and position
     const positions = ['QB', 'RB', 'WR', 'TE'];
-    const teams = [...new Set(schedules.map(s => s.team))];
+    
+    // Define the 32 NFL teams (standard abbreviations)
+    const validNflTeams = [
+      'ARI', 'ATL', 'BAL', 'BUF', 'CAR', 'CHI', 'CIN', 'CLE',
+      'DAL', 'DEN', 'DET', 'GB', 'HOU', 'IND', 'JAX', 'KC',
+      'LA', 'LAC', 'LV', 'MIA', 'MIN', 'NE', 'NO', 'NYG',
+      'NYJ', 'PHI', 'PIT', 'SEA', 'SF', 'TB', 'TEN', 'WAS'
+    ];
+    
+    // Only include valid NFL teams
+    const allTeamsInSchedule = [...new Set(schedules.map(s => s.team))];
+    const teams = allTeamsInSchedule.filter(t => validNflTeams.includes(t));
+    
+    console.log(`Found ${allTeamsInSchedule.length} teams in schedule, filtered to ${teams.length} valid NFL teams`);
     
     const teamSosData: any[] = [];
 
