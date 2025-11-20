@@ -62,6 +62,13 @@ serve(async (req) => {
         }
 
         const data = await response.json();
+        
+        // Handle null or undefined data
+        if (data === null || data === undefined) {
+          console.log(`Week ${week}: API returned null/undefined data`);
+          continue;
+        }
+        
         console.log(`Week ${week}: Response type: ${typeof data}, isArray: ${Array.isArray(data)}, length: ${Array.isArray(data) ? data.length : (data && typeof data === 'object' ? Object.keys(data).length : 'N/A')}`);
         
         let isEmpty = false;
@@ -261,11 +268,13 @@ serve(async (req) => {
 
                 // Add team SOS rankings (normalize team for lookup)
                 const normalizedTeam = normalizeTeam(proj.team);
-                const teamSosKey = `${normalizedTeam}:${pos}`;
-                const teamSos = teamSosMap.get(teamSosKey);
-                if (teamSos) {
-                  proj.ros_sos_rank = teamSos.ros;
-                  proj.playoff_sos_rank = teamSos.playoff;
+                if (normalizedTeam && pos) {
+                  const teamSosKey = `${normalizedTeam}:${pos}`;
+                  const teamSos = teamSosMap.get(teamSosKey);
+                  if (teamSos) {
+                    proj.ros_sos_rank = teamSos.ros;
+                    proj.playoff_sos_rank = teamSos.playoff;
+                  }
                 }
               }
             } else {
