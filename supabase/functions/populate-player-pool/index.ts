@@ -88,6 +88,23 @@ serve(async (req) => {
 
     console.log(`Loaded ${canonicalPlayers.length} canonical players`);
 
+    // Fetch defensive rankings for the season to enrich opponent_def_rank
+    const { data: defensiveRankings, error: defError } = await supabase
+      .from('defensive_rankings')
+      .select('*')
+      .eq('season', season);
+    
+    if (defError) throw defError;
+    
+    // Build lookup map: "opponent_position_week" -> rank
+    const defRankMap = new Map<string, number>();
+    (defensiveRankings || []).forEach((dr: any) => {
+      const key = `${dr.team}_${dr.position}_${dr.week}`;
+      defRankMap.set(key, dr.rank);
+    });
+    
+    console.log(`Loaded ${defensiveRankings?.length || 0} defensive rankings`);
+
     let sleeperInserted = 0;
     let nflInserted = 0;
 
@@ -125,6 +142,13 @@ serve(async (req) => {
             continue;
           }
           
+          // Look up defensive rank from defensive_rankings table
+          let defRank: number | null = null;
+          if (proj.opponent && proj.position) {
+            const defKey = `${proj.opponent}_${proj.position}_${proj.week}`;
+            defRank = defRankMap.get(defKey) ?? null;
+          }
+          
           poolRecords.push({
             canonical_player_id: canonical.id,
             player_name: canonical.player_name,
@@ -143,7 +167,7 @@ serve(async (req) => {
             receiving_yards: proj.rec_yd,
             receiving_tds: proj.rec_td,
             opponent: proj.opponent,
-            opponent_def_rank: proj.opponent_def_rank,
+            opponent_def_rank: defRank,
             ros_sos_rank: proj.ros_sos_rank,
             playoff_sos_rank: proj.playoff_sos_rank,
             bye_week: proj.bye_week || false,
@@ -209,6 +233,13 @@ serve(async (req) => {
             continue;
           }
           
+          // Look up defensive rank from defensive_rankings table
+          let defRank: number | null = null;
+          if (actual.opponent && actual.position) {
+            const defKey = `${actual.opponent}_${actual.position}_${actual.week}`;
+            defRank = defRankMap.get(defKey) ?? null;
+          }
+          
           poolRecords.push({
             canonical_player_id: canonical.id,
             player_name: canonical.player_name,
@@ -227,6 +258,7 @@ serve(async (req) => {
             receiving_yards: actual.receiving_yards,
             receiving_tds: actual.receiving_tds,
             opponent: actual.opponent,
+            opponent_def_rank: defRank,
             raw_source_ids: { nfl_id: actual.player_id }
           });
         }
