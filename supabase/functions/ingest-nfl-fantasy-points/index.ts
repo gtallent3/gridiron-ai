@@ -41,10 +41,44 @@ Deno.serve(async (req) => {
     const url = `https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_${season}.csv`;
     
     console.log(`Fetching from: ${url}`);
-    const response = await fetch(url);
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch data: ${response.statusText}`);
+    // Retry logic with exponential backoff for GitHub rate limiting
+    let response: Response | null = null;
+    let lastError: Error | null = null;
+    const maxRetries = 3;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Fetch attempt ${attempt}/${maxRetries}...`);
+        response = await fetch(url);
+        
+        if (response.ok) {
+          console.log('Fetch successful!');
+          break;
+        }
+        
+        lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+        console.warn(`Attempt ${attempt} failed: ${lastError.message}`);
+        
+        if (attempt < maxRetries) {
+          const delayMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+          console.log(`Waiting ${delayMs}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown fetch error');
+        console.warn(`Attempt ${attempt} failed: ${lastError.message}`);
+        
+        if (attempt < maxRetries) {
+          const delayMs = Math.pow(2, attempt) * 1000;
+          console.log(`Waiting ${delayMs}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+      }
+    }
+    
+    if (!response || !response.ok) {
+      throw lastError || new Error('Failed to fetch data after all retries');
     }
 
     const csvText = await response.text();
