@@ -880,24 +880,27 @@ export default function Admin() {
     let totalSleeperInserted = 0;
     let totalNflInserted = 0;
     let iteration = 0;
-    let nextSleeperId: string | null = null;
-    let nextNflId: string | null = null;
+    let nextSleeperIndex = 0;
+    let nextNflIndex = 0;
     let hasMoreSleeper = true;
     let hasMoreNfl = true;
 
     try {
       toast({
         title: "Starting Player Pool Population",
-        description: "Processing player data..."
+        description: "Processing all player data in batches..."
       });
 
+      // Continue until both Sleeper and NFL data are fully processed
       while (hasMoreSleeper || hasMoreNfl) {
         iteration++;
-        setPopulateProgress(`Batch ${iteration}: Processing...`);
+        setPopulateProgress(`Batch ${iteration}: Processing chunk starting at Sleeper[${nextSleeperIndex}], NFL[${nextNflIndex}]...`);
 
-        const body: any = { maxBatches: 50 };
-        if (typeof nextSleeperId === 'number') body.startSleeperIndex = nextSleeperId;
-        if (typeof nextNflId === 'number') body.startNflIndex = nextNflId;
+        const body: any = { 
+          maxBatches: 50,
+          startSleeperIndex: nextSleeperIndex,
+          startNflIndex: nextNflIndex
+        };
 
         const { data, error } = await supabase.functions.invoke('populate-player-pool', {
           body
@@ -907,30 +910,33 @@ export default function Admin() {
 
         totalSleeperInserted += data.sleeperInserted ?? 0;
         totalNflInserted += data.nflInserted ?? 0;
-        nextSleeperId = data.nextSleeperIndex ?? nextSleeperId;
-        nextNflId = data.nextNflIndex ?? nextNflId;
+        
+        // Update indices for next iteration
+        nextSleeperIndex = data.nextSleeperIndex ?? nextSleeperIndex;
+        nextNflIndex = data.nextNflIndex ?? nextNflIndex;
         hasMoreSleeper = data.hasMoreSleeper ?? false;
         hasMoreNfl = data.hasMoreNfl ?? false;
 
         setPopulateProgress(
-          `Batch ${iteration}: +${data.sleeperInserted || 0} projections, +${data.nflInserted || 0} actuals (Total: ${totalSleeperInserted} projections, ${totalNflInserted} actuals)`
+          `Batch ${iteration}: +${data.sleeperInserted || 0} projections, +${data.nflInserted || 0} actuals | Total: ${totalSleeperInserted} proj, ${totalNflInserted} actuals | ${hasMoreSleeper ? 'More Sleeper' : '✓ Sleeper Done'}, ${hasMoreNfl ? 'More NFL' : '✓ NFL Done'}`
         );
 
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Small delay to avoid overwhelming the edge function
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
       toast({
         title: "Population Complete ✅",
-        description: `Total: ${totalSleeperInserted} projections, ${totalNflInserted} actuals inserted across ${iteration} batches`
+        description: `Processed ALL players: ${totalSleeperInserted} projections, ${totalNflInserted} actuals across ${iteration} batches`
       });
-      setPopulateProgress(`Complete: ${totalSleeperInserted} projections, ${totalNflInserted} actuals`);
+      setPopulateProgress(`✅ Complete: ${totalSleeperInserted} projections, ${totalNflInserted} actuals (${iteration} batches)`);
     } catch (error: any) {
       toast({
-        title: "Error",
+        title: "Population Error",
         description: error.message,
         variant: "destructive"
       });
-      setPopulateProgress(`Error after batch ${iteration}`);
+      setPopulateProgress(`❌ Error after batch ${iteration}: ${error.message}`);
     } finally {
       setPopulatingPool(false);
     }
