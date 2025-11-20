@@ -591,8 +591,27 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
     }
   };
 
-  const totalProjected = starters.reduce((sum, p) => sum + p.projected, 0);
-  const totalActual = starters.reduce((sum, p) => sum + (p.actualPoints || 0), 0);
+  // Position ordering priority for starters display
+  const POSITION_ORDER: Record<string, number> = {
+    'QB': 1,
+    'RB': 2,
+    'WR': 3,
+    'TE': 4,
+    'FLEX': 5,
+    'DEF': 6,
+    'D/ST': 6,
+    'K': 7,
+  };
+
+  // Sort starters by position priority
+  const sortedStarters = [...starters].sort((a, b) => {
+    const orderA = POSITION_ORDER[a.position] || 99;
+    const orderB = POSITION_ORDER[b.position] || 99;
+    return orderA - orderB;
+  });
+
+  const totalProjected = sortedStarters.reduce((sum, p) => sum + (Number(p.projected) || 0), 0);
+  const totalActual = sortedStarters.reduce((sum, p) => sum + (Number(p.actualPoints) || 0), 0);
   const currentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
   const isHistoricalWeek = selectedWeek < currentWeek;
   const isFutureWeek = selectedWeek > currentWeek;
@@ -713,7 +732,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             <p className="text-center py-8 text-muted-foreground">No starters found</p>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
-              {starters.map(player => (
+              {sortedStarters.map(player => (
                 <div key={player.id} onClick={() => handlePlayerClick(player)} className="cursor-pointer">
                   <PlayerCard
                     player={player}
