@@ -339,13 +339,6 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
                           </>
                         )}
                       </div>
-                      
-                      <div className="flex gap-2">
-                        <Button onClick={() => handleAddPlayer(player)} size="sm">
-                          <Plus className="mr-2 h-4 w-4" />
-                          Add
-                        </Button>
-                      </div>
                     </div>
                   </CardContent>
                 </Card>
