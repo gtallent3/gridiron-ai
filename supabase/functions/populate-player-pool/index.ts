@@ -115,10 +115,10 @@ serve(async (req) => {
     
     // Build lookup maps:
     // 1. Exact week match: "opponent_position_week" -> rank
-    // 2. Average across all weeks: "opponent_position" -> avgRank (for future weeks)
+    // 2. Season average: calculate avg points allowed per team/position, then rank 1-32
     const defRankMap = new Map<string, number>();
     const defRankAvgMap = new Map<string, number>();
-    const defRankCountMap = new Map<string, { sum: number; count: number }>();
+    const avgPointsMap = new Map<string, { sum: number; count: number }>();
     
     (defensiveRankings || []).forEach((dr: any) => {
       const weekKey = `${dr.team}_${dr.position}_${dr.week}`;
@@ -126,21 +126,38 @@ serve(async (req) => {
       
       defRankMap.set(weekKey, dr.rank);
       
-      // Accumulate for average calculation
-      if (!defRankCountMap.has(avgKey)) {
-        defRankCountMap.set(avgKey, { sum: 0, count: 0 });
+      // Accumulate points allowed for season average calculation
+      if (!avgPointsMap.has(avgKey)) {
+        avgPointsMap.set(avgKey, { sum: 0, count: 0 });
       }
-      const acc = defRankCountMap.get(avgKey)!;
-      acc.sum += dr.rank;
+      const acc = avgPointsMap.get(avgKey)!;
+      acc.sum += (dr.avg_points_allowed || 0);
       acc.count += 1;
     });
     
-    // Calculate averages for projected defensive difficulty
-    defRankCountMap.forEach((acc, key) => {
-      defRankAvgMap.set(key, Math.round(acc.sum / acc.count));
-    });
+    // Calculate average points allowed per team/position, then rank 1-32 per position
+    const positions = ['QB', 'RB', 'WR', 'TE'];
+    for (const position of positions) {
+      const teamAvgs: Array<{ key: string; avgPoints: number }> = [];
+      
+      avgPointsMap.forEach((acc, key) => {
+        if (key.endsWith(`_${position}`)) {
+          teamAvgs.push({
+            key,
+            avgPoints: acc.sum / acc.count
+          });
+        }
+      });
+      
+      // Sort by avg points allowed: fewest = rank 1 (hardest), most = rank 32 (easiest)
+      teamAvgs.sort((a, b) => a.avgPoints - b.avgPoints);
+      
+      teamAvgs.forEach((team, index) => {
+        defRankAvgMap.set(team.key, index + 1);
+      });
+    }
     
-    console.log(`Loaded ${defensiveRankings?.length || 0} defensive rankings with ${defRankAvgMap.size} position averages`);
+    console.log(`Loaded ${defensiveRankings?.length || 0} defensive rankings with ${defRankAvgMap.size} normalized season-average ranks (1-32 per position)`);
 
     let sleeperInserted = 0;
     let nflInserted = 0;
