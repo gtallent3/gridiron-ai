@@ -88,6 +88,23 @@ serve(async (req) => {
 
     console.log(`Loaded ${canonicalPlayers.length} canonical players`);
 
+    // Team abbreviation normalization mapping
+    const normalizeTeam = (team: string | null | undefined): string | null => {
+      if (!team) return null;
+      const normalized: Record<string, string> = {
+        'WSH': 'WAS',
+        'TAM': 'TB',
+        'LVR': 'LV',
+        'NOR': 'NO',
+        'SFO': 'SF',
+        'NWE': 'NE',
+        'GNB': 'GB',
+        'KAN': 'KC',
+        'LAR': 'LA'
+      };
+      return normalized[team] || team;
+    };
+
     // Fetch defensive rankings for the season to enrich opponent_def_rank
     const { data: defensiveRankings, error: defError } = await supabase
       .from('defensive_rankings')
@@ -145,8 +162,11 @@ serve(async (req) => {
           // Look up defensive rank from defensive_rankings table
           let defRank: number | null = null;
           if (proj.opponent && proj.position) {
-            const defKey = `${proj.opponent}_${proj.position}_${proj.week}`;
-            defRank = defRankMap.get(defKey) ?? null;
+            const normalizedOpp = normalizeTeam(proj.opponent);
+            if (normalizedOpp) {
+              const defKey = `${normalizedOpp}_${proj.position}_${proj.week}`;
+              defRank = defRankMap.get(defKey) ?? null;
+            }
           }
           
           poolRecords.push({
@@ -236,8 +256,11 @@ serve(async (req) => {
           // Look up defensive rank from defensive_rankings table
           let defRank: number | null = null;
           if (actual.opponent && actual.position) {
-            const defKey = `${actual.opponent}_${actual.position}_${actual.week}`;
-            defRank = defRankMap.get(defKey) ?? null;
+            const normalizedOpp = normalizeTeam(actual.opponent);
+            if (normalizedOpp) {
+              const defKey = `${normalizedOpp}_${actual.position}_${actual.week}`;
+              defRank = defRankMap.get(defKey) ?? null;
+            }
           }
           
           poolRecords.push({
