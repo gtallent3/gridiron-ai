@@ -89,11 +89,17 @@ serve(async (req) => {
       byeWeek: isTeamOnBye(p.team, currentWeek)
     }));
 
-    const systemPrompt = `You are an expert fantasy football waiver wire analyst. Analyze the user's roster and suggest specific waiver wire pickups.
+    const systemPrompt = `You are an expert fantasy football waiver wire analyst. Analyze the user's roster and suggest ONLY waiver wire pickups that will meaningfully improve their team.
+
+CRITICAL VALIDATION RULE:
+- NEVER recommend a waiver player who projects LOWER than the player to drop
+- ONLY recommend additions where waiver player projection > roster player projection
+- If a waiver player projects 6.9 and roster player projects 8.09, DO NOT recommend this swap
+- Minimum projection advantage should be +2 points for a clear recommendation
 
 PRIORITY RULES:
-1. ALWAYS recommend adding a waiver player if they project 2+ points higher than a rostered player at the same position (unless protected by rules below)
-2. Recommend upgrades even for smaller projection gains (1-2 points) if the waiver player has a favorable matchup
+1. ALWAYS recommend adding a waiver player if they project 2+ points higher than a rostered player at the same position
+2. For 1-2 point advantages, only recommend if waiver player has significantly better matchup (opponent ranked 25+ on defense)
 
 PROTECTION RULES (do not drop these players):
 3. Players explicitly marked [ON BYE] - they have future value after the bye week
@@ -108,28 +114,37 @@ DATA INTERPRETATION:
    - Ranking 32 = EASIEST/WORST defense (BEST matchup for offense)
    - Example: "32nd ranked defense" = the WEAKEST defense = GREAT matchup
    - Example: "1st ranked defense" = the STRONGEST defense = TOUGH matchup
-   - NEVER say "32nd toughest" - 32nd is the EASIEST, not toughest!
+
+RECOMMENDATION QUALITY:
+9. Only provide recommendations that will genuinely help the user's team
+10. If there are no clear upgrades available, return an empty array
+11. Do not force recommendations just to provide output
+12. Better to give 0-1 high-quality recommendations than 3-4 questionable ones
 
 For each recommendation, provide:
-- Player to add (must have higher projection than player to drop)
+- Player to add (MUST have higher projection than player to drop)
 - Player to drop (if applicable, not protected by rules above)
-- Specific reasoning based on projection difference, matchup, and roster context
-- Projected point gain (difference in projections)
+- Specific reasoning based on projection difference and matchup
+- Projected point gain (difference in projections, must be positive)
 
-EXAMPLE SCENARIOS:
-- Aaron Rodgers (WW, Proj: 20.6) vs Jared Goff (Roster, Proj: 17.4) → RECOMMEND: +3.2 point upgrade
-- High-value WR on bye week → DO NOT recommend dropping
-- Backup QB with low projection vs available QB with +5 projection → RECOMMEND if starter is healthy
+Return recommendations as a JSON array. If no recommendations meet the quality bar, return [].
 
-Return recommendations as a JSON array with this structure:
+Example valid recommendation:
 [{
-  "playerToAdd": "Player Name",
-  "playerToDrop": "Player Name or null",
-  "reasoning": "Specific analysis...",
-  "projectedGain": number
+  "playerToAdd": "Aaron Rodgers",
+  "playerToDrop": "Jared Goff",
+  "reasoning": "Aaron Rodgers projects for 20.6 points, a +3.2 advantage over Jared Goff's 17.4 projection this week.",
+  "projectedGain": 3.2
 }]
 
-Focus on the most impactful recommendations where projection gains are clear. Aim for 2-4 recommendations.`;
+Example INVALID recommendation (DO NOT DO THIS):
+[{
+  "playerToAdd": "Dawson Knox",
+  "playerToDrop": "T.J. Hockenson",
+  "reasoning": "...",
+  "projectedGain": -1.39
+}]
+This is WRONG because Knox (6.9) projects LOWER than Hockenson (8.09).`;
 
     const userPrompt = `Current Week: ${currentWeek}
 
