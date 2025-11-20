@@ -385,8 +385,10 @@ serve(async (req) => {
         }));
       }
 
-      // Get SOS rankings from projections (use first available projection with SOS data)
-      const projWithSos = projs.find(p => p.ros_sos_rank != null || p.playoff_sos_rank != null);
+      // Get SOS rankings from projections (use the latest week's projection with SOS data for most current schedule)
+      const projWithSos = projs
+        .filter(p => p.ros_sos_rank != null || p.playoff_sos_rank != null)
+        .sort((a, b) => b.week - a.week)[0]; // Get most recent week with SOS data
       const rosSosRank = projWithSos?.ros_sos_rank ?? null;
       const playoffSosRank = projWithSos?.playoff_sos_rank ?? null;
 
