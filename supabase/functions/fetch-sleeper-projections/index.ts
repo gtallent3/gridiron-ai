@@ -19,8 +19,8 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
 
-    // Use current NFL season (2025)
-    const { season = 2025 } = await req.json().catch(() => ({ season: 2025 }));
+    // Use current NFL season (2024)
+    const { season = 2024 } = await req.json().catch(() => ({ season: 2024 }));
 
     console.log(`Starting fetch for season ${season}`);
 
