@@ -416,9 +416,13 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
                         ) : player.oppDefRank ? (
                           <Badge 
                             variant={
-                              player.oppDefRank <= 10 ? "default" : 
-                              player.oppDefRank <= 20 ? "secondary" : 
-                              "outline"
+                              player.oppDefRank >= 23 ? "outline" : 
+                              player.oppDefRank >= 11 ? "secondary" : 
+                              "destructive"
+                            }
+                            className={
+                              player.oppDefRank >= 23 ? "bg-green-500/10 text-green-600 border-green-500/30" : 
+                              ""
                             }
                           >
                             #{player.oppDefRank}
