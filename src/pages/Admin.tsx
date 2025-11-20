@@ -764,6 +764,7 @@ export default function Admin() {
   // CANONICAL PLAYERS MAPPING
   const [mappingPlayers, setMappingPlayers] = useState(false);
   const [mappingResult, setMappingResult] = useState<any>(null);
+  const [autoResumingMapping, setAutoResumingMapping] = useState(false);
   
   const handleMapCanonicalPlayers = async () => {
     setMappingPlayers(true);
@@ -772,17 +773,21 @@ export default function Admin() {
     try {
       toast({
         title: "Starting Player Mapping",
-        description: "Matching Sleeper and NFL player IDs..."
+        description: "Matching Sleeper and NFL player IDs (single batch of 1000)..."
       });
 
-      const { data, error } = await supabase.functions.invoke('map-canonical-players');
+      const { data, error } = await supabase.functions.invoke('map-canonical-players', {
+        body: { startIndex: 0, batchLimit: 1000 }
+      });
       
       if (error) throw error;
 
       setMappingResult(data);
       toast({
-        title: "Mapping Complete",
-        description: `${data.matched} matched, ${data.created} created, ${data.unmatched} unmatched`
+        title: data.hasMore ? "Batch Complete" : "Mapping Complete",
+        description: data.hasMore 
+          ? `Processed ${data.processedSoFar} players. ${data.matched} matched, ${data.created} created. More data available.`
+          : `✅ ${data.matched} matched, ${data.created} created, ${data.unmatched} unmatched`
       });
     } catch (error: any) {
       toast({
@@ -793,6 +798,74 @@ export default function Admin() {
       setMappingResult({ error: error.message });
     } finally {
       setMappingPlayers(false);
+    }
+  };
+
+  const handleAutoResumeMapping = async () => {
+    setAutoResumingMapping(true);
+    setMappingResult(null);
+    
+    let totalMatched = 0;
+    let totalCreated = 0;
+    let totalUnmatched = 0;
+    let iteration = 0;
+    let nextIndex = 0;
+    let hasMore = true;
+
+    try {
+      toast({
+        title: "Starting Auto-Resume Mapping",
+        description: "Processing all batches automatically..."
+      });
+
+      while (hasMore && iteration < 100) { // Safety limit
+        iteration++;
+
+        const { data, error } = await supabase.functions.invoke('map-canonical-players', {
+          body: { startIndex: nextIndex, batchLimit: 1000 }
+        });
+        
+        if (error) throw error;
+
+        totalMatched += data.matched || 0;
+        totalCreated += data.created || 0;
+        totalUnmatched += data.unmatched || 0;
+        hasMore = data.hasMore;
+        nextIndex = data.nextIndex;
+
+        setMappingResult({
+          matched: totalMatched,
+          created: totalCreated,
+          unmatched: totalUnmatched,
+          iteration,
+          processedSoFar: data.processedSoFar || nextIndex
+        });
+
+        toast({
+          title: `Batch ${iteration} Complete`,
+          description: `Processed ${data.processedSoFar || nextIndex} players. Total: ${totalMatched} matched, ${totalCreated} created`
+        });
+
+        if (!hasMore) {
+          toast({
+            title: "✅ Mapping Complete",
+            description: `Finished in ${iteration} batches. Total: ${totalMatched} matched, ${totalCreated} created, ${totalUnmatched} unmatched`
+          });
+          break;
+        }
+
+        // Small delay between batches
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+      setMappingResult({ error: error.message });
+    } finally {
+      setAutoResumingMapping(false);
     }
   };
 
@@ -1493,26 +1566,43 @@ export default function Admin() {
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Map Canonical Players</p>
                       <p className="text-xs text-muted-foreground">
-                        Creates canonical_players table matching Sleeper IDs to NFL IDs
+                        Creates canonical_players table matching Sleeper IDs to NFL IDs (processes 1000 players per batch)
                       </p>
-                      <Button 
-                        onClick={handleMapCanonicalPlayers} 
-                        disabled={mappingPlayers}
-                        size="sm"
-                        className="w-full sm:w-auto"
-                      >
-                        {mappingPlayers && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {mappingPlayers ? "Mapping..." : "Map Players"}
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          onClick={handleMapCanonicalPlayers} 
+                          disabled={mappingPlayers || autoResumingMapping}
+                          size="sm"
+                          className="flex-1"
+                        >
+                          {mappingPlayers && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          {mappingPlayers ? "Mapping..." : "Run Single Batch"}
+                        </Button>
+                        <Button 
+                          onClick={handleAutoResumeMapping} 
+                          disabled={mappingPlayers || autoResumingMapping}
+                          size="sm"
+                          variant="secondary"
+                          className="flex-1"
+                        >
+                          {autoResumingMapping && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                          {autoResumingMapping ? "Auto-Resuming..." : "Auto-Resume All"}
+                        </Button>
+                      </div>
                       {mappingResult && (
                         <div className="p-3 border rounded-lg text-xs space-y-1">
                           {mappingResult.error ? (
                             <div className="text-destructive">Error: {mappingResult.error}</div>
                           ) : (
                             <>
+                              {mappingResult.iteration && (
+                                <div className="text-muted-foreground mb-1">Batch {mappingResult.iteration} {mappingResult.processedSoFar && `(${mappingResult.processedSoFar} players)`}</div>
+                              )}
                               <div>Matched: <span className="font-medium text-green-600">{mappingResult.matched}</span></div>
                               <div>Created: <span className="font-medium text-blue-600">{mappingResult.created}</span></div>
-                              <div>Unmatched: <span className="font-medium text-yellow-600">{mappingResult.unmatched}</span></div>
+                              {mappingResult.unmatched !== undefined && (
+                                <div>Unmatched: <span className="font-medium text-yellow-600">{mappingResult.unmatched}</span></div>
+                              )}
                             </>
                           )}
                         </div>

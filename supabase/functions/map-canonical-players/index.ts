@@ -17,7 +17,10 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    console.log('Starting canonical player mapping...');
+    // Get cursor parameters for resumable processing
+    const { startIndex = 0, batchLimit = 1000 } = await req.json().catch(() => ({}));
+
+    console.log(`Starting canonical player mapping from index ${startIndex}...`);
 
     // Normalize player name for matching
     const normalizeName = (name: string): string => {
@@ -108,12 +111,13 @@ serve(async (req) => {
 
     const matchedNflIds = new Set<string>();
 
-    // Process Sleeper players in batches
+    // Process Sleeper players in batches with cursor-based resumption
     console.log('Processing Sleeper players...');
-    from = 0;
+    from = startIndex;
     let totalProcessed = 0;
+    const maxToProcess = batchLimit;
     
-    while (true) {
+    while (totalProcessed < maxToProcess) {
       const { data: sleeperBatch, error } = await supabase
         .from('sleeper_projections')
         .select('player_id, player_name, position, team')
@@ -198,10 +202,42 @@ serve(async (req) => {
       }
 
       totalProcessed += sleeperBatch.length;
-      console.log(`Processed ${totalProcessed} Sleeper players (batch: +${toInsert.length} inserted, +${toUpdate.length} updated)`);
+      console.log(`Processed ${from + sleeperBatch.length} Sleeper players total (batch: +${toInsert.length} inserted, +${toUpdate.length} updated)`);
       
-      if (sleeperBatch.length < BATCH_SIZE) break;
+      if (sleeperBatch.length < BATCH_SIZE) {
+        // No more data to process
+        return new Response(
+          JSON.stringify({
+            success: true,
+            matched,
+            created,
+            unmatched,
+            hasMore: false,
+            nextIndex: null,
+            message: `✅ Mapping complete: ${matched} matched, ${created} created, ${unmatched} unmatched`
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
       from += BATCH_SIZE;
+      
+      if (totalProcessed >= maxToProcess) {
+        // More data to process, return cursor for resumption
+        return new Response(
+          JSON.stringify({
+            success: true,
+            matched,
+            created,
+            unmatched,
+            hasMore: true,
+            nextIndex: from,
+            processedSoFar: from,
+            message: `Processed ${from} players so far. Call again with startIndex: ${from} to continue.`
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     }
 
     console.log(`✅ Mapping complete: ${matched} matched, ${created} created, ${unmatched} unmatched`);
@@ -212,6 +248,8 @@ serve(async (req) => {
         matched,
         created,
         unmatched,
+        hasMore: false,
+        nextIndex: null,
         message: `Successfully mapped ${matched} existing players, created ${created} new players (${unmatched} without NFL match)`
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
