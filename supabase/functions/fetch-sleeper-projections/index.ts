@@ -20,7 +20,7 @@ serve(async (req) => {
     );
 
     // Use current NFL season (2025)
-    const { season = 2025 } = await req.json().catch(() => ({ season: 2025 }));
+    const { season = 2025, startWeek = 1, endWeek = 18 } = await req.json().catch(() => ({ season: 2025, startWeek: 1, endWeek: 18 }));
 
     console.log(`Starting fetch for season ${season}`);
 
@@ -48,10 +48,10 @@ serve(async (req) => {
       let totalFetched = 0;
       let totalSaved = 0;
 
-      console.log("Starting Sleeper projection fetch for season", season);
+      console.log(`Starting Sleeper projection fetch for season ${season}, weeks ${startWeek} to ${endWeek}`);
 
-      // Fetch projections for all 18 weeks
-      for (let week = 1; week <= 18; week++) {
+      // Fetch projections for specified week range
+      for (let week = startWeek; week <= endWeek; week++) {
       const url = `https://api.sleeper.app/v1/projections/nfl/regular/${season}/${week}`;
       
       try {
