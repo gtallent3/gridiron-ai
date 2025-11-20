@@ -1400,23 +1400,9 @@ export default function Admin() {
                     <CardDescription>Run these first to fetch raw player data from external sources</CardDescription>
                   </CardHeader>
                   <CardContent className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                      <p className="text-sm font-medium">Ingest Sleeper Players</p>
-                      <p className="text-xs text-muted-foreground">Fetches all player data from Sleeper API</p>
-                      <Button 
-                        onClick={handleIngestSleeperPlayers} 
-                        disabled={playersIngesting}
-                        size="sm"
-                        className="w-full"
-                      >
-                        {playersIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {playersIngesting ? "Ingesting..." : "Ingest Sleeper Players"}
-                      </Button>
-                    </div>
-
                     <div className="space-y-2">
-                      <p className="text-sm font-medium">Normalize Player Data</p>
-                      <p className="text-xs text-muted-foreground">Fetches & normalizes weekly projections into canonical player format</p>
+                      <p className="text-sm font-medium">Fetch Sleeper Projections</p>
+                      <p className="text-xs text-muted-foreground">Fetches & normalizes weekly projections</p>
                       <div className="flex gap-2">
                         <Input
                           type="number"
@@ -1444,7 +1430,21 @@ export default function Admin() {
                         className="w-full"
                       >
                         {sleeperFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {sleeperFetching ? "Normalizing..." : "Normalize Players"}
+                        {sleeperFetching ? "Fetching..." : "Fetch Projections"}
+                      </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Ingest Sleeper Players</p>
+                      <p className="text-xs text-muted-foreground">Fetches all player data from Sleeper API</p>
+                      <Button 
+                        onClick={handleIngestSleeperPlayers} 
+                        disabled={playersIngesting}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {playersIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {playersIngesting ? "Ingesting..." : "Ingest Sleeper Players"}
                       </Button>
                     </div>
 
