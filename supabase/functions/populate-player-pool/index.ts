@@ -118,6 +118,13 @@ serve(async (req) => {
         for (const proj of projections) {
           const canonical = sleeperIdMap.get(proj.player_id);
           if (!canonical) continue;
+          
+          // Skip players with null position (violates NOT NULL constraint)
+          if (!proj.position) {
+            console.log(`Skipping Sleeper player ${proj.player_name} (${proj.player_id}) - null position`);
+            continue;
+          }
+          
           poolRecords.push({
             canonical_player_id: canonical.id,
             player_name: canonical.player_name,
@@ -195,6 +202,13 @@ serve(async (req) => {
         for (const actual of actuals) {
           const canonical = nflIdMap.get(actual.player_id);
           if (!canonical) continue;
+          
+          // Skip players with null position (violates NOT NULL constraint)
+          if (!actual.position) {
+            console.log(`Skipping NFL player ${actual.player_name} (${actual.player_id}) - null position`);
+            continue;
+          }
+          
           poolRecords.push({
             canonical_player_id: canonical.id,
             player_name: canonical.player_name,
