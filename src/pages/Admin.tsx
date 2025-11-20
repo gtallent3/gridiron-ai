@@ -103,6 +103,8 @@ export default function Admin() {
   // Sleeper Projections State
   const [sleeperFetching, setSleeperFetching] = useState(false);
   const [sleeperResult, setSleeperResult] = useState<any>(null);
+  const [sleeperStartWeek, setSleeperStartWeek] = useState(1);
+  const [sleeperEndWeek, setSleeperEndWeek] = useState(18);
   
   // Sleeper Players State
   const [playersIngesting, setPlayersIngesting] = useState(false);
@@ -627,11 +629,15 @@ export default function Admin() {
     try {
       toast({
         title: "Starting Projection Fetch",
-        description: "Fetching weekly projections from Sleeper API...",
+        description: `Fetching weeks ${sleeperStartWeek}-${sleeperEndWeek} from Sleeper API...`,
       });
 
       const { data, error } = await supabase.functions.invoke('fetch-sleeper-projections', {
-        body: {}
+        body: { 
+          season: 2025,
+          startWeek: sleeperStartWeek,
+          endWeek: sleeperEndWeek
+        }
       });
 
       if (error) throw error;
@@ -1411,6 +1417,26 @@ export default function Admin() {
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Normalize Player Data</p>
                       <p className="text-xs text-muted-foreground">Fetches & normalizes weekly projections into canonical player format</p>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          placeholder="Start Week"
+                          value={sleeperStartWeek}
+                          onChange={(e) => setSleeperStartWeek(parseInt(e.target.value) || 1)}
+                          min={1}
+                          max={18}
+                          className="w-24"
+                        />
+                        <Input
+                          type="number"
+                          placeholder="End Week"
+                          value={sleeperEndWeek}
+                          onChange={(e) => setSleeperEndWeek(parseInt(e.target.value) || 18)}
+                          min={1}
+                          max={18}
+                          className="w-24"
+                        />
+                      </div>
                       <Button 
                         onClick={handleFetchSleeperProjections} 
                         disabled={sleeperFetching}
