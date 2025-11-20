@@ -21,6 +21,23 @@ serve(async (req) => {
 
     console.log(`Computing defensive rankings for season ${season}${week ? `, week ${week}` : ''}`);
 
+    // Team abbreviation normalization mapping
+    const normalizeTeam = (team: string | null | undefined): string | null => {
+      if (!team) return null;
+      const normalized: Record<string, string> = {
+        'WSH': 'WAS',
+        'TAM': 'TB',
+        'LVR': 'LV',
+        'NOR': 'NO',
+        'SFO': 'SF',
+        'NWE': 'NE',
+        'GNB': 'GB',
+        'KAN': 'KC',
+        'LAR': 'LA'
+      };
+      return normalized[team] || team;
+    };
+
     // Prepare to fetch stats efficiently and avoid 1000-row default limits
     const positions = ['QB', 'RB', 'WR', 'TE'];
 
@@ -73,7 +90,8 @@ serve(async (req) => {
       console.log(`Week ${currentWeek}: processing ${weekStats?.length || 0} player stat records`);
 
       (weekStats || []).forEach((stat: any) => {
-        const opponent = stat.opponent as string | null;
+        const rawOpponent = stat.opponent as string | null;
+        const opponent = normalizeTeam(rawOpponent);
         const position = stat.position as string | null;
         if (!opponent || !position || !positions.includes(position)) return;
 
