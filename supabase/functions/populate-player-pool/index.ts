@@ -121,8 +121,10 @@ serve(async (req) => {
     const avgPointsMap = new Map<string, { sum: number; count: number }>();
     
     (defensiveRankings || []).forEach((dr: any) => {
-      const weekKey = `${dr.team}_${dr.position}_${dr.week}`;
-      const avgKey = `${dr.team}_${dr.position}`;
+      // Normalize team names in defensive rankings data
+      const normalizedTeam = normalizeTeam(dr.team);
+      const weekKey = `${normalizedTeam}_${dr.position}_${dr.week}`;
+      const avgKey = `${normalizedTeam}_${dr.position}`;
       
       defRankMap.set(weekKey, dr.rank);
       
