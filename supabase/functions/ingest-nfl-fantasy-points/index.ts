@@ -154,6 +154,52 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Fetch team schedules to enrich opponent data
+    console.log('Fetching team schedules to enrich opponent data...');
+    const { data: schedules, error: schedError } = await supabase
+      .from('team_schedules')
+      .select('team, week, opponent')
+      .eq('season', season);
+
+    if (schedError) {
+      console.error('Error fetching team schedules:', schedError);
+    }
+
+    // Create a lookup map: team_week -> opponent
+    const scheduleMap = new Map<string, string>();
+    if (schedules) {
+      for (const sched of schedules) {
+        const key = `${sched.team}_${sched.week}`;
+        scheduleMap.set(key, sched.opponent);
+      }
+    }
+
+    // Team abbreviation normalization
+    const normalizeTeam = (team: string | null | undefined): string | null => {
+      if (!team) return null;
+      const normalized: Record<string, string> = {
+        'WSH': 'WAS',
+        'TAM': 'TB',
+        'LVR': 'LV',
+        'NOR': 'NO',
+        'SFO': 'SF',
+        'NWE': 'NE',
+        'GNB': 'GB',
+        'KAN': 'KC',
+        'LAR': 'LA'
+      };
+      return normalized[team] || team;
+    };
+
+    // Enrich records with opponent data from schedules
+    console.log('Enriching records with opponent data...');
+    for (const record of records) {
+      const normalizedTeam = normalizeTeam(record.team);
+      const key = `${normalizedTeam}_${record.week}`;
+      const opponent = scheduleMap.get(key);
+      record.opponent = opponent || null;
+    }
+
     // Insert in batches to avoid timeouts
     const batchSize = 500;
     let totalInserted = 0;
