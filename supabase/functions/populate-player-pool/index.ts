@@ -158,6 +158,14 @@ serve(async (req) => {
         const avgKey = `${teamData.team}_${position}`;
         defRankAvgMap.set(avgKey, index + 1);
       });
+      
+      // Debug log for WR position
+      if (position === 'WR') {
+        console.log(`WR Defense Rankings (1-32):`);
+        teamAvgs.slice(0, 20).forEach((t, i) => {
+          console.log(`  #${i+1}: ${t.team} (${t.avgPoints.toFixed(2)} pts allowed)`);
+        });
+      }
     }
     
     console.log(`Loaded ${defensiveRankings?.length || 0} defensive rankings with ${defRankAvgMap.size} normalized season-average ranks (1-32 per position)`);
