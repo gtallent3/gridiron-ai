@@ -203,15 +203,9 @@ serve(async (req) => {
           const normalizedOpp = proj.opponent ? normalizeTeam(proj.opponent) : null;
           let defRank: number | null = null;
           if (normalizedOpp && proj.position) {
-            // Try exact week match first
-            const defKey = `${normalizedOpp}_${proj.position}_${proj.week}`;
-            defRank = defRankMap.get(defKey) ?? null;
-            
-            // If no exact match (future week), use season average as projected difficulty
-            if (defRank === null) {
-              const avgKey = `${normalizedOpp}_${proj.position}`;
-              defRank = defRankAvgMap.get(avgKey) ?? null;
-            }
+            // Always use season-average normalized rank (1-32) for consistency
+            const avgKey = `${normalizedOpp}_${proj.position}`;
+            defRank = defRankAvgMap.get(avgKey) ?? null;
           }
           
           poolRecords.push({
@@ -302,9 +296,9 @@ serve(async (req) => {
           const normalizedOpp = actual.opponent ? normalizeTeam(actual.opponent) : null;
           let defRank: number | null = null;
           if (normalizedOpp && actual.position) {
-            // For actuals, only use exact week match (no averaging needed)
-            const defKey = `${normalizedOpp}_${actual.position}_${actual.week}`;
-            defRank = defRankMap.get(defKey) ?? null;
+            // Always use season-average normalized rank (1-32) for consistency
+            const avgKey = `${normalizedOpp}_${actual.position}`;
+            defRank = defRankAvgMap.get(avgKey) ?? null;
           }
           
           poolRecords.push({
