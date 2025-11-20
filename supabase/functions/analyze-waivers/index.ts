@@ -78,6 +78,12 @@ serve(async (req) => {
       };
     });
 
+    // Calculate position counts
+    const positionCounts = new Map<string, number>();
+    rosterSummary.forEach((p: any) => {
+      positionCounts.set(p.position, (positionCounts.get(p.position) || 0) + 1);
+    });
+
     // Take top waiver players by position
     const topWaiverPlayers = waiverPlayers.slice(0, 50).map((p: any) => ({
       name: p.name,
@@ -102,24 +108,25 @@ PRIORITY RULES:
 2. For 1-2 point advantages, only recommend if waiver player has significantly better matchup (opponent ranked 25+ on defense)
 
 PROTECTION RULES (do not drop these players):
-3. Players explicitly marked [ON BYE] - they have future value after the bye week
-4. Players marked [INJURED] who are star players or proven producers - they will return
-5. The only backup at a critical position (QB, TE) if starting player is injury-prone
+3. NEVER drop a player if they are the ONLY player at that position on the roster (e.g., don't drop your only Kicker, only TE, only QB, etc.)
+4. Players explicitly marked [ON BYE] - they have future value after the bye week
+5. Players marked [INJURED] who are star players or proven producers - they will return
+6. The only backup at a critical position (QB, TE) if starting player is injury-prone
 
 DATA INTERPRETATION:
-6. Only consider a player on BYE if they have the [ON BYE] marker - DO NOT assume 0 projections means bye week
-7. If a player has 0 projections but NO [ON BYE] marker, they likely have missing data - do not recommend them
-8. Defensive rankings (CRITICAL - READ CAREFULLY):
+7. Only consider a player on BYE if they have the [ON BYE] marker - DO NOT assume 0 projections means bye week
+8. If a player has 0 projections but NO [ON BYE] marker, they likely have missing data - do not recommend them
+9. Defensive rankings (CRITICAL - READ CAREFULLY):
    - Ranking 1 = TOUGHEST/BEST defense (HARDEST matchup for offense)
    - Ranking 32 = EASIEST/WORST defense (BEST matchup for offense)
    - Example: "32nd ranked defense" = the WEAKEST defense = GREAT matchup
    - Example: "1st ranked defense" = the STRONGEST defense = TOUGH matchup
 
 RECOMMENDATION QUALITY:
-9. Only provide recommendations that will genuinely help the user's team
-10. If there are no clear upgrades available, return an empty array
-11. Do not force recommendations just to provide output
-12. Better to give 0-1 high-quality recommendations than 3-4 questionable ones
+10. Only provide recommendations that will genuinely help the user's team
+11. If there are no clear upgrades available, return an empty array
+12. Do not force recommendations just to provide output
+13. Better to give 0-1 high-quality recommendations than 3-4 questionable ones
 
 For each recommendation, provide:
 - Player to add (MUST have higher projection than player to drop)
@@ -147,6 +154,9 @@ Example INVALID recommendation (DO NOT DO THIS):
 This is WRONG because Knox (6.9) projects LOWER than Hockenson (8.09).`;
 
     const userPrompt = `Current Week: ${currentWeek}
+
+ROSTER POSITION COUNTS:
+${Array.from(positionCounts.entries()).map(([pos, count]) => `${pos}: ${count} player${count !== 1 ? 's' : ''}`).join('\n')}
 
 MY ROSTER:
 ${rosterSummary.map((p: any) => 
