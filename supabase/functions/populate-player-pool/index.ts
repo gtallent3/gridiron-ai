@@ -138,12 +138,13 @@ serve(async (req) => {
     // Calculate average points allowed per team/position, then rank 1-32 per position
     const positions = ['QB', 'RB', 'WR', 'TE'];
     for (const position of positions) {
-      const teamAvgs: Array<{ key: string; avgPoints: number }> = [];
+      const teamAvgs: Array<{ team: string; avgPoints: number }> = [];
       
       avgPointsMap.forEach((acc, key) => {
         if (key.endsWith(`_${position}`)) {
+          const team = key.replace(`_${position}`, '');
           teamAvgs.push({
-            key,
+            team,
             avgPoints: acc.sum / acc.count
           });
         }
@@ -152,8 +153,10 @@ serve(async (req) => {
       // Sort by avg points allowed: fewest = rank 1 (hardest), most = rank 32 (easiest)
       teamAvgs.sort((a, b) => a.avgPoints - b.avgPoints);
       
-      teamAvgs.forEach((team, index) => {
-        defRankAvgMap.set(team.key, index + 1);
+      // Assign unique ranks 1-32 (or fewer if less than 32 teams have data)
+      teamAvgs.forEach((teamData, index) => {
+        const avgKey = `${teamData.team}_${position}`;
+        defRankAvgMap.set(avgKey, index + 1);
       });
     }
     
