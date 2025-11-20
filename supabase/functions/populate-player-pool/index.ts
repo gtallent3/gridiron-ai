@@ -159,14 +159,12 @@ serve(async (req) => {
             continue;
           }
           
-          // Look up defensive rank from defensive_rankings table
+          // Normalize opponent FIRST, then look up defensive rank
+          const normalizedOpp = proj.opponent ? normalizeTeam(proj.opponent) : null;
           let defRank: number | null = null;
-          if (proj.opponent && proj.position) {
-            const normalizedOpp = normalizeTeam(proj.opponent);
-            if (normalizedOpp) {
-              const defKey = `${normalizedOpp}_${proj.position}_${proj.week}`;
-              defRank = defRankMap.get(defKey) ?? null;
-            }
+          if (normalizedOpp && proj.position) {
+            const defKey = `${normalizedOpp}_${proj.position}_${proj.week}`;
+            defRank = defRankMap.get(defKey) ?? null;
           }
           
           poolRecords.push({
@@ -186,7 +184,7 @@ serve(async (req) => {
             receptions: proj.rec,
             receiving_yards: proj.rec_yd,
             receiving_tds: proj.rec_td,
-            opponent: normalizeTeam(proj.opponent),
+            opponent: normalizedOpp,
             opponent_def_rank: defRank,
             ros_sos_rank: proj.ros_sos_rank,
             playoff_sos_rank: proj.playoff_sos_rank,
@@ -253,14 +251,12 @@ serve(async (req) => {
             continue;
           }
           
-          // Look up defensive rank from defensive_rankings table
+          // Normalize opponent FIRST, then look up defensive rank
+          const normalizedOpp = actual.opponent ? normalizeTeam(actual.opponent) : null;
           let defRank: number | null = null;
-          if (actual.opponent && actual.position) {
-            const normalizedOpp = normalizeTeam(actual.opponent);
-            if (normalizedOpp) {
-              const defKey = `${normalizedOpp}_${actual.position}_${actual.week}`;
-              defRank = defRankMap.get(defKey) ?? null;
-            }
+          if (normalizedOpp && actual.position) {
+            const defKey = `${normalizedOpp}_${actual.position}_${actual.week}`;
+            defRank = defRankMap.get(defKey) ?? null;
           }
           
           poolRecords.push({
@@ -280,7 +276,7 @@ serve(async (req) => {
             receptions: actual.receptions,
             receiving_yards: actual.receiving_yards,
             receiving_tds: actual.receiving_tds,
-            opponent: normalizeTeam(actual.opponent),
+            opponent: normalizedOpp,
             opponent_def_rank: defRank,
             raw_source_ids: { nfl_id: actual.player_id }
           });
