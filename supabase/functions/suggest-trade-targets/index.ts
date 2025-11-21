@@ -79,12 +79,23 @@ serve(async (req) => {
     const userStrengthMap = new Map(userStrengths.map(s => [s.position, s]));
 
     // Identify user's weak positions (unless specific position requested)
+    // NEVER include K or DST in trade suggestions
     let targetPositions: string[];
     if (targetPosition) {
-      targetPositions = [targetPosition.toUpperCase()];
+      const pos = targetPosition.toUpperCase();
+      if (pos === 'K' || pos === 'DST' || pos === 'DEF' || pos === 'D/ST') {
+        return new Response(JSON.stringify({ 
+          error: 'Trade suggestions are not available for kickers and defenses',
+          suggestions: []
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      targetPositions = [pos];
     } else {
       targetPositions = userStrengths
         .filter(s => s.rank >= 6 || s.z_score < -0.3)
+        .filter(s => s.position !== 'K' && s.position !== 'DST' && s.position !== 'DEF' && s.position !== 'D/ST')
         .sort((a, b) => a.z_score - b.z_score)
         .slice(0, 2)
         .map(s => s.position);
@@ -193,9 +204,10 @@ serve(async (req) => {
         const teamStrengths = strengths.filter(s => s.team_id === teamId);
         const teamStrengthMap = new Map(teamStrengths.map(s => [s.position, s]));
 
-        // Find their top players at target position
+        // Find their top players at target position (exclude K and DST)
         const topPlayers = teamRoster
           .filter(p => p.position === targetPos && p.trade_value > 5)
+          .filter(p => p.position !== 'K' && p.position !== 'DST' && p.position !== 'DEF' && p.position !== 'D/ST')
           .sort((a, b) => b.trade_value - a.trade_value)
           .slice(0, 3);
 
@@ -205,9 +217,11 @@ serve(async (req) => {
             .filter(s => s.rank >= 6 || s.z_score < -0.3)
             .map(s => s.position);
 
-          // Find our players that match their needs
+          // Find our players that match their needs (exclude K and DST)
           const offerCandidates = userRoster
             .filter(p => {
+              // Never offer K or DST
+              if (p.position === 'K' || p.position === 'DST' || p.position === 'DEF' || p.position === 'D/ST') return false;
               // Must be in a position we're strong at OR they're weak at
               const inOurStrength = tradeablePositions.includes(p.position);
               const inTheirWeakness = theirWeakPositions.includes(p.position);
@@ -261,6 +275,8 @@ serve(async (req) => {
       for (const [teamId, roster] of teamRosters.entries()) {
         if (teamId === userTeamId) continue;
         for (const p of roster) {
+          // Exclude K and DST
+          if (p.position === 'K' || p.position === 'DST' || p.position === 'DEF' || p.position === 'D/ST') continue;
           if (targetPositions.includes(p.position) && (p.trade_value || 0) > 10) {
             candidateTargetsA.push({ ...p, teamId });
           }
@@ -271,6 +287,7 @@ serve(async (req) => {
       for (const target of topTargetsA) {
         const offer = userRoster
           .filter(p => (p.trade_value || 0) > 0)
+          .filter(p => p.position !== 'K' && p.position !== 'DST' && p.position !== 'DEF' && p.position !== 'D/ST')
           .sort((a, b) => Math.abs((a.trade_value || 0) - target.trade_value) - Math.abs((b.trade_value || 0) - target.trade_value))[0];
         if (offer) {
           const targetPosStrength = userStrengthMap.get(target.position);
@@ -317,6 +334,10 @@ serve(async (req) => {
         }
         const topTvw = (tvw || [])
           .filter(r => targetPositions.includes((r.position || '').toUpperCase()))
+          .filter(r => {
+            const pos = (r.position || '').toUpperCase();
+            return pos !== 'K' && pos !== 'DST' && pos !== 'DEF' && pos !== 'D/ST';
+          })
           .sort((a, b) => Number(b.trade_value) - Number(a.trade_value))
           .slice(0, 100);
         for (const r of topTvw) {
@@ -328,6 +349,7 @@ serve(async (req) => {
           if (trade_value <= 10) continue;
           const offer = userRoster
             .filter(p => (p.trade_value || 0) > 0)
+            .filter(p => p.position !== 'K' && p.position !== 'DST' && p.position !== 'DEF' && p.position !== 'D/ST')
             .sort((a, b) => Math.abs((a.trade_value || 0) - trade_value) - Math.abs((b.trade_value || 0) - trade_value))[0];
           if (!offer) continue;
           const targetPosStrength = userStrengthMap.get(r.position || '');
