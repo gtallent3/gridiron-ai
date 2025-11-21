@@ -10,6 +10,7 @@ const corsHeaders = {
 const requestSchema = z.object({
   feature: z.enum(['ai_assistant', 'start_sit', 'trade_analysis', 'prop_bet']),
   description: z.string().max(500).optional(),
+  amount: z.number().int().positive().optional(),
 });
 
 serve(async (req) => {
@@ -52,7 +53,7 @@ serve(async (req) => {
       );
     }
 
-    const { feature, description } = validationResult.data;
+    const { feature, description, amount } = validationResult.data;
 
     // Map feature to transaction type
     const transactionTypeMap: Record<string, string> = {
@@ -73,7 +74,7 @@ serve(async (req) => {
     // Call deduct_tokens function
     const { data, error } = await supabase.rpc('deduct_tokens', {
       p_user_id: user.id,
-      p_amount: 1,
+      p_amount: amount || 1,
       p_transaction_type: transactionType,
       p_description: description || `Used ${feature.replace('_', ' ')}`
     });
