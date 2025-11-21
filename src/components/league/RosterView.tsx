@@ -653,8 +653,10 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                   onValueChange={(v) => setSelectedWeek(Number(v))}
                   disabled={loading}
                 >
-                  <SelectTrigger className="w-20 sm:w-24 touch-target">
-                    <SelectValue />
+                  <SelectTrigger className="w-24 sm:w-32 touch-target">
+                    <SelectValue placeholder={`Week ${selectedWeek}`}>
+                      Week {selectedWeek}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="bg-card z-50 max-h-[300px]">
                     {Array.from({ length: maxWeek - currentWeek + 1 }, (_, i) => currentWeek + i).map(w => (
