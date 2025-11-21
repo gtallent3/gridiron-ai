@@ -66,7 +66,7 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
       // Enrich teams with weekly stats from player_pool_v2
       const currentWeek = league.current_week || getCurrentNFLWeek().week;
       const now = new Date();
-      const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() + 1 : now.getFullYear();
+      const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
       const isHistorical = currentWeek < (league.current_week || getCurrentNFLWeek().week);
 
       // Get platform ID field
