@@ -4,6 +4,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Trophy, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { ManualSyncButton } from "./ManualSyncButton";
+import { calculateFantasyPoints } from "@/lib/fantasyPointsCalculator";
+import { getCurrentNFLWeek } from "@/lib/nflWeekUtils";
 
 type League = {
   id: string;
@@ -13,6 +15,7 @@ type League = {
   scoring_type: string;
   scoring_settings?: any;
   opponent_team_id?: string;
+  current_week?: number;
 };
 
 type Team = {
@@ -32,6 +35,7 @@ type LeagueHeaderProps = {
 
 export function LeagueHeader({ league, userTeam, onSyncComplete }: LeagueHeaderProps) {
   const [winProbability, setWinProbability] = useState(50);
+  const [projectedPoints, setProjectedPoints] = useState(0);
 
   useEffect(() => {
     const fetchWinProbability = async () => {
@@ -58,28 +62,145 @@ export function LeagueHeader({ league, userTeam, onSyncComplete }: LeagueHeaderP
     fetchWinProbability();
   }, [league.id, league.opponent_team_id, userTeam?.total_projected]);
 
-  // Compute projected points from the starting lineup using the same rules as RosterView
-  const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
-  const projectedPoints = (() => {
-    const roster = userTeam?.roster;
-    if (!Array.isArray(roster)) return 0;
+  // Calculate projected points using the same logic as RosterView for ESPN
+  useEffect(() => {
+    const calculateProjectedPoints = async () => {
+      const roster = userTeam?.roster;
+      if (!Array.isArray(roster)) {
+        setProjectedPoints(0);
+        return;
+      }
 
-    if (league.platform === 'sleeper' || league.platform === 'yahoo') {
-      return roster
-        .filter((p: any) => {
-          if (league.platform === 'yahoo') {
-            const sp = String(p.selected_position ?? '').toUpperCase();
-            return sp !== '' && !['BN','BENCH','IR','NA','IL','PUP'].includes(sp);
+      // For non-ESPN, use simple calculation from roster data
+      if (league.platform === 'sleeper' || league.platform === 'yahoo') {
+        const points = roster
+          .filter((p: any) => {
+            if (league.platform === 'yahoo') {
+              const sp = String(p.selected_position ?? '').toUpperCase();
+              return sp !== '' && !['BN','BENCH','IR','NA','IL','PUP'].includes(sp);
+            }
+            return p.starter !== false;
+          })
+          .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
+        setProjectedPoints(points);
+        return;
+      }
+
+      // For ESPN, calculate using league-specific scoring settings (same as RosterView)
+      try {
+        const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+        const currentWeek = league.current_week || getCurrentNFLWeek().week;
+        const now = new Date();
+        const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+        
+        // Get starter player IDs
+        const starterPlayers = roster.filter((p: any) => STARTER_SLOTS.includes(p.slot));
+        const platformIdField = 'espn_id';
+        const rosterPlayerIds = starterPlayers
+          .map((p: any) => String(p.player_id ?? p.playerId ?? p.id ?? ''))
+          .filter(Boolean);
+        
+        // Look up canonical players
+        const { data: canonicalData } = await supabase
+          .from('canonical_players')
+          .select('id, player_name, position, team, espn_id')
+          .in(platformIdField, rosterPlayerIds);
+        
+        const canonicalMap = new Map<string, any>();
+        if (canonicalData) {
+          for (const cp of canonicalData) {
+            if (cp.espn_id) {
+              canonicalMap.set(String(cp.espn_id), cp);
+            }
           }
-          return p.starter !== false;
-        })
-        .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
-    }
+        }
+        
+        const canonicalIds = Array.from(canonicalMap.values()).map(cp => cp.id);
+        
+        // Fetch from player_pool_v2
+        const { data: poolData } = await supabase
+          .from('player_pool_v2')
+          .select('*')
+          .eq('week', currentWeek)
+          .eq('season', inferredSeason)
+          .in('canonical_player_id', canonicalIds);
+        
+        const poolMap = new Map<string, any>();
+        if (poolData) {
+          for (const pool of poolData) {
+            poolMap.set(pool.canonical_player_id, pool);
+          }
+        }
+        
+        // Get scoring settings
+        const { data: leagueData } = await supabase
+          .from('connected_leagues')
+          .select('scoring_settings, scoring_type')
+          .eq('id', league.id)
+          .maybeSingle();
+        
+        let scoringSettings: any = {
+          passing_yards: 0.04, passing_tds: 4, interceptions: -2,
+          rushing_yards: 0.1, rushing_tds: 6,
+          receptions: 1, receiving_yards: 0.1, receiving_tds: 6,
+          fumbles_lost: -2,
+        };
+        
+        if (leagueData?.scoring_settings) {
+          scoringSettings = { ...scoringSettings, ...(leagueData.scoring_settings as Record<string, any>) };
+        } else if (leagueData?.scoring_type === 'standard') {
+          scoringSettings.receptions = 0;
+        } else if (leagueData?.scoring_type === 'half_ppr') {
+          scoringSettings.receptions = 0.5;
+        }
+        
+        // Calculate projected points for each starter
+        let totalProjected = 0;
+        starterPlayers.forEach((player: any) => {
+          const playerId = String(player.player_id ?? player.playerId ?? player.id ?? '');
+          const canonical = canonicalMap.get(playerId);
+          const poolEntry = canonical ? poolMap.get(canonical.id) : null;
+          
+          if (poolEntry) {
+            const stats = {
+              passing_yards: Number(poolEntry.passing_yards) || 0,
+              passing_tds: Number(poolEntry.passing_tds) || 0,
+              interceptions: Number(poolEntry.passing_ints) || 0,
+              rushing_yards: Number(poolEntry.rushing_yards) || 0,
+              rushing_tds: Number(poolEntry.rushing_tds) || 0,
+              receptions: Number(poolEntry.receptions) || 0,
+              receiving_yards: Number(poolEntry.receiving_yards) || 0,
+              receiving_tds: Number(poolEntry.receiving_tds) || 0,
+            } as Record<string, number>;
 
-    return roster
-      .filter((p: any) => STARTER_SLOTS.includes(p.slot))
-      .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
-  })();
+            const statSum: number = (Object.values(stats) as number[]).reduce(
+              (s, v) => s + (Number(v) || 0),
+              0
+            );
+            const { total } = calculateFantasyPoints(stats, scoringSettings);
+
+            const projectedPoints = statSum > 0
+              ? total
+              : (Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0);
+            
+            totalProjected += projectedPoints;
+          }
+        });
+        
+        setProjectedPoints(totalProjected);
+      } catch (error) {
+        console.error('Error calculating projected points:', error);
+        // Fallback to simple calculation
+        const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+        const points = roster
+          .filter((p: any) => STARTER_SLOTS.includes(p.slot))
+          .reduce((sum: number, p: any) => sum + (p.projected || 0), 0);
+        setProjectedPoints(points);
+      }
+    };
+
+    calculateProjectedPoints();
+  }, [league.id, league.platform, league.current_week, userTeam?.roster]);
 
   // Get actual team record from userTeam data
   const record = {
