@@ -280,14 +280,14 @@ Deno.serve(async (req) => {
 
           if (myPosPlayers.length < 1) continue;
 
-          // Try all my players at this position (including best if fair value)
+          // Try 1-for-1 trades first (tight tolerance)
           for (let i = 0; i < Math.min(myPosPlayers.length, 5); i++) {
             const myPlayer = myPosPlayers[i];
             const myValue = myPlayer.value;
             const valueDiff = targetValue - myValue;
 
-            // Check if it's a reasonably fair trade (within 40% value)
-            if (Math.abs(valueDiff) < Math.max(targetValue, myValue) * 0.40) {
+            // 1-for-1: Check if values are close (within 20% value)
+            if (Math.abs(valueDiff) < Math.max(targetValue, myValue) * 0.20) {
               // Calculate PSS changes
               const myNewPSS = calculatePSSAfterTrade(
                 myRoster,
@@ -410,12 +410,129 @@ Deno.serve(async (req) => {
               });
               
               // Limit proposals per team
-              if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 2) break;
+              if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 3) break;
             }
           }
-          if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 2) break;
+
+          // Try 2-for-1 trades: I give 2 players for their 1 better player
+          if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length < 3) {
+            for (let i = 0; i < Math.min(myPosPlayers.length - 1, 4); i++) {
+              for (let j = i + 1; j < Math.min(myPosPlayers.length, 5); j++) {
+                const myPlayer1 = myPosPlayers[i];
+                const myPlayer2 = myPosPlayers[j];
+                const myTotalValue = myPlayer1.value + myPlayer2.value;
+                const valueDiff = targetValue - myTotalValue;
+
+                // 2-for-1: Check if combined values match (within 15%)
+                if (Math.abs(valueDiff) < Math.max(targetValue, myTotalValue) * 0.15) {
+                  const myNewPSS = calculatePSSAfterTrade(
+                    myRoster,
+                    targetPosition,
+                    [targetPlayer],
+                    [myPlayer1, myPlayer2]
+                  );
+                  const myPSSDelta = myNewPSS - targetPosStrength.pss;
+                  const myNewRank = estimateNewRank(
+                    targetPosStrength.rank,
+                    targetPosStrength.pss,
+                    myNewPSS,
+                    allTeamsPSSForPosition
+                  );
+
+                  const theirPosStrength = theirStrengths.get(needPos.position);
+                  const theirCurrentPSS = theirPosStrength?.pss || 0;
+                  const theirNewPSS = calculatePSSAfterTrade(
+                    team.roster || [],
+                    needPos.position,
+                    [myPlayer1, myPlayer2],
+                    [targetPlayer]
+                  );
+                  const theirPSSDelta = theirNewPSS - theirCurrentPSS;
+
+                  const netValueGain = targetValue - myTotalValue;
+                  if (netValueGain <= 0) continue;
+
+                  const rankImprovement = Math.max(0, targetPosStrength.rank - myNewRank);
+                  const myPosBoost = (myNewRank < targetPosStrength.rank) ? rankImprovement * 5 : 0;
+                  
+                  const theirRankChange = (theirPosStrength?.rank || 10) - estimateNewRank(
+                    theirPosStrength?.rank || 10,
+                    theirCurrentPSS,
+                    theirNewPSS,
+                    Array.from(strengthsByTeam.values())
+                      .map(s => s.get(needPos.position)?.pss || 0)
+                      .filter(p => p > 0)
+                  );
+                  const theirPosCost = theirRankChange > 0 ? theirRankChange * 3 : 0;
+                  const posBoost = myPosBoost - theirPosCost;
+
+                  const tradeFitScore = (1.0 * netValueGain) + (0.25 * posBoost);
+
+                  let grade = 'D';
+                  if (netValueGain >= 25) grade = 'A+';
+                  else if (netValueGain >= 20) grade = 'A';
+                  else if (netValueGain >= 15) grade = 'A-';
+                  else if (netValueGain >= 10) grade = 'B+';
+                  else if (netValueGain >= 7) grade = 'B';
+                  else if (netValueGain >= 5) grade = 'B-';
+                  else if (netValueGain >= 3) grade = 'C+';
+                  else if (netValueGain >= 1) grade = 'C';
+                  else if (netValueGain > 0) grade = 'C-';
+                  else grade = 'F';
+
+                  let acceptanceLikelihood = 'Medium';
+                  if (theirPSSDelta > 10 && theirRankChange >= 2) acceptanceLikelihood = 'High';
+                  else if (theirPSSDelta < 0 || theirRankChange >= 4) acceptanceLikelihood = 'Low';
+                  else acceptanceLikelihood = 'Medium';
+
+                  const mutualBenefit = theirPSSDelta > 0 && myPSSDelta > 0;
+
+                  console.log(`2-for-1 Match: ${myPlayer1.name} + ${myPlayer2.name} → ${targetPlayer.name}, Value Δ: +${netValueGain.toFixed(1)}`);
+                  
+                  tradeTargets.push({
+                    myPlayers: [myPlayer1, myPlayer2],
+                    theirPlayers: [targetPlayer],
+                    theirTeam: team,
+                    valueDiff,
+                    net_value_gain: netValueGain,
+                    my_pos_rank_before: targetPosStrength.rank,
+                    my_pos_rank_after: myNewRank,
+                    my_pss_before: targetPosStrength.pss,
+                    my_pss_after: myNewPSS,
+                    pss_delta: myPSSDelta,
+                    opponent_pos_rank_before: theirPosStrength?.rank || 0,
+                    opponent_pos_rank_after: estimateNewRank(
+                      theirPosStrength?.rank || 10,
+                      theirCurrentPSS,
+                      theirNewPSS,
+                      Array.from(strengthsByTeam.values())
+                        .map(s => s.get(needPos.position)?.pss || 0)
+                        .filter(p => p > 0)
+                    ),
+                    opponent_pss_delta: theirPSSDelta,
+                    opponent_improved_position: needPos.position,
+                    opponent_rank_change: theirRankChange,
+                    trade_fit_score: tradeFitScore,
+                    grade,
+                    mutual_benefit: mutualBenefit,
+                    acceptance_likelihood: acceptanceLikelihood,
+                    rationale: `Net value gain: +${netValueGain.toFixed(1)} ROS points. ` +
+                      `Trade ${myPlayer1.name} (${myPlayer1.value.toFixed(1)}) + ${myPlayer2.name} (${myPlayer2.value.toFixed(1)}) from your ${needPos.position} depth for ${targetPlayer.name} (${targetValue.toFixed(1)}). ` +
+                      `Your ${targetPosition} improves from rank ${targetPosStrength.rank} → ${myNewRank}. ` +
+                      `Opponent's ${needPos.position} rank changes by ${theirRankChange >= 0 ? '+' : ''}${theirRankChange}. ` +
+                      `Acceptance likelihood: ${acceptanceLikelihood}.`,
+                  });
+                  
+                  if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 3) break;
+                }
+              }
+              if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 3) break;
+            }
+          }
+
+          if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 3) break;
         }
-        if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 2) break;
+        if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 3) break;
       }
     }
 
