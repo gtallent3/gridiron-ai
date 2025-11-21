@@ -39,28 +39,158 @@ export function LeagueHeader({ league, userTeam, onSyncComplete }: LeagueHeaderP
 
   useEffect(() => {
     const fetchWinProbability = async () => {
-      if (!league.opponent_team_id) return;
+      if (!league.opponent_team_id || league.platform !== 'espn') return;
 
+      // Fetch opponent team roster
       const { data: opponentTeam } = await supabase
         .from('user_teams')
-        .select('total_projected')
+        .select('roster')
         .eq('league_id', league.id)
         .eq('team_id', league.opponent_team_id)
         .maybeSingle();
 
-      if (opponentTeam && userTeam?.total_projected) {
-        const userProjected = userTeam.total_projected;
-        const opponentProjected = opponentTeam.total_projected || 0;
-        const totalProjected = userProjected + opponentProjected;
+      if (!opponentTeam || !userTeam?.roster) return;
+
+      try {
+        const STARTER_SLOTS = [0, 2, 4, 5, 6, 16, 17, 23];
+        const currentWeek = league.current_week || getCurrentNFLWeek().week;
+        const now = new Date();
+        const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+
+        // Get starters from both teams
+        const userStarters = (Array.isArray(userTeam.roster) ? userTeam.roster : [])
+          .filter((p: any) => STARTER_SLOTS.includes(p.slot));
+        const oppStarters = (Array.isArray(opponentTeam.roster) ? opponentTeam.roster : [])
+          .filter((p: any) => STARTER_SLOTS.includes(p.slot));
+
+        // Get all ESPN IDs
+        const userStarterIds = userStarters.map((p: any) => String(p.player_id ?? '')).filter(Boolean);
+        const oppStarterIds = oppStarters.map((p: any) => String(p.player_id ?? '')).filter(Boolean);
+        const allStarterIds = [...userStarterIds, ...oppStarterIds];
+
+        if (allStarterIds.length === 0) return;
+
+        // Fetch canonical players
+        const { data: canonicalPlayers } = await supabase
+          .from('canonical_players')
+          .select('id, espn_id, position')
+          .in('espn_id', allStarterIds);
+
+        if (!canonicalPlayers?.length) return;
+
+        const canonicalIds = canonicalPlayers.map(p => p.id);
+
+        // Fetch player pool data - prioritize actual stats
+        const { data: playerPoolData } = await supabase
+          .from('player_pool_v2')
+          .select('*')
+          .in('canonical_player_id', canonicalIds)
+          .eq('week', currentWeek)
+          .eq('season', inferredSeason)
+          .order('actual_fp', { ascending: false, nullsFirst: false });
+
+        if (!playerPoolData?.length) return;
+
+        // Create map, preferring actual stats over projected
+        const poolMap = new Map<string, any>();
+        for (const pool of playerPoolData) {
+          const existing = poolMap.get(pool.canonical_player_id);
+          if (!existing || (Number(pool.actual_fp) > 0 && Number(existing.actual_fp) === 0)) {
+            poolMap.set(pool.canonical_player_id, pool);
+          }
+        }
+
+        // Get league scoring settings
+        const { data: leagueData } = await supabase
+          .from('connected_leagues')
+          .select('scoring_settings, scoring_type')
+          .eq('id', league.id)
+          .single();
+
+        let scoringSettings: any = {
+          passing_yards: 0.04, passing_tds: 4, interceptions: -2,
+          rushing_yards: 0.1, rushing_tds: 6,
+          receptions: 1, receiving_yards: 0.1, receiving_tds: 6,
+          fumbles_lost: -2,
+        };
+
+        if (leagueData?.scoring_settings) {
+          scoringSettings = { ...scoringSettings, ...(leagueData.scoring_settings as Record<string, any>) };
+        } else if (leagueData?.scoring_type === 'standard') {
+          scoringSettings.receptions = 0;
+        } else if (leagueData?.scoring_type === 'half_ppr') {
+          scoringSettings.receptions = 0.5;
+        }
+
+        // Create map from ESPN ID to canonical player and pool data
+        const espnToData = new Map<string, { canonical: any, pool: any }>();
+        canonicalPlayers.forEach(cp => {
+          if (cp.espn_id) {
+            const poolEntry = poolMap.get(cp.id);
+            if (poolEntry) {
+              espnToData.set(cp.espn_id, { canonical: cp, pool: poolEntry });
+            }
+          }
+        });
+
+        // Calculate user projected
+        let userTotal = 0;
+        userStarterIds.forEach(espnId => {
+          const data = espnToData.get(espnId);
+          if (data) {
+            const { pool } = data;
+            const hasActualStats = Number(pool.actual_fp) > 0;
+            
+            const stats = {
+              passing_yards: Number(pool.passing_yards) || 0,
+              passing_tds: Number(pool.passing_tds) || 0,
+              interceptions: Number(pool.passing_ints) || 0,
+              rushing_yards: Number(pool.rushing_yards) || 0,
+              rushing_tds: Number(pool.rushing_tds) || 0,
+              receptions: Number(pool.receptions) || 0,
+              receiving_yards: Number(pool.receiving_yards) || 0,
+              receiving_tds: Number(pool.receiving_tds) || 0,
+            };
+            const { total } = calculateFantasyPoints(stats, scoringSettings);
+            userTotal += total;
+          }
+        });
+
+        // Calculate opponent projected
+        let oppTotal = 0;
+        oppStarterIds.forEach(espnId => {
+          const data = espnToData.get(espnId);
+          if (data) {
+            const { pool } = data;
+            const hasActualStats = Number(pool.actual_fp) > 0;
+            
+            const stats = {
+              passing_yards: Number(pool.passing_yards) || 0,
+              passing_tds: Number(pool.passing_tds) || 0,
+              interceptions: Number(pool.passing_ints) || 0,
+              rushing_yards: Number(pool.rushing_yards) || 0,
+              rushing_tds: Number(pool.rushing_tds) || 0,
+              receptions: Number(pool.receptions) || 0,
+              receiving_yards: Number(pool.receiving_yards) || 0,
+              receiving_tds: Number(pool.receiving_tds) || 0,
+            };
+            const { total } = calculateFantasyPoints(stats, scoringSettings);
+            oppTotal += total;
+          }
+        });
+
+        const totalProjected = userTotal + oppTotal;
         const calculatedWinProb = totalProjected > 0 
-          ? Math.round((userProjected / totalProjected) * 100) 
+          ? Math.round((userTotal / totalProjected) * 100) 
           : 50;
         setWinProbability(calculatedWinProb);
+      } catch (error) {
+        console.error('Error calculating win probability:', error);
       }
     };
 
     fetchWinProbability();
-  }, [league.id, league.opponent_team_id, userTeam?.total_projected]);
+  }, [league.id, league.opponent_team_id, league.platform, league.current_week, userTeam?.roster]);
 
   // Calculate projected points using the same logic as RosterView for ESPN
   useEffect(() => {
@@ -88,7 +218,7 @@ export function LeagueHeader({ league, userTeam, onSyncComplete }: LeagueHeaderP
 
       // For ESPN, calculate using league-specific scoring settings (same as RosterView)
       try {
-        const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+        const STARTER_SLOTS = [0, 2, 4, 5, 6, 16, 17, 23];
         const currentWeek = league.current_week || getCurrentNFLWeek().week;
         const now = new Date();
         const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
@@ -117,18 +247,22 @@ export function LeagueHeader({ league, userTeam, onSyncComplete }: LeagueHeaderP
         
         const canonicalIds = Array.from(canonicalMap.values()).map(cp => cp.id);
         
-        // Fetch from player_pool_v2
+        // Fetch from player_pool_v2 - prioritize actual stats
         const { data: poolData } = await supabase
           .from('player_pool_v2')
           .select('*')
           .eq('week', currentWeek)
           .eq('season', inferredSeason)
-          .in('canonical_player_id', canonicalIds);
+          .in('canonical_player_id', canonicalIds)
+          .order('actual_fp', { ascending: false, nullsFirst: false });
         
         const poolMap = new Map<string, any>();
         if (poolData) {
           for (const pool of poolData) {
-            poolMap.set(pool.canonical_player_id, pool);
+            const existing = poolMap.get(pool.canonical_player_id);
+            if (!existing || (Number(pool.actual_fp) > 0 && Number(existing.actual_fp) === 0)) {
+              poolMap.set(pool.canonical_player_id, pool);
+            }
           }
         }
         
@@ -173,17 +307,9 @@ export function LeagueHeader({ league, userTeam, onSyncComplete }: LeagueHeaderP
               receiving_tds: Number(poolEntry.receiving_tds) || 0,
             } as Record<string, number>;
 
-            const statSum: number = (Object.values(stats) as number[]).reduce(
-              (s, v) => s + (Number(v) || 0),
-              0
-            );
             const { total } = calculateFantasyPoints(stats, scoringSettings);
-
-            const projectedPoints = statSum > 0
-              ? total
-              : (Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0);
             
-            totalProjected += projectedPoints;
+            totalProjected += total;
           }
         });
         
