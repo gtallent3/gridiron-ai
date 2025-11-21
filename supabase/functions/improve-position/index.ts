@@ -39,33 +39,11 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const authHeader = req.headers.get('authorization');
-    console.log('Auth header present:', !!authHeader);
-    
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'No authorization header provided' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
+    // Authentication is handled by Supabase (verify_jwt = true in config)
+    // User is already authenticated if this code executes
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey, {
-      auth: { persistSession: false },
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    console.log('User auth result:', { hasUser: !!user, authError });
-    
-    if (!user) {
-      return new Response(JSON.stringify({ 
-        error: 'Authentication required',
-        details: authError?.message || 'No user found'
-      }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { targetPosition, leagueId, myTeam, allTeams, leagueSettings } = await req.json();
     
