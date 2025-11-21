@@ -223,15 +223,18 @@ serve(async (req) => {
     };
 
     const getValue = (p: any, pos: string) => {
-      // For QB and TE, use trade_value for the single best player based on canonical_player_id
+      // For QB and TE, ONLY use trade_value for that player; no ROS/value_score fallback
       if (pos === 'QB' || pos === 'TE') {
         const canonicalId = String(p.canonical_player_id || '').trim();
         if (canonicalId && tradeValueByCanonicalId.has(canonicalId)) {
           return tradeValueByCanonicalId.get(canonicalId)!;
         }
+        // If we don't have a trade value entry, treat as 0 so backups or unranked TEs/QBs
+        // don't inflate positional strength
+        return 0;
       }
 
-      // Default: use league-specific value scores from player_value_cache
+      // Default for RB/WR/K/DST: use league-specific value scores from player_value_cache
       // Try exact player_id match first (handles both espn_ prefixed and platform-specific IDs)
       let pid = String(p.player_id || p.playerId || p.id || '').trim();
       if (pid && valueById.has(pid)) return valueById.get(pid)!;
