@@ -18,6 +18,7 @@ type Player = {
   injury_duration_weeks?: number;
   opponent?: string;
   opponent_def_rank?: number;
+  has_actual_points?: boolean;
 };
 
 type PlayerCardProps = {
@@ -117,14 +118,16 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly, showActual 
 
         <div className="pt-2 border-t border-border/50">
           <p className="text-xs text-muted-foreground">
-            {(showActual || (player.actualPoints && player.actualPoints > 0)) ? 'Actual Points' : 'Projected'}
+            {(showActual || player.has_actual_points || (player.actualPoints && player.actualPoints > 0)) ? 'Actual Points' : 'Projected'}
           </p>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <p className="text-lg font-bold cursor-help">
-                  {((showActual || (player.actualPoints && player.actualPoints > 0)) && player.actualPoints !== undefined) ? (
+                  {((showActual || player.has_actual_points) && player.actualPoints !== undefined) ? (
                     player.actualPoints.toFixed(1)
+                  ) : ((showActual || player.has_actual_points) && player.projected > 0) ? (
+                    player.projected.toFixed(1)
                   ) : player.projected > 0 ? (
                     player.projected.toFixed(1)
                   ) : player.is_bye_week ? (
