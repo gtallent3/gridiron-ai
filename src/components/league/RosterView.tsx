@@ -159,7 +159,10 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           let actualPoints = 0;
           
           if (poolEntry) {
-            // Compute points from raw stats using league scoring to match PlayerStatsDialog
+            // Check if player has actual stats
+            const hasActualStats = Number(poolEntry.actual_fp) > 0;
+            
+            // Build stats object from raw data
             const stats = {
               passing_yards: Number(poolEntry.passing_yards) || 0,
               passing_tds: Number(poolEntry.passing_tds) || 0,
@@ -169,25 +172,23 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
               receptions: Number(poolEntry.receptions) || 0,
               receiving_yards: Number(poolEntry.receiving_yards) || 0,
               receiving_tds: Number(poolEntry.receiving_tds) || 0,
-            } as Record<string, number>;
+            };
 
-            const statSum: number = (Object.values(stats) as number[]).reduce(
-              (s, v) => s + (Number(v) || 0),
-              0
-            );
             const { total } = calculateFantasyPoints(stats, scoringSettings);
 
             if (isHistorical) {
+              const statSum: number = (Object.values(stats) as number[]).reduce(
+                (s, v) => s + (Number(v) || 0),
+                0
+              );
               actualPoints = statSum > 0
                 ? total
                 : (Number(poolEntry.actual_fp) || Number(poolEntry.composite_fp) || 0);
             } else {
-              // For current week, check if player has already played (has actual stats)
-              const hasActualStats = Number(poolEntry.actual_fp) > 0;
-              
+              // For current week, match MatchupInsight logic
               if (hasActualStats) {
-                // Player has played - always use actual_fp directly
-                actualPoints = Number(poolEntry.actual_fp);
+                // Player has played - calculate from actual stats
+                actualPoints = total;
                 projectedPoints = 0;
               } else {
                 // Player hasn't played yet - show projected points
