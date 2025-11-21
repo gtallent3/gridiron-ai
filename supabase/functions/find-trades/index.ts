@@ -161,16 +161,24 @@ serve(async (req) => {
         throw new Error('Target player not found');
       }
 
+      // Never allow targeting K or DST
+      const targetPos = normPos(targetPlayer.position);
+      if (targetPos === 'K' || targetPos === 'DST' || targetPos === 'DEF' || targetPos === 'D/ST') {
+        throw new Error('Cannot target kickers or defenses in trade finder');
+      }
+
       const targetValue = getPlayerValue(targetPlayer);
       const targetOwner = allTeams.find((t: any) => 
         (t.roster || []).some((p: any) => (p.id || p.player_id) === targetPlayerId)
       );
 
-      // Find fair packages from my roster
-      const myRoster = myTeam.roster || [];
+      // Find fair packages from my roster (exclude K and DST)
+      const myRoster = (myTeam.roster || []).filter((p: any) => {
+        const pos = normPos(p.position);
+        return pos !== 'K' && pos !== 'DST' && pos !== 'DEF' && pos !== 'D/ST';
+      });
       
       // Calculate positional fit for target
-      const targetPos = normPos(targetPlayer.position);
       const targetPosStrength = myStrengthsMap.get(targetPos);
       const targetPosBonus = getPositionalFitBonus(targetPlayer);
       const targetIsWeakPos = weakPositions.includes(targetPos);
@@ -266,8 +274,13 @@ serve(async (req) => {
         throw new Error('Shop player not found');
       }
 
-      const shopValue = getPlayerValue(shopPlayer);
+      // Never allow shopping K or DST
       const shopPos = normPos(shopPlayer.position);
+      if (shopPos === 'K' || shopPos === 'DST' || shopPos === 'DEF' || shopPos === 'D/ST') {
+        throw new Error('Cannot shop kickers or defenses in trade finder');
+      }
+
+      const shopValue = getPlayerValue(shopPlayer);
 
       // Look through all opponent teams
       for (const team of allTeams) {
@@ -275,9 +288,11 @@ serve(async (req) => {
 
         const opponentRoster = team.roster || [];
 
-        // Prioritize getting players in my weak positions
+        // Prioritize getting players in my weak positions (exclude K and DST)
         const matches = opponentRoster
           .filter((p: any) => {
+            const pos = normPos(p.position);
+            if (pos === 'K' || pos === 'DST' || pos === 'DEF' || pos === 'D/ST') return false;
             const val = getPlayerValue(p);
             return val >= shopValue * 0.85 && val <= shopValue * 1.15;
           })

@@ -56,7 +56,9 @@ export function TradeFinder({ league, userTeam, allTeams }: TradeFinderProps) {
   const allPlayers = mode === 'target'
     ? allTeams.flatMap(t => (t.roster || []).map(p => ({ ...normalizePlayer(p), ownerTeamId: t.team_id })))
         .filter(p => p.id !== userTeam.roster.find(r => normalizePlayer(r).id === p.id)?.id)
-    : (userTeam.roster || []).map(normalizePlayer);
+        .filter(p => p.position !== 'K' && p.position !== 'DST' && p.position !== 'DEF' && p.position !== 'D/ST')
+    : (userTeam.roster || []).map(normalizePlayer)
+        .filter(p => p.position !== 'K' && p.position !== 'DST' && p.position !== 'DEF' && p.position !== 'D/ST');
 
   const handleFindTrades = async () => {
     if (!selectedPlayerId) {
