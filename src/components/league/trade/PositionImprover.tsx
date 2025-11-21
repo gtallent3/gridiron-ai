@@ -65,7 +65,7 @@ export function PositionImprover({ league, userTeam, allTeams }: PositionImprove
       // Get current session to ensure authentication
       const { data: { session } } = await supabase.auth.getSession();
       
-      if (!session) {
+      if (!session?.access_token) {
         toast({
           title: "Authentication Required",
           description: "Please log in to use this feature",
@@ -89,6 +89,9 @@ export function PositionImprover({ league, userTeam, allTeams }: PositionImprove
             roster: (t.roster || []).map(normalizePlayer),
           })),
           leagueSettings: league.scoring_settings || {},
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
 
