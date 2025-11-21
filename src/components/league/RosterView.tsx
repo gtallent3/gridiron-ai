@@ -177,9 +177,21 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                 ? total
                 : (Number(poolEntry.actual_fp) || Number(poolEntry.composite_fp) || 0);
             } else {
-              projectedPoints = statSum > 0
-                ? total
-                : (Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0);
+              // For current week, check if player has already played (has actual stats)
+              const hasActualStats = Number(poolEntry.actual_fp) > 0 || statSum > 0;
+              
+              if (hasActualStats) {
+                // Player has played - show actual points
+                actualPoints = statSum > 0
+                  ? total
+                  : (Number(poolEntry.actual_fp) || 0);
+                projectedPoints = 0;
+              } else {
+                // Player hasn't played yet - show projected points
+                projectedPoints = statSum > 0
+                  ? total
+                  : (Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0);
+              }
             }
           }
           
@@ -610,7 +622,13 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
     return orderA - orderB;
   });
 
-  const totalProjected = sortedStarters.reduce((sum, p) => sum + (Number(p.projected) || 0), 0);
+  const totalProjected = sortedStarters.reduce((sum, p) => {
+    // For current week, use actual points if available, otherwise use projected
+    if (!isHistoricalWeek && p.actualPoints && p.actualPoints > 0) {
+      return sum + Number(p.actualPoints);
+    }
+    return sum + (Number(p.projected) || 0);
+  }, 0);
   const totalActual = sortedStarters.reduce((sum, p) => sum + (Number(p.actualPoints) || 0), 0);
   const currentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
   const isHistoricalWeek = selectedWeek < currentWeek;
