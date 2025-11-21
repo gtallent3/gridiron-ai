@@ -193,6 +193,8 @@ serve(async (req) => {
           .select('*')
           .eq('season', season)
           .in('player_id', idsChunk)
+          .not('player_name', 'is', null)
+          .not('position', 'is', null)
           .range(pageFrom, pageFrom + pageSize - 1);
 
         if (projError) throw projError;
@@ -286,6 +288,8 @@ serve(async (req) => {
           .select('*')
           .eq('season', season)
           .in('player_id', idsChunk)
+          .not('player_name', 'is', null)
+          .not('position', 'is', null)
           .range(pageFrom, pageFrom + pageSize - 1);
 
         if (actualsError) throw actualsError;
