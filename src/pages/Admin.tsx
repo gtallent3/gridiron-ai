@@ -72,6 +72,8 @@ export default function Admin() {
     under_multiplier: number;
     week: number;
     season: number;
+    opponent: string;
+    game_time: string;
   }>({
     player_name: "",
     team: "",
@@ -81,6 +83,8 @@ export default function Admin() {
     under_multiplier: 2.0,
     week: 1,
     season: 2025,
+    opponent: "",
+    game_time: "",
   });
   const [creatingProp, setCreatingProp] = useState(false);
 
@@ -398,10 +402,30 @@ export default function Admin() {
   };
 
   const handleCreateProp = async () => {
-    if (!newProp.player_name || !newProp.team || newProp.line === 0) {
+    if (!newProp.player_name || !newProp.team || !newProp.opponent || !newProp.game_time || newProp.line === 0) {
       toast({
         title: "Missing Fields",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields including opponent and game time",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate team format (must be exactly 3 uppercase letters)
+    if (!/^[A-Z]{3}$/.test(newProp.team)) {
+      toast({
+        title: "Invalid Team Format",
+        description: "Team must be exactly 3 uppercase letters (e.g., KC, BUF, DAL)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validate opponent format
+    if (!/^[A-Z]{3}$/.test(newProp.opponent)) {
+      toast({
+        title: "Invalid Opponent Format",
+        description: "Opponent must be exactly 3 uppercase letters (e.g., KC, BUF, DAL)",
         variant: "destructive",
       });
       return;
@@ -409,8 +433,11 @@ export default function Admin() {
 
     setCreatingProp(true);
     try {
+      // Convert datetime-local to ISO format for the API
+      const gameTimeISO = newProp.game_time ? new Date(newProp.game_time).toISOString() : new Date().toISOString();
+      
       const { data, error } = await supabase.functions.invoke('admin-create-prop', {
-        body: newProp
+        body: { ...newProp, game_time: gameTimeISO }
       });
 
       if (error) throw error;
@@ -430,6 +457,8 @@ export default function Admin() {
         under_multiplier: 2.0,
         week: 1,
         season: 2025,
+        opponent: "",
+        game_time: "",
       });
 
       fetchProps();
@@ -1357,9 +1386,22 @@ export default function Admin() {
                       onChange={(e) => setNewProp({ ...newProp, player_name: e.target.value })}
                     />
                     <Input
-                      placeholder="Team"
+                      placeholder="Team (3 letters, e.g. KC)"
                       value={newProp.team}
-                      onChange={(e) => setNewProp({ ...newProp, team: e.target.value })}
+                      onChange={(e) => setNewProp({ ...newProp, team: e.target.value.toUpperCase() })}
+                      maxLength={3}
+                    />
+                    <Input
+                      placeholder="Opponent (3 letters, e.g. BUF)"
+                      value={newProp.opponent}
+                      onChange={(e) => setNewProp({ ...newProp, opponent: e.target.value.toUpperCase() })}
+                      maxLength={3}
+                    />
+                    <Input
+                      type="datetime-local"
+                      placeholder="Game Time"
+                      value={newProp.game_time}
+                      onChange={(e) => setNewProp({ ...newProp, game_time: e.target.value })}
                     />
                     <Select
                       value={newProp.stat_type}
