@@ -49,71 +49,77 @@ serve(async (req) => {
     const BATCH_SIZE = 300; // Smaller batches to reduce memory usage
     const UPSERT_CHUNK = 25;
 
-    // Clean up null teams first
-    console.log('Cleaning up players with null teams...');
-    await supabase.from('canonical_players').delete().is('team', null);
+    // Only do expensive setup on first batch to avoid timeouts on resumed batches
+    let existingBySleeperIdMap = new Map<string, any>();
+    let existingByNflIdMap = new Map<string, any>();
+    let nflByNamePos = new Map<string, any[]>();
     
-    // Fetch existing canonical players for lookup - in batches
-    console.log('Loading existing canonical players...');
-    const existingBySleeperIdMap = new Map<string, any>();
-    const existingByNflIdMap = new Map<string, any>();
-    
-    let from = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from('canonical_players')
-        .select('id, player_name, position, team, sleeper_id, nfl_id')
-        .range(from, from + BATCH_SIZE - 1);
-      if (error) throw error;
-      if (!data || data.length === 0) break;
+    if (startIndex === 0) {
+      // Clean up null teams first (only on first run)
+      console.log('Cleaning up players with null teams...');
+      await supabase.from('canonical_players').delete().is('team', null);
       
-      for (const cp of data) {
-        if (cp.sleeper_id) existingBySleeperIdMap.set(cp.sleeper_id, cp);
-        if (cp.nfl_id) existingByNflIdMap.set(cp.nfl_id, cp);
-      }
+      // Fetch existing canonical players for lookup - in batches
+      console.log('Loading existing canonical players...');
       
-      console.log(`Loaded ${from + data.length} canonical players...`);
-      if (data.length < BATCH_SIZE) break;
-      from += BATCH_SIZE;
-    }
-
-    console.log(`Loaded ${existingBySleeperIdMap.size} existing canonical players`);
-
-    // Build NFL player lookup - in batches
-    console.log('Building NFL player lookup...');
-    const nflByNamePos = new Map<string, any[]>();
-    from = 0;
-    while (true) {
-      const { data: nflBatch, error } = await supabase
-        .from('nfl_fantasy_points')
-        .select('player_id, player_name, position, team')
-        .gte('season', 2024)
-        .not('player_id', 'is', null)
-        .not('player_name', 'is', null)
-        .range(from, from + BATCH_SIZE - 1);
-      
-      if (error) throw error;
-      if (!nflBatch || nflBatch.length === 0) break;
-
-      for (const player of nflBatch) {
-        const normalizedFull = normalizeName(player.player_name);
-        const key = `${normalizedFull}:${player.position}`;
-        if (!nflByNamePos.has(key)) {
-          nflByNamePos.set(key, []);
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('canonical_players')
+          .select('id, player_name, position, team, sleeper_id, nfl_id')
+          .range(from, from + BATCH_SIZE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        
+        for (const cp of data) {
+          if (cp.sleeper_id) existingBySleeperIdMap.set(cp.sleeper_id, cp);
+          if (cp.nfl_id) existingByNflIdMap.set(cp.nfl_id, cp);
         }
-        nflByNamePos.get(key)!.push(player);
+        
+        console.log(`Loaded ${from + data.length} canonical players...`);
+        if (data.length < BATCH_SIZE) break;
+        from += BATCH_SIZE;
       }
 
-      if (nflBatch.length < BATCH_SIZE) break;
-      from += BATCH_SIZE;
+      console.log(`Loaded ${existingBySleeperIdMap.size} existing canonical players`);
+
+      // Build NFL player lookup - in batches
+      console.log('Building NFL player lookup...');
+      from = 0;
+      while (true) {
+        const { data: nflBatch, error } = await supabase
+          .from('nfl_fantasy_points')
+          .select('player_id, player_name, position, team')
+          .gte('season', 2024)
+          .not('player_id', 'is', null)
+          .not('player_name', 'is', null)
+          .range(from, from + BATCH_SIZE - 1);
+        
+        if (error) throw error;
+        if (!nflBatch || nflBatch.length === 0) break;
+
+        for (const player of nflBatch) {
+          const normalizedFull = normalizeName(player.player_name);
+          const key = `${normalizedFull}:${player.position}`;
+          if (!nflByNamePos.has(key)) {
+            nflByNamePos.set(key, []);
+          }
+          nflByNamePos.get(key)!.push(player);
+        }
+
+        if (nflBatch.length < BATCH_SIZE) break;
+        from += BATCH_SIZE;
+      }
+      console.log(`Built lookup for ${nflByNamePos.size} NFL player combinations`);
+    } else {
+      console.log(`Skipping expensive setup for resumed batch at index ${startIndex}`);
     }
-    console.log(`Built lookup for ${nflByNamePos.size} NFL player combinations`);
 
     const matchedNflIds = new Set<string>();
 
     // Process Sleeper players in batches with cursor-based resumption
     console.log('Processing Sleeper players...');
-    from = startIndex;
+    let from = startIndex;
     let totalProcessed = 0;
     const maxToProcess = batchLimit;
     
@@ -134,6 +140,22 @@ serve(async (req) => {
 
       // Process each player in this batch
       for (const sleeperPlayer of sleeperBatch) {
+        // On resumed batches (startIndex > 0), skip expensive matching since data is already loaded
+        // Just try to insert new players and let database constraints handle duplicates
+        if (startIndex > 0) {
+          const normalizedTeam = normalizeTeam(sleeperPlayer.team);
+          if (normalizedTeam && sleeperPlayer.position) {
+            toInsert.push({
+              player_name: sleeperPlayer.player_name,
+              position: sleeperPlayer.position,
+              team: normalizedTeam,
+              sleeper_id: sleeperPlayer.player_id
+            });
+          }
+          continue;
+        }
+        
+        // Full matching logic only on first batch (startIndex === 0)
         const normalizedName = normalizeName(sleeperPlayer.player_name);
         const key = `${normalizedName}:${sleeperPlayer.position}`;
         const normalizedSleeperTeam = normalizeTeam(sleeperPlayer.team);
@@ -193,7 +215,15 @@ serve(async (req) => {
       // Upsert in smaller chunks
       for (let i = 0; i < toInsert.length; i += UPSERT_CHUNK) {
         const chunk = toInsert.slice(i, i + UPSERT_CHUNK);
-        await supabase.from('canonical_players').upsert(chunk, { onConflict: 'sleeper_id' });
+        // On resumed batches, ignore conflicts since we're not doing full matching
+        if (startIndex > 0) {
+          await supabase.from('canonical_players').upsert(chunk, { 
+            onConflict: 'sleeper_id',
+            ignoreDuplicates: true 
+          });
+        } else {
+          await supabase.from('canonical_players').upsert(chunk, { onConflict: 'sleeper_id' });
+        }
       }
 
       // Update existing records
