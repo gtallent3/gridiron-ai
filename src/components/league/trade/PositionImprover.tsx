@@ -62,6 +62,18 @@ export function PositionImprover({ league, userTeam, allTeams }: PositionImprove
     setResult(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast({
+          title: "Authentication Required",
+          description: "Please sign in to use this feature",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke('improve-position', {
         body: {
           targetPosition,
@@ -76,6 +88,9 @@ export function PositionImprover({ league, userTeam, allTeams }: PositionImprove
             roster: (t.roster || []).map(normalizePlayer),
           })),
           leagueSettings: league.scoring_settings || {},
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
         },
       });
 
