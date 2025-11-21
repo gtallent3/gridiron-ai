@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, TrendingUp, Users, ArrowRight, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ImprovePositionProps {
@@ -127,7 +127,7 @@ export function ImprovePosition({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
+            <Users className="w-5 h-5" />
             Improve a Position
           </CardTitle>
           <CardDescription>
@@ -166,70 +166,10 @@ export function ImprovePosition({
           {packages.map((pkg, idx) => (
             <Card key={idx} className="hover:border-primary/50 transition-colors">
               <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Users className="w-4 h-4" />
-                        Trade with {pkg.partner_team_name}
-                      </CardTitle>
-                    </div>
-                    
-                    {/* PRIMARY: Net Value Gain */}
-                    <div className="flex items-center gap-4 mb-3 p-3 bg-primary/10 rounded-lg">
-                      <div className="flex-1">
-                        <div className="text-xs text-muted-foreground mb-1">Net ROS Value Gain</div>
-                        <div className="text-2xl font-bold text-primary">
-                          +{pkg.net_value_gain.toFixed(1)}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {pkg.acceptance_likelihood === 'High' && (
-                          <CheckCircle2 className="h-5 w-5 text-green-500" />
-                        )}
-                        {pkg.acceptance_likelihood === 'Medium' && (
-                          <AlertCircle className="h-5 w-5 text-yellow-500" />
-                        )}
-                        {pkg.acceptance_likelihood === 'Low' && (
-                          <AlertCircle className="h-5 w-5 text-red-500" />
-                        )}
-                        <div className="text-sm">
-                          <div className="font-medium">{pkg.acceptance_likelihood}</div>
-                          <div className="text-xs text-muted-foreground">Acceptance</div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* SECONDARY: Positional Context */}
-                    <div className="bg-muted/50 rounded-lg p-3 mb-3">
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <div className="text-muted-foreground mb-1 text-xs">📈 Your {selectedPosition} Rank</div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">#{pkg.my_pos_rank_before}</span>
-                            <ArrowRight className="h-3 w-3" />
-                            <span className="font-bold text-primary">#{pkg.my_pos_rank_after}</span>
-                            {pkg.rank_improvement && pkg.rank_improvement > 0 && (
-                              <span className="text-xs text-green-600">
-                                (+{pkg.rank_improvement})
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-muted-foreground mb-1 text-xs">🤝 Partner Rank Impact</div>
-                          <div className="font-medium text-xs">
-                            {pkg.opponent_pos} rank {pkg.opponent_rank_change !== undefined && pkg.opponent_rank_change >= 0 ? 'drops' : 'improves'} by {Math.abs(pkg.opponent_rank_change || 0)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <CardDescription className="text-xs">
-                      {pkg.explanation}
-                    </CardDescription>
-                  </div>
-                </div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Trade with {pkg.partner_team_name}
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid md:grid-cols-2 gap-6">
@@ -285,20 +225,6 @@ export function ImprovePosition({
                     </div>
                   </div>
                 </div>
-
-                {/* Mutual Benefit Analysis */}
-                {pkg.opponent_pos && pkg.opponent_pss_delta !== undefined && (
-                  <div className="mt-4 pt-4 border-t">
-                    <h4 className="text-sm font-medium mb-2">Why They'd Accept:</h4>
-                    <div className="text-sm text-muted-foreground flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-green-500" />
-                      <span>
-                        Improves their {pkg.opponent_pos} from rank {pkg.opponent_pos_rank_before} → {pkg.opponent_pos_rank_after}
-                        {pkg.opponent_pss_delta > 0 && ` (+${pkg.opponent_pss_delta.toFixed(1)} PSS)`}
-                      </span>
-                    </div>
-                  </div>
-                )}
 
                 {onTradeSelected && (
                   <Button 
