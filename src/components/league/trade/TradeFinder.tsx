@@ -72,6 +72,12 @@ export function TradeFinder({ league, userTeam, allTeams }: TradeFinderProps) {
     setProposals([]);
 
     try {
+      // Verify session before making the call
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Please log in to use this feature');
+      }
+
       const { data, error } = await supabase.functions.invoke('find-trades', {
         body: {
           mode,
