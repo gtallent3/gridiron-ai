@@ -622,6 +622,11 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
     return orderA - orderB;
   });
 
+  // Calculate week status first (needed for projection calculations)
+  const currentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
+  const isHistoricalWeek = selectedWeek < currentWeek;
+  const isFutureWeek = selectedWeek > currentWeek;
+
   const totalProjected = sortedStarters.reduce((sum, p) => {
     // For current week, use actual points if available, otherwise use projected
     if (!isHistoricalWeek && p.actualPoints && p.actualPoints > 0) {
@@ -630,9 +635,6 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
     return sum + (Number(p.projected) || 0);
   }, 0);
   const totalActual = sortedStarters.reduce((sum, p) => sum + (Number(p.actualPoints) || 0), 0);
-  const currentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
-  const isHistoricalWeek = selectedWeek < currentWeek;
-  const isFutureWeek = selectedWeek > currentWeek;
   const maxWeek = 18; // NFL regular season weeks
 
   if (!userTeam) {
