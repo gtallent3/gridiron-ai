@@ -21,10 +21,10 @@ serve(async (req) => {
 
     // Parse optional controls from request body
     let reset = false;
-    let maxBatches = 20; // number of chunks per invocation
+    let maxBatches = 5; // number of chunks per invocation (reduced to prevent timeouts)
     let startSleeperIndex = 0;
     let startNflIndex = 0;
-    let chunkSize = 1000;
+    let chunkSize = 500; // reduced chunk size for better reliability
     try {
       const body = await req.json();
       reset = !!body?.reset;
