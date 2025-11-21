@@ -92,7 +92,7 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
       const season = 2025;
 
       // Get starters from both teams
-      const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+      const STARTER_SLOTS = [0, 2, 4, 5, 6, 16, 17, 23];
       const userStarters = (userTeamData.roster || []).filter((p: any) => 
         STARTER_SLOTS.includes(p.slot) || p.starter === true
       );
