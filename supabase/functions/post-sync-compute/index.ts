@@ -165,8 +165,8 @@ serve(async (req) => {
     const POSITION_WEIGHTS: Record<string, number[]> = {
       RB: [1.00, 0.85, 0.55, 0.30],  // Depth matters - multiple starters + bench
       WR: [1.00, 0.85, 0.55, 0.30],  // Depth matters - multiple starters + bench
-      QB: [1.25],                    // ONLY best QB counts (no bench value)
-      TE: [1.15],                    // ONLY best TE counts (no bench value)
+      QB: [1.0],                     // ONLY best QB counts, equals top value
+      TE: [1.0],                     // ONLY best TE counts, equals top value
       K: [0.60],                     // Low impact
       DST: [0.60],                   // Low impact
     };
