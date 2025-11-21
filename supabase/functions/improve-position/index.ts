@@ -228,25 +228,49 @@ Deno.serve(async (req) => {
       // Target teams that have reasonable depth at this position
       if (!theirTargetPosStrength || theirTargetPosStrength.rank > 8) continue;
 
-      // Find positions where I have tradeable depth (not necessarily strongest)
+      // PRIORITY 1: Same-position trades (WR for WR, RB for RB)
+      // These are always preferred because they don't deplete other positions
+      const samePositionTrades: any[] = [];
+      
+      // PRIORITY 2: Cross-position trades (only when it makes sense for both sides)
+      // Find positions where I have tradeable depth
       const myTradablePositions = Array.from(myStrengths?.entries() || [])
         .filter(([pos, strength]) => pos !== targetPosition && strength.rank <= 7)
         .map(([pos, strength]) => ({ position: pos, ...strength }))
         .sort((a, b) => a.rank - b.rank); // Prioritize stronger positions
 
-      // Check if opponent could benefit from these positions
-      const complementaryNeeds = myTradablePositions.filter(myStrong => {
+      // Check if opponent actually NEEDS what I'm offering
+      // They should be weak at my strong position AND I should be weak at target position
+      const intelligentCrossPositionNeeds = myTradablePositions.filter(myStrong => {
         const theirPosStrength = theirStrengths.get(myStrong.position);
-        return theirPosStrength && theirPosStrength.rank > 5; // They're weaker than top 5
+        // They're weak at my position (rank > 5) AND they're strong at target position
+        return theirPosStrength && theirPosStrength.rank > 5 && theirTargetPosStrength.rank <= 5;
       });
 
-      // If no clear needs, allow any tradable position
-      const tradablePositions = complementaryNeeds.length > 0 ? complementaryNeeds : myTradablePositions;
+      // Count how many starters each team needs at each position
+      const getStarterCount = (pos: string) => DEFAULT_STARTERS[pos] || 1;
       
-      if (tradablePositions.length === 0) continue;
+      // Filter out positions where opponent doesn't need more depth
+      const validCrossPositionTrades = intelligentCrossPositionNeeds.filter(myStrong => {
+        const theirPosStrength = theirStrengths.get(myStrong.position);
+        const startersNeeded = getStarterCount(myStrong.position);
+        
+        // For QB/TE (1 starter): only trade if they're truly weak (rank > 7)
+        if (startersNeeded === 1 && theirPosStrength && theirPosStrength.rank <= 7) {
+          return false; // They don't need depth here
+        }
+        
+        return true;
+      });
 
-      console.log(`Team ${team.team_id} rank ${theirTargetPosStrength.rank} at ${targetPosition}, can offer from:`, 
-        tradablePositions.map(c => c.position).join(', '));
+      // Prioritize same-position trades, then valid cross-position trades
+      const tradablePositions = [targetPosition, ...validCrossPositionTrades.map(c => c.position)];
+
+      console.log(`Team ${team.team_id} rank ${theirTargetPosStrength.rank} at ${targetPosition}`);
+      console.log(`  Valid trade positions: ${tradablePositions.join(', ')}`);
+      console.log(`  Same-position trade available: ${tradablePositions.includes(targetPosition)}`);
+
+      if (tradablePositions.length === 0) continue;
 
       const theirRoster = team.roster || [];
       const theirPosPlayers = theirRoster
@@ -269,14 +293,19 @@ Deno.serve(async (req) => {
         if (targetValue === 0) continue;
 
         // Look for matches from my tradable positions
-        for (const needPos of tradablePositions) {
+        for (const tradePos of tradablePositions) {
+          const isSamePosition = tradePos === targetPosition;
+          
+          // Extract position from object if needed
+          const needPos = typeof tradePos === 'string' ? tradePos : tradePos.position;
+          
           const myPosPlayers = myRoster
-            .filter((p: any) => normPos(p.position) === needPos.position)
+            .filter((p: any) => normPos(p.position) === needPos)
             .map((p: any) => normalizePlayerForTrade(p))
             .filter((p: any) => p.value > 0)
             .sort((a: any, b: any) => b.value - a.value);
 
-          console.log(`My team has ${myPosPlayers.length} ${needPos.position} players with value`);
+          console.log(`My team has ${myPosPlayers.length} ${needPos} players with value`);
 
           if (myPosPlayers.length < 1) continue;
 
@@ -298,11 +327,11 @@ Deno.serve(async (req) => {
               const myTargetPSSDelta = myNewTargetPSS - targetPosStrength.pss;
               
               // Calculate PSS changes at TRADED position (what I'm losing depth at)
-              const myTradedPosStrength = myStrengths?.get(needPos.position);
+              const myTradedPosStrength = myStrengths?.get(needPos);
               const myTradedPosCurrentPSS = myTradedPosStrength?.pss || 0;
               const myNewTradedPosPSS = calculatePSSAfterTrade(
                 myRoster,
-                needPos.position,
+                needPos,
                 [], // Not adding anyone to this position
                 [myPlayer] // Only removing my player
               );
@@ -320,11 +349,11 @@ Deno.serve(async (req) => {
               );
 
               // Calculate their PSS improvement
-              const theirPosStrength = theirStrengths.get(needPos.position);
+              const theirPosStrength = theirStrengths.get(needPos);
               const theirCurrentPSS = theirPosStrength?.pss || 0;
               const theirNewPSS = calculatePSSAfterTrade(
                 team.roster || [],
-                needPos.position,
+                needPos,
                 [myPlayer],
                 [targetPlayer]
               );
@@ -333,8 +362,26 @@ Deno.serve(async (req) => {
               // PRIMARY: Net value gain (must be positive)
               const netValueGain = targetValue - myValue;
               
-              // Reject if losing too much value OR if net PSS change is too negative
-              if (netValueGain <= 0 || netPSSChange < -15) continue;
+              // SAME-POSITION BONUS: Heavily favor same-position trades
+              const samePositionBonus = isSamePosition ? 30 : 0; // Big boost for WR-for-WR, RB-for-RB
+              
+              // CROSS-POSITION PENALTY: Penalize illogical trades
+              let crossPositionPenalty = 0;
+              if (!isSamePosition) {
+                // Heavy penalty if they don't actually need what I'm offering
+                const startersNeeded = getStarterCount(needPos);
+                if (startersNeeded === 1 && theirPosStrength && theirPosStrength.rank <= 6) {
+                  crossPositionPenalty = -50; // They don't need depth at my position
+                }
+                
+                // Penalty for depleting critical positions (RB/WR)
+                if ((needPos === 'RB' || needPos === 'WR') && myPosPlayers.length <= 3) {
+                  crossPositionPenalty -= 20; // Don't deplete my RB/WR depth
+                }
+              }
+              
+              // Reject if losing too much value OR if net PSS change is too negative OR illogical trade
+              if (netValueGain <= 0 || netPSSChange < -15 || crossPositionPenalty < -40) continue;
 
               // SECONDARY: Positional improvement boost (contextual modifier)
               const rankImprovement = Math.max(0, targetPosStrength.rank - myNewRank);
@@ -352,8 +399,8 @@ Deno.serve(async (req) => {
               const theirPosCost = theirRankChange > 0 ? theirRankChange * 3 : 0;
               const posBoost = myPosBoost - theirPosCost;
 
-              // NEW TRADE SCORE: Net PSS change (total team value) + value gain + positional context
-              const tradeFitScore = (0.8 * netPSSChange) + (1.0 * netValueGain) + (0.25 * posBoost);
+              // NEW TRADE SCORE: Net PSS change + value gain + positional context + same-position bonus - cross-position penalty
+              const tradeFitScore = (0.8 * netPSSChange) + (1.0 * netValueGain) + (0.25 * posBoost) + samePositionBonus + crossPositionPenalty;
 
               // Grade based purely on YOUR net value gain (what you receive vs what you give)
               // This is YOUR grade, not a fairness grade
@@ -397,7 +444,7 @@ Deno.serve(async (req) => {
                 pss_delta: myTargetPSSDelta,
                 
                 // My metrics at TRADED position
-                my_traded_pos: needPos.position,
+                my_traded_pos: needPos,
                 my_traded_pos_pss_before: myTradedPosCurrentPSS,
                 my_traded_pos_pss_after: myNewTradedPosPSS,
                 my_traded_pos_pss_delta: myTradedPosPSSDelta,
@@ -409,11 +456,11 @@ Deno.serve(async (req) => {
                   theirCurrentPSS,
                   theirNewPSS,
                   Array.from(strengthsByTeam.values())
-                    .map(s => s.get(needPos.position)?.pss || 0)
+                    .map(s => s.get(needPos)?.pss || 0)
                     .filter(p => p > 0)
                 ),
                 opponent_pss_delta: theirPSSDelta,
-                opponent_improved_position: needPos.position,
+                opponent_improved_position: needPos,
                 opponent_rank_change: theirRankChange,
                 
                 // Scoring
@@ -425,9 +472,10 @@ Deno.serve(async (req) => {
                 // Analysis
                 rationale: `Net team improvement: ${netPSSChange >= 0 ? '+' : ''}${netPSSChange.toFixed(1)} PSS across both positions. ` +
                   `Net value gain: +${netValueGain.toFixed(1)} ROS points. ` +
-                  `Trade ${myPlayer.name} (${myValue.toFixed(1)}) from your ${needPos.position} (loses ${Math.abs(myTradedPosPSSDelta).toFixed(1)} PSS) to get ${targetPlayer.name} (${targetValue.toFixed(1)}). ` +
+                  `Trade ${myPlayer.name} (${myValue.toFixed(1)}) from your ${needPos} (loses ${Math.abs(myTradedPosPSSDelta).toFixed(1)} PSS) to get ${targetPlayer.name} (${targetValue.toFixed(1)}). ` +
                   `Your ${targetPosition} improves from rank ${targetPosStrength.rank} → ${myNewRank} (+${myTargetPSSDelta.toFixed(1)} PSS). ` +
-                  `Opponent's ${needPos.position} rank changes by ${theirRankChange >= 0 ? '+' : ''}${theirRankChange}. ` +
+                  `Opponent's ${needPos} rank changes by ${theirRankChange >= 0 ? '+' : ''}${theirRankChange}. ` +
+                  `${isSamePosition ? 'Same-position trade (preferred). ' : 'Cross-position trade. '}` +
                   `Acceptance likelihood: ${acceptanceLikelihood}.`,
               });
               
@@ -457,11 +505,11 @@ Deno.serve(async (req) => {
                   const myTargetPSSDelta = myNewTargetPSS - targetPosStrength.pss;
                   
                   // Calculate PSS changes at TRADED position (losing 2 players)
-                  const myTradedPosStrength = myStrengths?.get(needPos.position);
+                  const myTradedPosStrength = myStrengths?.get(needPos);
                   const myTradedPosCurrentPSS = myTradedPosStrength?.pss || 0;
                   const myNewTradedPosPSS = calculatePSSAfterTrade(
                     myRoster,
-                    needPos.position,
+                    needPos,
                     [], // Not adding anyone to this position
                     [myPlayer1, myPlayer2] // Only removing my two players
                   );
@@ -477,11 +525,11 @@ Deno.serve(async (req) => {
                     allTeamsPSSForPosition
                   );
 
-                  const theirPosStrength = theirStrengths.get(needPos.position);
+                  const theirPosStrength = theirStrengths.get(needPos);
                   const theirCurrentPSS = theirPosStrength?.pss || 0;
                   const theirNewPSS = calculatePSSAfterTrade(
                     team.roster || [],
-                    needPos.position,
+                    needPos,
                     [myPlayer1, myPlayer2],
                     [targetPlayer]
                   );
@@ -489,8 +537,25 @@ Deno.serve(async (req) => {
 
                   const netValueGain = targetValue - myTotalValue;
                   
-                  // Reject if losing too much value OR net PSS is too negative
-                  if (netValueGain <= 0 || netPSSChange < -20) continue;
+                  // SAME-POSITION BONUS for 2-for-1
+                  const samePositionBonus = isSamePosition ? 30 : 0;
+                  
+                  // CROSS-POSITION PENALTY for 2-for-1
+                  let crossPositionPenalty = 0;
+                  if (!isSamePosition) {
+                    const startersNeeded = getStarterCount(needPos);
+                    if (startersNeeded === 1 && theirPosStrength && theirPosStrength.rank <= 6) {
+                      crossPositionPenalty = -50; // They don't need 2 more players at this position
+                    }
+                    
+                    // Extra penalty for 2-for-1 depleting RB/WR
+                    if ((needPos === 'RB' || needPos === 'WR') && myPosPlayers.length <= 4) {
+                      crossPositionPenalty -= 30; // Heavy penalty for depleting key positions
+                    }
+                  }
+                  
+                  // Reject if losing too much value OR net PSS is too negative OR illogical 2-for-1
+                  if (netValueGain <= 0 || netPSSChange < -20 || crossPositionPenalty < -40) continue;
 
                   const rankImprovement = Math.max(0, targetPosStrength.rank - myNewRank);
                   const myPosBoost = (myNewRank < targetPosStrength.rank) ? rankImprovement * 5 : 0;
@@ -506,7 +571,7 @@ Deno.serve(async (req) => {
                   const theirPosCost = theirRankChange > 0 ? theirRankChange * 3 : 0;
                   const posBoost = myPosBoost - theirPosCost;
 
-                  const tradeFitScore = (0.8 * netPSSChange) + (1.0 * netValueGain) + (0.25 * posBoost);
+                  const tradeFitScore = (0.8 * netPSSChange) + (1.0 * netValueGain) + (0.25 * posBoost) + samePositionBonus + crossPositionPenalty;
 
                   let grade = 'D';
                   if (netValueGain >= 25) grade = 'A+';
@@ -541,7 +606,7 @@ Deno.serve(async (req) => {
                     my_pss_before: targetPosStrength.pss,
                     my_pss_after: myNewTargetPSS,
                     pss_delta: myTargetPSSDelta,
-                    my_traded_pos: needPos.position,
+                    my_traded_pos: needPos,
                     my_traded_pos_pss_before: myTradedPosCurrentPSS,
                     my_traded_pos_pss_after: myNewTradedPosPSS,
                     my_traded_pos_pss_delta: myTradedPosPSSDelta,
@@ -551,11 +616,11 @@ Deno.serve(async (req) => {
                       theirCurrentPSS,
                       theirNewPSS,
                       Array.from(strengthsByTeam.values())
-                        .map(s => s.get(needPos.position)?.pss || 0)
+                        .map(s => s.get(needPos)?.pss || 0)
                         .filter(p => p > 0)
                     ),
                     opponent_pss_delta: theirPSSDelta,
-                    opponent_improved_position: needPos.position,
+                    opponent_improved_position: needPos,
                     opponent_rank_change: theirRankChange,
                     trade_fit_score: tradeFitScore,
                     grade,
@@ -563,9 +628,10 @@ Deno.serve(async (req) => {
                     acceptance_likelihood: acceptanceLikelihood,
                     rationale: `Net team improvement: ${netPSSChange >= 0 ? '+' : ''}${netPSSChange.toFixed(1)} PSS across both positions. ` +
                       `Net value gain: +${netValueGain.toFixed(1)} ROS points. ` +
-                      `Trade 2 players (${myPlayer1.name} + ${myPlayer2.name}, total ${myTotalValue.toFixed(1)}) from your ${needPos.position} (loses ${Math.abs(myTradedPosPSSDelta).toFixed(1)} PSS) to consolidate into ${targetPlayer.name} (${targetValue.toFixed(1)}). ` +
+                      `Trade 2 players (${myPlayer1.name} + ${myPlayer2.name}, total ${myTotalValue.toFixed(1)}) from your ${needPos} (loses ${Math.abs(myTradedPosPSSDelta).toFixed(1)} PSS) to consolidate into ${targetPlayer.name} (${targetValue.toFixed(1)}). ` +
                       `Your ${targetPosition} improves from rank ${targetPosStrength.rank} → ${myNewRank} (+${myTargetPSSDelta.toFixed(1)} PSS). ` +
-                      `Opponent's ${needPos.position} rank changes by ${theirRankChange >= 0 ? '+' : ''}${theirRankChange}.`,
+                      `${isSamePosition ? 'Same-position trade (preferred). ' : 'Cross-position trade. '}` +
+                      `Opponent's ${needPos} rank changes by ${theirRankChange >= 0 ? '+' : ''}${theirRankChange}.`,
                   });
                   
                   if (tradeTargets.filter(t => t.theirTeam.team_id === team.team_id).length >= 3) break;
