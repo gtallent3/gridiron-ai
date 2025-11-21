@@ -12,6 +12,7 @@ interface Player {
   position: string;
   team: string;
   projected: number;
+  actualPoints?: number;
   opponent?: string;
   opponent_def_rank?: number;
   is_bye_week?: boolean;
@@ -175,7 +176,7 @@ Format: [{"benchPlayerName":"...","starterPlayerName":"...","reasoning":"...","p
       aiRecommendations = [];
     }
 
-    // Map AI recommendations to actual player objects and enforce 2-point rule
+    // Map AI recommendations to actual player objects and enforce rules
     const recommendations: Recommendation[] = aiRecommendations
       .map((rec: any) => {
         const benchPlayer = bench.find((p: Player) => 
@@ -193,6 +194,13 @@ Format: [{"benchPlayerName":"...","starterPlayerName":"...","reasoning":"...","p
         // Validate that positions match
         if (benchPlayer.position !== starterPlayer.position) {
           console.warn('Position mismatch:', benchPlayer.position, starterPlayer.position);
+          return null;
+        }
+
+        // CRITICAL: Never recommend replacing a player who has already played (locked in)
+        const starterHasPlayed = starterPlayer.actualPoints !== undefined && starterPlayer.actualPoints > 0;
+        if (starterHasPlayed) {
+          console.warn(`Filtered out locked player: ${starterPlayer.name} has already played with ${starterPlayer.actualPoints} actual points`);
           return null;
         }
 

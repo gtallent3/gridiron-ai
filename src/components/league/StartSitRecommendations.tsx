@@ -14,6 +14,7 @@ type Player = {
   position: string;
   team: string;
   projected: number;
+  actualPoints?: number;
 };
 
 type StartSitRecommendationsProps = {
