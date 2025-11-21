@@ -183,19 +183,16 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                 : (Number(poolEntry.actual_fp) || Number(poolEntry.composite_fp) || 0);
             } else {
               // For current week, check if player has already played (has actual stats)
-              const hasActualStats = Number(poolEntry.actual_fp) > 0 || statSum > 0;
+              const hasActualStats = Number(poolEntry.actual_fp) > 0;
               
               if (hasActualStats) {
-                // Player has played - show actual points
-                actualPoints = statSum > 0
-                  ? total
-                  : (Number(poolEntry.actual_fp) || 0);
+                // Player has played - show actual points from computed stats
+                actualPoints = total;
                 projectedPoints = 0;
               } else {
                 // Player hasn't played yet - show projected points
-                projectedPoints = statSum > 0
-                  ? total
-                  : (Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0);
+                projectedPoints = total || Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0;
+                actualPoints = 0;
               }
             }
           }
