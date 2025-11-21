@@ -18,29 +18,9 @@ serve(async (req) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-    const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
-    const authHeader = req.headers.get('Authorization') ?? '';
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    const userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // JWT is already verified by verify_jwt = true in config.toml
     const adminClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    const { data: { user }, error: authError } = await userClient.auth.getUser();
-
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     const { leagueId } = await req.json();
 
@@ -130,10 +110,7 @@ serve(async (req) => {
     try {
       const { data: valuesData, error: valuesError } = await adminClient.functions.invoke(
         'compute-player-values',
-        {
-          body: { leagueId },
-          headers: { Authorization: authHeader },
-        }
+        { body: { leagueId } }
       );
       if (valuesError) throw valuesError;
       playersProcessed = valuesData?.playersProcessed ?? 0;
