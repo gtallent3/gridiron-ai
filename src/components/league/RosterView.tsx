@@ -99,12 +99,17 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           .select('*')
           .eq('week', week)
           .eq('season', inferredSeason)
-          .in('canonical_player_id', canonicalIds);
+          .in('canonical_player_id', canonicalIds)
+          .order('actual_fp', { ascending: false, nullsFirst: false });
         
         const poolMap = new Map<string, any>();
         if (poolData) {
           for (const pool of poolData) {
-            poolMap.set(pool.canonical_player_id, pool);
+            // Prefer rows with actual stats (actual_fp > 0) over projected
+            const existing = poolMap.get(pool.canonical_player_id);
+            if (!existing || (Number(pool.actual_fp) > 0 && Number(existing.actual_fp) === 0)) {
+              poolMap.set(pool.canonical_player_id, pool);
+            }
           }
         }
         
