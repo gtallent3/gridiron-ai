@@ -62,6 +62,8 @@ export function PositionImprover({ league, userTeam, allTeams }: PositionImprove
     setResult(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const { data, error } = await supabase.functions.invoke('improve-position', {
         body: {
           targetPosition,
@@ -75,7 +77,10 @@ export function PositionImprover({ league, userTeam, allTeams }: PositionImprove
             team_name: t.team_name,
             roster: (t.roster || []).map(normalizePlayer),
           })),
-        }
+        },
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
       });
 
       if (error) throw error;
