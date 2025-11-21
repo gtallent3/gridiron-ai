@@ -166,24 +166,26 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
 
       if (teamsError) throw teamsError;
 
-      // Extract all player IDs
-      const allPlayerIds = new Set<string>();
+      // Extract all canonical player IDs
+      const allCanonicalIds = new Set<string>();
       teamsData?.forEach(team => {
         const roster = team.roster as any[];
         roster?.forEach((player: any) => {
-          if (player.player_id) allPlayerIds.add(player.player_id);
+          if (player.canonical_player_id) {
+            allCanonicalIds.add(player.canonical_player_id);
+          }
         });
       });
 
-      // Fetch trade values for all players
+      // Fetch trade values for all players using canonical IDs
       const { data: rankingsData, error: rankingsError } = await supabase
         .from('player_rankings')
         .select('player_id, trade_value')
-        .in('player_id', Array.from(allPlayerIds));
+        .in('player_id', Array.from(allCanonicalIds));
 
       if (rankingsError) throw rankingsError;
 
-      // Create a map of player_id to trade_value
+      // Create a map of canonical_player_id to trade_value
       const tradeValueMap = new Map<string, number>();
       rankingsData?.forEach(player => {
         tradeValueMap.set(player.player_id, player.trade_value || 0);
@@ -193,7 +195,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       const values: TeamValue[] = teamsData?.map(team => {
         const roster = team.roster as any[];
         const totalValue = roster?.reduce((sum: number, player: any) => {
-          const value = tradeValueMap.get(player.player_id) || 0;
+          const value = tradeValueMap.get(player.canonical_player_id) || 0;
           return sum + value;
         }, 0) || 0;
 
