@@ -150,26 +150,30 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
           const poolEntry = canonical ? poolMap.get(canonical.id) : null;
 
           let points = 0;
+          let hasActualPoints = false;
           if (poolEntry) {
-            const stats = {
-              passing_yards: Number(poolEntry.passing_yards) || 0,
-              passing_tds: Number(poolEntry.passing_tds) || 0,
-              interceptions: Number(poolEntry.passing_ints) || 0,
-              rushing_yards: Number(poolEntry.rushing_yards) || 0,
-              rushing_tds: Number(poolEntry.rushing_tds) || 0,
-              receptions: Number(poolEntry.receptions) || 0,
-              receiving_yards: Number(poolEntry.receiving_yards) || 0,
-              receiving_tds: Number(poolEntry.receiving_tds) || 0,
-            };
-
-            const { total } = calculateFantasyPoints(stats, scoringSettings);
+            const hasActualStats = Number(poolEntry.actual_fp) > 0;
             
-            if (isHistorical) {
+            if (isHistorical || hasActualStats) {
+              // Use actual stats if available (historical week or player has played)
+              const stats = {
+                passing_yards: Number(poolEntry.passing_yards) || 0,
+                passing_tds: Number(poolEntry.passing_tds) || 0,
+                interceptions: Number(poolEntry.passing_ints) || 0,
+                rushing_yards: Number(poolEntry.rushing_yards) || 0,
+                rushing_tds: Number(poolEntry.rushing_tds) || 0,
+                receptions: Number(poolEntry.receptions) || 0,
+                receiving_yards: Number(poolEntry.receiving_yards) || 0,
+                receiving_tds: Number(poolEntry.receiving_tds) || 0,
+              };
+
+              const { total } = calculateFantasyPoints(stats, scoringSettings);
               points = total || Number(poolEntry.actual_fp) || Number(poolEntry.composite_fp) || 0;
+              hasActualPoints = hasActualStats;
             } else {
-              // For current week, check if player has already played
-              const hasActualStats = Number(poolEntry.actual_fp) > 0;
-              points = total || Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0;
+              // Use projected stats for players who haven't played yet
+              points = Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0;
+              hasActualPoints = false;
             }
           }
 
@@ -180,6 +184,7 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
             ...player,
             projected: Math.round(points * 100) / 100,
             is_bye_week: isByeWeek,
+            has_actual_points: hasActualPoints,
           };
         });
 
@@ -216,6 +221,7 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
         is_bye_week: player.is_bye_week || false,
         injury_status: player.injury_status || null,
         injury_duration_weeks: player.injury_duration_weeks || 0,
+        has_actual_points: player.has_actual_points || false,
       };
     });
   };
