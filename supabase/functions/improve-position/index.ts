@@ -303,8 +303,8 @@ Deno.serve(async (req) => {
               const myNewTradedPosPSS = calculatePSSAfterTrade(
                 myRoster,
                 needPos.position,
-                [targetPlayer],
-                [myPlayer]
+                [], // Not adding anyone to this position
+                [myPlayer] // Only removing my player
               );
               const myTradedPosPSSDelta = myNewTradedPosPSS - myTradedPosCurrentPSS;
               
@@ -462,8 +462,8 @@ Deno.serve(async (req) => {
                   const myNewTradedPosPSS = calculatePSSAfterTrade(
                     myRoster,
                     needPos.position,
-                    [targetPlayer],
-                    [myPlayer1, myPlayer2]
+                    [], // Not adding anyone to this position
+                    [myPlayer1, myPlayer2] // Only removing my two players
                   );
                   const myTradedPosPSSDelta = myNewTradedPosPSS - myTradedPosCurrentPSS;
                   
