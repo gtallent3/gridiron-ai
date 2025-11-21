@@ -17,15 +17,22 @@ serve(async (req) => {
 
   try {
     const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Authentication required' }), {
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: { persistSession: false },
-      global: { headers: { Authorization: authHeader! } },
+      global: { headers: { Authorization: authHeader } },
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      console.error('Auth error:', userError);
       return new Response(JSON.stringify({ error: 'Authentication required' }), {
         status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
