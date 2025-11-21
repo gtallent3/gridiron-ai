@@ -117,28 +117,22 @@ export function PlayerCard({ player, isSelected, onSelect, readOnly, showActual 
 
         <div className="pt-2 border-t border-border/50">
           <p className="text-xs text-muted-foreground">
-            {showActual ? 'Actual Points' : 'Projected'}
+            {(showActual || (player.actualPoints && player.actualPoints > 0)) ? 'Actual Points' : 'Projected'}
           </p>
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
                 <p className="text-lg font-bold cursor-help">
-                  {showActual ? (
-                    player.actualPoints !== undefined 
-                      ? player.actualPoints.toFixed(1)
-                      : player.is_bye_week 
-                        ? '0 (Bye Week)' 
-                        : player.injury_status 
-                          ? '0 (Injured)'
-                          : 'N/A'
+                  {((showActual || (player.actualPoints && player.actualPoints > 0)) && player.actualPoints !== undefined) ? (
+                    player.actualPoints.toFixed(1)
+                  ) : player.projected > 0 ? (
+                    player.projected.toFixed(1)
+                  ) : player.is_bye_week ? (
+                    '0 (Bye Week)'
+                  ) : player.injury_status ? (
+                    '0 (Injured)'
                   ) : (
-                    player.projected > 0 
-                      ? player.projected.toFixed(1) 
-                      : player.is_bye_week 
-                        ? '0 (Bye Week)' 
-                        : player.injury_status 
-                          ? '0 (Injured)'
-                          : '0'
+                    '0'
                   )}
                 </p>
               </TooltipTrigger>
