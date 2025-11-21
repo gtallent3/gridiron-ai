@@ -225,25 +225,28 @@ Deno.serve(async (req) => {
 
       const theirTargetPosStrength = theirStrengths.get(targetPosition);
       
-      // Only target teams that are strong at this position AND weak where I'm strong
-      if (!theirTargetPosStrength || theirTargetPosStrength.z_score < 0.5) continue;
+      // Target teams that have reasonable depth at this position
+      if (!theirTargetPosStrength || theirTargetPosStrength.rank > 8) continue;
 
-      // Find if they have a weakness where I have strength (complementary needs)
-      const myStrongPositions = Array.from(myStrengths?.entries() || [])
-        .filter(([pos, strength]) => pos !== targetPosition && strength.z_score > 0 && strength.rank <= 4)
+      // Find positions where I have tradeable depth (not necessarily strongest)
+      const myTradablePositions = Array.from(myStrengths?.entries() || [])
+        .filter(([pos, strength]) => pos !== targetPosition && strength.rank <= 7)
         .map(([pos, strength]) => ({ position: pos, ...strength }))
-        .sort((a, b) => b.z_score - a.z_score);
+        .sort((a, b) => a.rank - b.rank); // Prioritize stronger positions
 
-      // Check if opponent is weak in any of my strong positions
-      const complementaryNeeds = myStrongPositions.filter(myStrong => {
+      // Check if opponent could benefit from these positions
+      const complementaryNeeds = myTradablePositions.filter(myStrong => {
         const theirPosStrength = theirStrengths.get(myStrong.position);
-        return theirPosStrength && (theirPosStrength.z_score < -0.3 || theirPosStrength.rank > 6);
+        return theirPosStrength && theirPosStrength.rank > 5; // They're weaker than top 5
       });
 
-      if (complementaryNeeds.length === 0) continue; // Skip if no mutual benefit
+      // If no clear needs, allow any tradable position
+      const tradablePositions = complementaryNeeds.length > 0 ? complementaryNeeds : myTradablePositions;
+      
+      if (tradablePositions.length === 0) continue;
 
-      console.log(`Team ${team.team_id} has surplus at ${targetPosition} AND needs:`, 
-        complementaryNeeds.map(c => c.position).join(', '));
+      console.log(`Team ${team.team_id} rank ${theirTargetPosStrength.rank} at ${targetPosition}, can offer from:`, 
+        tradablePositions.map(c => c.position).join(', '));
 
       const theirRoster = team.roster || [];
       const theirPosPlayers = theirRoster
@@ -254,10 +257,10 @@ Deno.serve(async (req) => {
 
       console.log(`Team ${team.team_id} has ${theirPosPlayers.length} ${targetPosition} players with value`);
 
-      if (theirPosPlayers.length < 2) continue; // Need at least 2 to target depth
+      if (theirPosPlayers.length < 1) continue; // Need at least 1 player to trade
 
-      // Try to find fair trades - target their 2nd, 3rd, 4th best player at this position
-      for (const targetPlayerIdx of [1, 2, 3]) {
+      // Try to find fair trades - target their best 4 players at this position
+      for (const targetPlayerIdx of [0, 1, 2, 3]) {
         if (targetPlayerIdx >= theirPosPlayers.length) continue;
         
         const targetPlayer = theirPosPlayers[targetPlayerIdx];
@@ -265,8 +268,8 @@ Deno.serve(async (req) => {
 
         if (targetValue === 0) continue;
 
-        // Look for matches from my positions that help THEM (complementary needs)
-        for (const needPos of complementaryNeeds) {
+        // Look for matches from my tradable positions
+        for (const needPos of tradablePositions) {
           const myPosPlayers = myRoster
             .filter((p: any) => normPos(p.position) === needPos.position)
             .map((p: any) => normalizePlayerForTrade(p))
@@ -275,16 +278,16 @@ Deno.serve(async (req) => {
 
           console.log(`My team has ${myPosPlayers.length} ${needPos.position} players with value`);
 
-          if (myPosPlayers.length < 2) continue;
+          if (myPosPlayers.length < 1) continue;
 
-          // Try 2nd-4th best players to preserve my top player
-          for (let i = 1; i < Math.min(myPosPlayers.length, 4); i++) {
+          // Try all my players at this position (including best if fair value)
+          for (let i = 0; i < Math.min(myPosPlayers.length, 5); i++) {
             const myPlayer = myPosPlayers[i];
             const myValue = myPlayer.value;
             const valueDiff = targetValue - myValue;
 
-            // Check if it's a fair trade (within 30% value)
-            if (Math.abs(valueDiff) < Math.max(targetValue, myValue) * 0.30) {
+            // Check if it's a reasonably fair trade (within 40% value)
+            if (Math.abs(valueDiff) < Math.max(targetValue, myValue) * 0.40) {
               // Calculate PSS changes
               const myNewPSS = calculatePSSAfterTrade(
                 myRoster,
