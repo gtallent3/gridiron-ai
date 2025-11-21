@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { isTeamOnBye } from "@/lib/byeWeekSchedule";
 import { getCurrentNFLWeek } from "@/lib/nflWeekUtils";
+import { calculateFantasyPoints } from "@/lib/fantasyPointsCalculator";
 
 // ESPN numeric position -> label mapping
 const POSITION_MAP: Record<number, string> = {
@@ -100,19 +101,45 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
 
       const canonicalIds = Array.from(canonicalMap.values()).map(cp => cp.id);
 
-      // Fetch from player_pool_v2
+      // Fetch from player_pool_v2 - prioritize actual stats
       const { data: poolData } = await supabase
         .from('player_pool_v2')
         .select('*')
         .eq('week', currentWeek)
         .eq('season', inferredSeason)
-        .in('canonical_player_id', canonicalIds);
+        .in('canonical_player_id', canonicalIds)
+        .order('actual_fp', { ascending: false, nullsFirst: false });
 
       const poolMap = new Map<string, any>();
       if (poolData) {
         for (const pool of poolData) {
-          poolMap.set(pool.canonical_player_id, pool);
+          const existing = poolMap.get(pool.canonical_player_id);
+          if (!existing || (Number(pool.actual_fp) > 0 && Number(existing.actual_fp) === 0)) {
+            poolMap.set(pool.canonical_player_id, pool);
+          }
         }
+      }
+
+      // Get league scoring settings
+      const { data: leagueData } = await supabase
+        .from('connected_leagues')
+        .select('scoring_settings, scoring_type')
+        .eq('id', league.id)
+        .maybeSingle();
+
+      let scoringSettings: any = {
+        passing_yards: 0.04, passing_tds: 4, interceptions: -2,
+        rushing_yards: 0.1, rushing_tds: 6,
+        receptions: 1, receiving_yards: 0.1, receiving_tds: 6,
+        fumbles_lost: -2,
+      };
+
+      if (leagueData?.scoring_settings) {
+        scoringSettings = { ...scoringSettings, ...(leagueData.scoring_settings as Record<string, any>) };
+      } else if (leagueData?.scoring_type === 'standard') {
+        scoringSettings.receptions = 0;
+      } else if (leagueData?.scoring_type === 'half_ppr') {
+        scoringSettings.receptions = 0.5;
       }
 
       const enrichedTeams = (data || []).map((team: any) => {
@@ -124,12 +151,25 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
 
           let points = 0;
           if (poolEntry) {
-            if (isHistorical && poolEntry.actual_fp) {
-              points = poolEntry.actual_fp;
-            } else if (!isHistorical && poolEntry.projected_fp) {
-              points = poolEntry.projected_fp;
-            } else if (poolEntry.composite_fp) {
-              points = poolEntry.composite_fp;
+            const stats = {
+              passing_yards: Number(poolEntry.passing_yards) || 0,
+              passing_tds: Number(poolEntry.passing_tds) || 0,
+              interceptions: Number(poolEntry.passing_ints) || 0,
+              rushing_yards: Number(poolEntry.rushing_yards) || 0,
+              rushing_tds: Number(poolEntry.rushing_tds) || 0,
+              receptions: Number(poolEntry.receptions) || 0,
+              receiving_yards: Number(poolEntry.receiving_yards) || 0,
+              receiving_tds: Number(poolEntry.receiving_tds) || 0,
+            };
+
+            const { total } = calculateFantasyPoints(stats, scoringSettings);
+            
+            if (isHistorical) {
+              points = total || Number(poolEntry.actual_fp) || Number(poolEntry.composite_fp) || 0;
+            } else {
+              // For current week, check if player has already played
+              const hasActualStats = Number(poolEntry.actual_fp) > 0;
+              points = total || Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0;
             }
           }
 
