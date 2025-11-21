@@ -6,16 +6,11 @@ import { PlayerCard } from "./PlayerCard";
 import { Trophy, TrendingUp, TrendingDown, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { enrichRosterWithValuations } from "@/lib/enrichRoster";
-import { calculateFantasyPoints, getScoringSettings } from "@/lib/fantasyPointsCalculator";
-import { getCurrentNFLWeek } from "@/lib/nflWeekUtils";
 
 type League = {
   id: string;
   current_week?: number;
   opponent_team_id?: string;
-  platform?: string;
-  scoring_type?: string;
-  scoring_settings?: any;
 };
 
 type Team = {
@@ -36,8 +31,6 @@ type MatchupInsightProps = {
 export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
   const [opponentTeam, setOpponentTeam] = useState<Team | null>(null);
   const [loading, setLoading] = useState(true);
-  const [userProjected, setUserProjected] = useState(0);
-  const [opponentProjected, setOpponentProjected] = useState(0);
 
   useEffect(() => {
     const fetchOpponent = async () => {
@@ -67,133 +60,6 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
     fetchOpponent();
   }, [league.id, league.opponent_team_id]);
 
-  // Calculate projected points with league-specific scoring
-  useEffect(() => {
-    const calculateProjections = async () => {
-      if (!league.platform || !userTeam || !opponentTeam) return;
-
-      try {
-        if (league.platform === 'espn') {
-          const { week: currentWeek } = getCurrentNFLWeek();
-          const season = 2025;
-
-          // Calculate user team projection
-          const userStarterIds = (userTeam.roster || [])
-            .filter((p: any) => {
-              const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
-              return STARTER_SLOTS.includes(p.slot) || p.starter === true;
-            })
-            .map((p: any) => p.espn_id || p.player_id)
-            .filter(Boolean);
-
-          // Calculate opponent team projection
-          const oppStarterIds = (opponentTeam.roster || [])
-            .filter((p: any) => {
-              const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
-              return STARTER_SLOTS.includes(p.slot) || p.starter === true;
-            })
-            .map((p: any) => p.espn_id || p.player_id)
-            .filter(Boolean);
-
-          if (userStarterIds.length === 0 && oppStarterIds.length === 0) {
-            setUserProjected(userTeam.total_projected || 0);
-            setOpponentProjected(opponentTeam.total_projected || 0);
-            return;
-          }
-
-          // Fetch canonical players for both teams
-          const allStarterIds = [...userStarterIds, ...oppStarterIds];
-          const { data: canonicalPlayers } = await supabase
-            .from('canonical_players')
-            .select('id, espn_id')
-            .in('espn_id', allStarterIds);
-
-          if (!canonicalPlayers?.length) {
-            setUserProjected(userTeam.total_projected || 0);
-            setOpponentProjected(opponentTeam.total_projected || 0);
-            return;
-          }
-
-          const canonicalIds = canonicalPlayers.map(p => p.id);
-
-          // Fetch player pool data
-          const { data: playerPoolData } = await supabase
-            .from('player_pool_v2')
-            .select('*')
-            .in('canonical_player_id', canonicalIds)
-            .eq('week', currentWeek)
-            .eq('season', season);
-
-          if (!playerPoolData?.length) {
-            setUserProjected(userTeam.total_projected || 0);
-            setOpponentProjected(opponentTeam.total_projected || 0);
-            return;
-          }
-
-          // Get league scoring settings
-          const { data: leagueData } = await supabase
-            .from('connected_leagues')
-            .select('scoring_settings, scoring_type')
-            .eq('id', league.id)
-            .single();
-
-          const scoringType = (leagueData?.scoring_type || 'ppr') as 'ppr' | 'half_ppr' | 'standard' | 'custom';
-          const customSettings = (typeof leagueData?.scoring_settings === 'object' && 
-            leagueData?.scoring_settings !== null && 
-            !Array.isArray(leagueData?.scoring_settings)) 
-            ? leagueData.scoring_settings as any
-            : {};
-          const scoringSettings = getScoringSettings(scoringType, customSettings);
-
-          // Create map from ESPN ID to calculated points
-          const espnIdToPoints = new Map<string, number>();
-          canonicalPlayers.forEach(cp => {
-            const poolEntry = playerPoolData.find(pp => pp.canonical_player_id === cp.id);
-            if (poolEntry && cp.espn_id) {
-              const stats = {
-                passing_yards: poolEntry.passing_yards || 0,
-                passing_tds: poolEntry.passing_tds || 0,
-                interceptions: poolEntry.passing_ints || 0,
-                rushing_yards: poolEntry.rushing_yards || 0,
-                rushing_tds: poolEntry.rushing_tds || 0,
-                receptions: poolEntry.receptions || 0,
-                receiving_yards: poolEntry.receiving_yards || 0,
-                receiving_tds: poolEntry.receiving_tds || 0,
-              };
-              const { total } = calculateFantasyPoints(stats, scoringSettings);
-              espnIdToPoints.set(cp.espn_id, total);
-            }
-          });
-
-          // Calculate user projected
-          let userTotal = 0;
-          userStarterIds.forEach(espnId => {
-            userTotal += espnIdToPoints.get(espnId) || 0;
-          });
-
-          // Calculate opponent projected
-          let oppTotal = 0;
-          oppStarterIds.forEach(espnId => {
-            oppTotal += espnIdToPoints.get(espnId) || 0;
-          });
-
-          setUserProjected(userTotal);
-          setOpponentProjected(oppTotal);
-        } else {
-          // For Sleeper/Yahoo, use existing total_projected
-          setUserProjected(userTeam.total_projected || 0);
-          setOpponentProjected(opponentTeam.total_projected || 0);
-        }
-      } catch (error) {
-        console.error('Error calculating projections:', error);
-        setUserProjected(userTeam.total_projected || 0);
-        setOpponentProjected(opponentTeam.total_projected || 0);
-      }
-    };
-
-    calculateProjections();
-  }, [league, userTeam, opponentTeam]);
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -212,6 +78,18 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
     );
   }
 
+  // Calculate projections from starters only - matching RosterView logic
+  const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
+  
+  const userStarters = (userTeam?.roster || []).filter((p: any) => 
+    STARTER_SLOTS.includes(p.slot) || p.starter === true
+  );
+  const oppStarters = (opponentTeam.roster || []).filter((p: any) => 
+    STARTER_SLOTS.includes(p.slot) || p.starter === true
+  );
+
+  const userProjected = userStarters.reduce((sum: number, p: any) => sum + (Number(p.projected) || 0), 0);
+  const opponentProjected = oppStarters.reduce((sum: number, p: any) => sum + (Number(p.projected) || 0), 0);
   const totalProjected = userProjected + opponentProjected;
   const userWinProb = totalProjected > 0 ? Math.round((userProjected / totalProjected) * 100) : 50;
   const opponentWinProb = 100 - userWinProb;
@@ -251,31 +129,23 @@ export function MatchupInsight({ league, userTeam }: MatchupInsightProps) {
   };
 
   // Calculate positional breakdowns - ONLY FOR STARTERS
-  const getPositionalProjections = (roster: any[]) => {
+  const getPositionalProjections = (starters: any[]) => {
     const positions: Record<string, number> = {
       QB: 0, RB: 0, WR: 0, TE: 0, K: 0, DEF: 0
     };
     
-    // Filter to only include starters (slot 0-17, 23 for ESPN, starter=true for Sleeper)
-    const STARTER_SLOTS = [0, 2, 4, 6, 16, 17, 23];
-    
-    roster.forEach((p: any) => {
-      // Check if player is a starter
-      const isStarter = STARTER_SLOTS.includes(p.slot) || p.starter === true;
-      
-      if (isStarter) {
-        const pos = getPositionString(p.position);
-        if (positions.hasOwnProperty(pos)) {
-          positions[pos] += p.projected || 0;
-        }
+    starters.forEach((p: any) => {
+      const pos = getPositionString(p.position);
+      if (positions.hasOwnProperty(pos)) {
+        positions[pos] += p.projected || 0;
       }
     });
     
     return positions;
   };
 
-  const userPositions = getPositionalProjections(userTeam?.roster || []);
-  const oppPositions = getPositionalProjections(opponentTeam?.roster || []);
+  const userPositions = getPositionalProjections(userStarters);
+  const oppPositions = getPositionalProjections(oppStarters);
 
   return (
     <div className="space-y-6">
