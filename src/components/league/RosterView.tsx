@@ -176,18 +176,6 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
             const { total } = calculateFantasyPoints(stats, scoringSettings);
 
-            // Debug logging for Josh Allen
-            if (playerName.includes('Allen') && positionName === 'QB') {
-              console.log('Josh Allen Debug:', {
-                playerName,
-                hasActualStats,
-                actual_fp: poolEntry.actual_fp,
-                stats,
-                calculatedTotal: total,
-                scoringSettings
-              });
-            }
-
             if (isHistorical) {
               const statSum: number = (Object.values(stats) as number[]).reduce(
                 (s, v) => s + (Number(v) || 0),
@@ -220,6 +208,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             team: playerTeam,
             projected: projectedPoints,
             actualPoints: actualPoints,
+            has_actual_points: actualPoints > 0,
             status: isStarter ? 'starter' : 'bench',
             is_bye_week: isByeWeek,
             injury_status: player.injury_status ?? null,
