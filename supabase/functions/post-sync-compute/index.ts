@@ -148,6 +148,28 @@ serve(async (req) => {
       }
     }
 
+    // Build trade value map by canonical_player_id for QB/TE using player_rankings.trade_value
+    const canonicalIds = new Set<string>();
+    for (const t of teams || []) {
+      const roster = Array.isArray(t.roster) ? t.roster : [];
+      for (const p of roster as any[]) {
+        const cid = String((p as any).canonical_player_id || '').trim();
+        if (cid) canonicalIds.add(cid);
+      }
+    }
+
+    const tradeValueByCanonicalId = new Map<string, number>();
+    if (canonicalIds.size > 0) {
+      const { data: tradeRows, error: tradeErr } = await adminClient
+        .from('player_rankings')
+        .select('player_id, trade_value')
+        .in('player_id', Array.from(canonicalIds));
+      if (tradeErr) throw tradeErr;
+      for (const row of tradeRows || []) {
+        tradeValueByCanonicalId.set(String(row.player_id), Number(row.trade_value) || 0);
+      }
+    }
+
     const positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
     const DEFAULT_STARTERS: Record<string, number> = { QB:1, RB:2, WR:2, TE:1, FLEX:1, K:1, DST:1 };
     
@@ -200,7 +222,16 @@ serve(async (req) => {
       return s;
     };
 
-    const getValue = (p: any) => {
+    const getValue = (p: any, pos: string) => {
+      // For QB and TE, use trade_value for the single best player based on canonical_player_id
+      if (pos === 'QB' || pos === 'TE') {
+        const canonicalId = String(p.canonical_player_id || '').trim();
+        if (canonicalId && tradeValueByCanonicalId.has(canonicalId)) {
+          return tradeValueByCanonicalId.get(canonicalId)!;
+        }
+      }
+
+      // Default: use league-specific value scores from player_value_cache
       // Try exact player_id match first (handles both espn_ prefixed and platform-specific IDs)
       let pid = String(p.player_id || p.playerId || p.id || '').trim();
       if (pid && valueById.has(pid)) return valueById.get(pid)!;
@@ -247,7 +278,7 @@ serve(async (req) => {
       for (const pos of positions) {
         const scores = roster
           .filter((p: any) => normPos(p.position) === pos)
-          .map((p: any) => getValue(p))
+          .map((p: any) => getValue(p, pos))
           .sort((a: number, b: number) => b - a);
         
         sortedValues[pos] = scores;
