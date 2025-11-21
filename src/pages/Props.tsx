@@ -87,7 +87,8 @@ export default function Props() {
       // Deduct tokens
       const tokenResult = await deductToken(
         "prop_bet",
-        `${prop.player_name} ${prop.stat_type} ${selectedProp.selection} ${prop.line}`
+        `${prop.player_name} ${prop.stat_type} ${selectedProp.selection} ${prop.line}`,
+        wagerAmount
       );
 
       if (!tokenResult.success) {

@@ -65,7 +65,7 @@ export const useTokens = () => {
     }
   };
 
-  const deductToken = async (feature: string, description?: string) => {
+  const deductToken = async (feature: string, description?: string, amount?: number) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -79,7 +79,7 @@ export const useTokens = () => {
       }
 
       const { data, error } = await supabase.functions.invoke("deduct-token", {
-        body: { feature, description },
+        body: { feature, description, amount },
       });
 
       if (error) throw error;
