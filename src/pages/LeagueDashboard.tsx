@@ -226,12 +226,6 @@ export default function LeagueDashboard() {
           <span className="sm:hidden">Back</span>
         </Button>
 
-        <LeagueHeader 
-          league={league} 
-          userTeam={userTeam}
-          onSyncComplete={fetchLeagueData}
-        />
-
         <Tabs defaultValue="roster" className="mt-4 sm:mt-8">
           <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 max-w-4xl mx-auto h-auto">
             <TabsTrigger value="roster" className="text-xs sm:text-sm py-2">
@@ -261,10 +255,17 @@ export default function LeagueDashboard() {
           </TabsList>
 
           <TabsContent value="roster" className="mt-4 sm:mt-6">
-            <RosterView 
+            <LeagueHeader 
               league={league} 
               userTeam={userTeam}
+              onSyncComplete={fetchLeagueData}
             />
+            <div className="mt-4 sm:mt-6">
+              <RosterView 
+                league={league} 
+                userTeam={userTeam}
+              />
+            </div>
           </TabsContent>
 
           <TabsContent value="matchup" className="mt-4 sm:mt-6">
