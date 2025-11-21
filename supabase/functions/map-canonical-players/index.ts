@@ -130,6 +130,8 @@ serve(async (req) => {
         .eq('season', 2025)
         .not('player_id', 'is', null)
         .not('player_name', 'is', null)
+        .not('team', 'is', null)
+        .in('position', ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'])
         .range(from, from + BATCH_SIZE - 1);
 
       if (error) throw error;
