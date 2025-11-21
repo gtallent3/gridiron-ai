@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTokens } from '@/hooks/useTokens';
 import { getCurrentNFLWeek } from '@/lib/nflWeekUtils';
-import { Lock, CheckCircle } from 'lucide-react';
+import { Lock, CheckCircle, ArrowUpDown } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PositionalStrength {
@@ -30,6 +30,12 @@ interface PositionalStrength {
   updated_at: string;
 }
 
+interface TeamValue {
+  team_id: string;
+  total_value: number;
+  rank: number;
+}
+
 interface PositionalRankingsProps {
   leagueId: string;
   teams: any[];
@@ -37,6 +43,7 @@ interface PositionalRankingsProps {
 
 export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps) {
   const [strengths, setStrengths] = useState<PositionalStrength[]>([]);
+  const [teamValues, setTeamValues] = useState<TeamValue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [showUnlockDialog, setShowUnlockDialog] = useState(false);
@@ -46,6 +53,8 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
     rankings_expires_at: string | null;
   } | null>(null);
   const [timeRemaining, setTimeRemaining] = useState<string>('');
+  const [sortBy, setSortBy] = useState<string | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   
   const { subscription, loading: subLoading } = useSubscription();
   const { balance, hasUnlimited, refreshBalance } = useTokens();
@@ -58,6 +67,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
 
   useEffect(() => {
     fetchPositionalStrengths();
+    fetchTeamValues();
     checkUnlockStatus();
   }, [leagueId]);
   
@@ -145,6 +155,66 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
       setIsLoading(false);
     }
   };
+
+  const fetchTeamValues = async () => {
+    try {
+      // Fetch all teams' rosters
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('user_teams')
+        .select('team_id, roster')
+        .eq('league_id', leagueId);
+
+      if (teamsError) throw teamsError;
+
+      // Extract all player IDs
+      const allPlayerIds = new Set<string>();
+      teamsData?.forEach(team => {
+        const roster = team.roster as any[];
+        roster?.forEach((player: any) => {
+          if (player.player_id) allPlayerIds.add(player.player_id);
+        });
+      });
+
+      // Fetch trade values for all players
+      const { data: rankingsData, error: rankingsError } = await supabase
+        .from('player_rankings')
+        .select('player_id, trade_value')
+        .in('player_id', Array.from(allPlayerIds));
+
+      if (rankingsError) throw rankingsError;
+
+      // Create a map of player_id to trade_value
+      const tradeValueMap = new Map<string, number>();
+      rankingsData?.forEach(player => {
+        tradeValueMap.set(player.player_id, player.trade_value || 0);
+      });
+
+      // Calculate total value for each team
+      const values: TeamValue[] = teamsData?.map(team => {
+        const roster = team.roster as any[];
+        const totalValue = roster?.reduce((sum: number, player: any) => {
+          const value = tradeValueMap.get(player.player_id) || 0;
+          return sum + value;
+        }, 0) || 0;
+
+        return {
+          team_id: team.team_id,
+          total_value: totalValue,
+          rank: 0,
+        };
+      }) || [];
+
+      // Sort and assign ranks
+      values.sort((a, b) => b.total_value - a.total_value);
+      values.forEach((v, idx) => {
+        v.rank = idx + 1;
+      });
+
+      setTeamValues(values);
+    } catch (error) {
+      console.error('Error fetching team values:', error);
+    }
+  };
   
   const handleUnlock = async () => {
     setShowUnlockDialog(false);
@@ -205,6 +275,39 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
     return ((clamped + 2) / 4) * 100;
   };
 
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+  };
+
+  const getSortedTeams = () => {
+    const teamsArray = Array.from(teamGroups.entries());
+    
+    if (!sortBy) return teamsArray;
+
+    return teamsArray.sort((a, b) => {
+      const [teamIdA, strengthsA] = a;
+      const [teamIdB, strengthsB] = b;
+
+      let valueA: number;
+      let valueB: number;
+
+      if (sortBy === 'TOTAL') {
+        valueA = teamValues.find(tv => tv.team_id === teamIdA)?.rank || 999;
+        valueB = teamValues.find(tv => tv.team_id === teamIdB)?.rank || 999;
+      } else {
+        valueA = strengthsA.find(s => s.position === sortBy)?.rank || 999;
+        valueB = strengthsB.find(s => s.position === sortBy)?.rank || 999;
+      }
+
+      return sortOrder === 'asc' ? valueA - valueB : valueB - valueA;
+    });
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -228,7 +331,8 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
     teamGroups.get(s.team_id)!.push(s);
   }
 
-  const positions = ['QB', 'RB', 'WR', 'TE', 'K', 'DST'];
+  const positions = ['QB', 'RB', 'WR', 'TE'];
+  const sortedTeams = getSortedTeams();
 
   return (
     <>
@@ -297,14 +401,32 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
               <TableRow>
                 <TableHead className="min-w-[150px]">Team</TableHead>
                 {positions.map(pos => (
-                  <TableHead key={pos} className="text-center min-w-[100px]">
-                    {pos}
+                  <TableHead 
+                    key={pos} 
+                    className="text-center min-w-[100px] cursor-pointer hover:bg-accent transition-colors"
+                    onClick={() => handleSort(pos)}
+                  >
+                    <div className="flex items-center justify-center gap-1">
+                      {pos}
+                      {sortBy === pos && <ArrowUpDown className="h-3 w-3" />}
+                    </div>
                   </TableHead>
                 ))}
+                <TableHead 
+                  className="text-center min-w-[120px] cursor-pointer hover:bg-accent transition-colors font-semibold"
+                  onClick={() => handleSort('TOTAL')}
+                >
+                  <div className="flex items-center justify-center gap-1">
+                    Total Value
+                    {sortBy === 'TOTAL' && <ArrowUpDown className="h-3 w-3" />}
+                  </div>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {Array.from(teamGroups.entries()).map(([teamId, teamStrengths]) => (
+              {sortedTeams.map(([teamId, teamStrengths]) => {
+                const teamValue = teamValues.find(tv => tv.team_id === teamId);
+                return (
                 <TableRow key={teamId}>
                   <TableCell className="font-medium">
                     {getTeamName(teamId)}
@@ -361,8 +483,41 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                       </TableCell>
                     );
                   })}
+                  <TableCell className="text-center">
+                    {teamValue ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="flex flex-col items-center gap-1">
+                              <Badge
+                                variant="outline"
+                                className="bg-primary/10 text-primary font-semibold"
+                              >
+                                #{teamValue.rank}
+                              </Badge>
+                              <span className="text-xs text-muted-foreground">
+                                {teamValue.total_value.toFixed(0)}
+                              </span>
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <div className="text-sm space-y-1">
+                              <p className="font-semibold">Total Team Value</p>
+                              <p className="font-medium">{teamValue.total_value.toFixed(1)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Sum of all players' trade values
+                              </p>
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : (
+                      '-'
+                    )}
+                  </TableCell>
                 </TableRow>
-              ))}
+              );
+              })}
             </TableBody>
           </Table>
         </div>
