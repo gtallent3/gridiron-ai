@@ -67,38 +67,14 @@ serve(async (req) => {
 
     console.log(`League: ${leagueName}, Season: ${season}`);
 
-    // Calculate actual current NFL week based on season dates
-    // 2024 NFL Season started September 5, 2024
-    // Week 1: Sep 5-9, Week 2: Sep 12-16, etc.
-    function getCurrentNFLWeek(): number {
-      const now = new Date();
-      const seasonStart = new Date('2024-09-05T00:00:00Z'); // NFL Week 1 start
-      
-      // If before season start, return 1
-      if (now < seasonStart) return 1;
-      
-      // Calculate weeks since season start
-      const daysSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (1000 * 60 * 60 * 24));
-      const weeksSinceStart = Math.floor(daysSinceStart / 7);
-      
-      // Add 1 to get current week (week 1 is first week)
-      const calculatedWeek = weeksSinceStart + 1;
-      
-      // Cap at week 18 (regular season end)
-      return Math.min(calculatedWeek, 18);
-    }
-
-    const calculatedWeek = getCurrentNFLWeek();
-    const yahooWeek = parseInt(league.current_week || '1');
-    
-    // Use the higher of calculated week or Yahoo's week (in case Yahoo is behind)
-    const currentWeek = Math.max(calculatedWeek, yahooWeek);
-    
-    console.log(`Yahoo reported week: ${yahooWeek}, Calculated week: ${calculatedWeek}, Using week: ${currentWeek}`);
     // Prepare scoring and opponent details
     let scoringSettings: any = {};
     let scoringType = 'standard';
     let opponentTeamId: string | null = null;
+
+    const currentWeek = parseInt(league.current_week || '1');
+
+    // Fetch league settings to populate scoring_settings and try to infer scoring_type
     try {
       const settingsResponse = await fetch(
         `https://fantasysports.yahooapis.com/fantasy/v2/league/${leagueKey}/settings?format=json`,
