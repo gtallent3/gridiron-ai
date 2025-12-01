@@ -172,13 +172,10 @@ serve(async (req) => {
     
     console.log(`Loaded ${defensiveRankings?.length || 0} defensive rankings with ${defRankAvgMap.size} normalized season-average ranks (1-32 per position)`);
     
-    // Debug: Log TE defense rankings to verify WAS_TE exists in map
-    console.log('TE Defense Rankings in defRankAvgMap:');
-    for (const [key, rank] of defRankAvgMap.entries()) {
-      if (key.includes('_TE')) {
-        console.log(`  ${key}: rank ${rank}`);
-      }
-    }
+    // Debug: Check if WAS_TE specifically exists
+    const wasTeRank = defRankAvgMap.get('WAS_TE');
+    console.log(`WAS_TE defensive rank in map: ${wasTeRank ?? 'NOT FOUND'}`);
+    console.log(`Total TE entries in map: ${Array.from(defRankAvgMap.keys()).filter(k => k.endsWith('_TE')).length}`);
 
     let sleeperInserted = 0;
     let nflInserted = 0;
