@@ -45,20 +45,32 @@ export function ManualSyncButton({ leagueId, onSyncComplete }: ManualSyncButtonP
         }
 
         toast.success(`✓ Synced ${data?.teamsSynced || 0} teams with updated rosters`);
-      } else {
-        // ESPN/Sleeper sync (rosters only)
-        const { data: rostersData, error: rostersError } = await supabase.functions.invoke(
-          'ingest-roster-snapshots',
+      } else if (platform === 'espn') {
+        // ESPN sync
+        const { data, error } = await supabase.functions.invoke(
+          'resync-espn-league',
           { body: { leagueId } }
         );
 
-        if (rostersError) {
-          console.warn("Rosters sync warning:", rostersError);
+        if (error) {
+          throw new Error(`ESPN sync failed: ${error.message}`);
         }
 
-        toast.success(
-          `✓ Synced ${rostersData?.rosterEntriesProcessed || 0} roster entries`
+        toast.success(`✓ Synced ${data?.teamsSynced || 0} teams with updated rosters`);
+      } else if (platform === 'sleeper') {
+        // Sleeper sync
+        const { data, error } = await supabase.functions.invoke(
+          'resync-sleeper-league',
+          { body: { leagueId } }
         );
+
+        if (error) {
+          throw new Error(`Sleeper sync failed: ${error.message}`);
+        }
+
+        toast.success(`✓ Synced ${data?.teamsSynced || 0} teams with updated rosters`);
+      } else {
+        throw new Error(`Unknown platform: ${platform}`);
       }
 
       // Force a small delay to ensure DB writes complete
@@ -66,10 +78,8 @@ export function ManualSyncButton({ leagueId, onSyncComplete }: ManualSyncButtonP
       
       onSyncComplete?.();
       
-      // Force page reload for Yahoo to ensure fresh data
-      if (platform === 'yahoo') {
-        window.location.reload();
-      }
+      // Force page reload to ensure fresh data
+      window.location.reload();
     } catch (error) {
       console.error("Sync error:", error);
       toast.error(error instanceof Error ? error.message : "Failed to sync data");

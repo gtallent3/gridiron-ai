@@ -184,9 +184,24 @@ serve(async (req) => {
         rosters.flatMap((r: any) => (r.players || []).map((id: any) => id?.toString()).filter(Boolean))
       ));
 
-      const normalizedMap = new Map<string, { player_name: string; position: string; team: string }>();
+      const normalizedMap = new Map<string, { player_name: string; position: string; team: string; canonical_player_id: string | null }>();
       
-      // First, try to get from normalized_players table
+      // First, get canonical player IDs for mapping
+      const canonicalIdMap = new Map<string, string>();
+      if (allPlayerIds.length > 0) {
+        const { data: canonicalPlayers } = await supabase
+          .from('canonical_players')
+          .select('sleeper_id, id')
+          .in('sleeper_id', allPlayerIds);
+        
+        if (canonicalPlayers && canonicalPlayers.length > 0) {
+          for (const cp of canonicalPlayers) {
+            canonicalIdMap.set(cp.sleeper_id, cp.id);
+          }
+        }
+      }
+      
+      // Then get player details from normalized_players table
       if (allPlayerIds.length > 0) {
         const { data: normPlayers } = await supabase
           .from('normalized_players')
@@ -199,6 +214,7 @@ serve(async (req) => {
               player_name: p.player_name,
               position: p.position,
               team: p.team,
+              canonical_player_id: canonicalIdMap.get(p.sleeper_id) || null,
             });
           }
         }
@@ -220,6 +236,7 @@ serve(async (req) => {
               player_name: playerName,
               position: position,
               team: team,
+              canonical_player_id: canonicalIdMap.get(playerId) || null,
             });
             
             playersToInsert.push({
@@ -409,6 +426,7 @@ serve(async (req) => {
           const meta = normalizedMap.get(id);
           return {
             player_id: id,
+            canonical_player_id: meta?.canonical_player_id || null,
             player_name: meta?.player_name || 'Unknown Player',
             position: meta?.position || 'FLEX',
             team: meta?.team || 'NFL',
