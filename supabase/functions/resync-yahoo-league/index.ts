@@ -217,8 +217,8 @@ serve(async (req) => {
     
     console.log(`Season: ${season}, Yahoo week: ${yahooWeek}, Calculated week: ${calculatedWeek}, Using: ${currentWeek}`);
     
-    // Update league's current week if it's behind
-    if (!league.current_week || league.current_week < currentWeek) {
+    // Always update league's current week to the calculated value
+    if (!league.current_week || league.current_week !== currentWeek) {
       await supabase
         .from('connected_leagues')
         .update({ current_week: currentWeek })
