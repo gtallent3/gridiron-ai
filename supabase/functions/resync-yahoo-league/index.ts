@@ -102,7 +102,78 @@ serve(async (req) => {
       );
     }
 
-    const tokenData = credentials as { access_token: string; refresh_token: string };
+    let tokenData = credentials as { access_token: string; refresh_token: string };
+
+    // Helper function to refresh Yahoo OAuth token
+    async function refreshYahooToken(): Promise<void> {
+      if (!user) throw new Error('User not authenticated');
+      
+      console.log('Refreshing Yahoo OAuth token...');
+      const clientId = Deno.env.get('YAHOO_CLIENT_ID')!;
+      const clientSecret = Deno.env.get('YAHOO_CLIENT_SECRET')!;
+      
+      const refreshResponse = await fetch('https://api.login.yahoo.com/oauth2/get_token', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Basic ${btoa(`${clientId}:${clientSecret}`)}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          refresh_token: tokenData.refresh_token,
+        }),
+      });
+
+      if (!refreshResponse.ok) {
+        const errorText = await refreshResponse.text();
+        console.error('Token refresh failed:', errorText);
+        throw new Error('Failed to refresh OAuth token. Please reconnect your Yahoo league.');
+      }
+
+      const refreshData = await refreshResponse.json();
+      
+      // Update token data with new access token (and possibly new refresh token)
+      tokenData = {
+        access_token: refreshData.access_token,
+        refresh_token: refreshData.refresh_token || tokenData.refresh_token,
+      };
+
+      // Store updated tokens back in vault
+      await supabaseAdmin.rpc('store_league_credentials', {
+        p_user_id: user.id,
+        p_platform: 'yahoo',
+        p_league_id: league.league_id,
+        p_credentials: tokenData,
+      });
+
+      console.log('Successfully refreshed Yahoo OAuth token');
+    }
+
+    // Helper function to make Yahoo API calls with automatic token refresh
+    async function fetchYahooAPI(url: string): Promise<Response> {
+      let response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${tokenData.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      // If token expired, refresh and retry
+      if (response.status === 401) {
+        console.log('Access token expired, attempting refresh...');
+        await refreshYahooToken();
+        
+        // Retry with new token
+        response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${tokenData.access_token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+      }
+
+      return response;
+    }
 
     // Construct proper Yahoo league key format (e.g., "nfl.l.1582610")
     const rawLeagueId = String(league.league_id).trim();
@@ -113,14 +184,8 @@ serve(async (req) => {
         : rawLeagueId; // fallback for already-full keys
     
     console.log(`Fetching teams for league (raw: ${rawLeagueId}) -> using key: ${yahooLeagueKey}`);
-    const teamsResponse = await fetch(
-      `https://fantasysports.yahooapis.com/fantasy/v2/league/${yahooLeagueKey}/teams?format=json`,
-      {
-        headers: {
-          Authorization: `Bearer ${tokenData.access_token}`,
-          'Content-Type': 'application/json',
-        },
-      }
+    const teamsResponse = await fetchYahooAPI(
+      `https://fantasysports.yahooapis.com/fantasy/v2/league/${yahooLeagueKey}/teams?format=json`
     );
 
     if (!teamsResponse.ok) {
@@ -131,11 +196,6 @@ serve(async (req) => {
         body: errorText,
         leagueId: league.league_id
       });
-      
-      // Check if token expired
-      if (teamsResponse.status === 401) {
-        throw new Error('OAuth token expired. Please reconnect your Yahoo league.');
-      }
       
       throw new Error(`Failed to fetch teams from Yahoo: ${teamsResponse.statusText} - ${errorText}`);
     }
@@ -167,14 +227,8 @@ serve(async (req) => {
         ? `;type=week;week=${league.current_week}`
         : '';
       
-      const rosterResponse = await fetch(
-        `https://fantasysports.yahooapis.com/fantasy/v2/team/${teamKeyFull}/roster/players${weekParam}?format=json`,
-        {
-          headers: {
-            Authorization: `Bearer ${tokenData.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
+      const rosterResponse = await fetchYahooAPI(
+        `https://fantasysports.yahooapis.com/fantasy/v2/team/${teamKeyFull}/roster/players${weekParam}?format=json`
       );
       
       if (rosterResponse.ok) {
@@ -299,14 +353,8 @@ serve(async (req) => {
         ? `;type=week;week=${league.current_week}`
         : '';
       
-      const rosterResponse = await fetch(
-        `https://fantasysports.yahooapis.com/fantasy/v2/team/${teamKeyFull}/roster/players${weekParam}?format=json`,
-        {
-          headers: {
-            Authorization: `Bearer ${tokenData.access_token}`,
-            'Content-Type': 'application/json',
-          },
-        }
+      const rosterResponse = await fetchYahooAPI(
+        `https://fantasysports.yahooapis.com/fantasy/v2/team/${teamKeyFull}/roster/players${weekParam}?format=json`
       );
 
       if (!rosterResponse.ok) {
