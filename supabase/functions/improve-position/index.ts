@@ -247,8 +247,8 @@ Deno.serve(async (req) => {
 
       const theirTargetPosStrength = theirStrengths.get(targetPosition);
       
-      // Target teams that have reasonable depth at this position
-      if (!theirTargetPosStrength || theirTargetPosStrength.rank > 8) continue;
+      // Target teams that have reasonable depth at this position - be lenient
+      if (!theirTargetPosStrength || theirTargetPosStrength.rank > 12) continue;
 
       // PRIORITY 1: Same-position trades (WR for WR, RB for RB)
       // These are always preferred because they don't deplete other positions
@@ -337,8 +337,8 @@ Deno.serve(async (req) => {
             const myValue = myPlayer.value;
             const valueDiff = targetValue - myValue;
 
-            // 1-for-1: Check if values are close (within 20% value)
-            if (Math.abs(valueDiff) < Math.max(targetValue, myValue) * 0.20) {
+            // 1-for-1: Check if values are close (within 35% value for more options)
+            if (Math.abs(valueDiff) < Math.max(targetValue, myValue) * 0.35) {
               // Calculate PSS changes at TARGET position (what I'm improving)
               const myNewTargetPSS = calculatePSSAfterTrade(
                 myRoster,
@@ -416,8 +416,8 @@ Deno.serve(async (req) => {
                 }
               }
               
-              // Reject if losing too much value OR if net PSS change is too negative OR illogical trade
-              if (netValueGain <= 0 || netPSSChange < -15 || crossPositionPenalty < -40) continue;
+              // Be more lenient - allow even trades or slight losses if positional improvement is good
+              if (netValueGain < -5 || netPSSChange < -25 || crossPositionPenalty < -40) continue;
 
               // SECONDARY: Positional improvement boost (contextual modifier)
               const rankImprovement = Math.max(0, targetPosStrength.rank - myNewRank);
@@ -542,8 +542,8 @@ Deno.serve(async (req) => {
                 const myTotalValue = myPlayer1.value + myPlayer2.value;
                 const valueDiff = targetValue - myTotalValue;
 
-                // 2-for-1: Check if combined values match (within 15%)
-                if (Math.abs(valueDiff) < Math.max(targetValue, myTotalValue) * 0.15) {
+                // 2-for-1: Check if combined values match (within 35% for more options)
+                if (Math.abs(valueDiff) < Math.max(targetValue, myTotalValue) * 0.35) {
                   // Calculate PSS changes at TARGET position
                   const myNewTargetPSS = calculatePSSAfterTrade(
                     myRoster,
@@ -618,8 +618,8 @@ Deno.serve(async (req) => {
                     }
                   }
                   
-                  // Reject if losing too much value OR net PSS is too negative OR illogical 2-for-1
-                  if (netValueGain <= 0 || netPSSChange < -20 || crossPositionPenalty < -40) continue;
+                  // Be more lenient on 2-for-1 trades
+                  if (netValueGain < -5 || netPSSChange < -30 || crossPositionPenalty < -40) continue;
 
                   const rankImprovement = Math.max(0, targetPosStrength.rank - myNewRank);
                   const myPosBoost = (myNewRank < targetPosStrength.rank) ? rankImprovement * 5 : 0;
