@@ -17,22 +17,26 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-    { 
-      global: { 
-        headers: { Authorization: req.headers.get('Authorization') || '' } 
-      },
-      auth: { persistSession: false }
-    }
-  );
-
   try {
     logStep("Function started");
     
     const authHeader = req.headers.get('Authorization');
-    logStep("Authorization header present", { hasAuth: !!authHeader });
+    logStep("Authorization header", { header: authHeader?.substring(0, 20) + '...' });
+    
+    if (!authHeader) {
+      throw new Error("No Authorization header provided");
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      { 
+        global: { 
+          headers: { Authorization: authHeader } 
+        },
+        auth: { persistSession: false }
+      }
+    );
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
