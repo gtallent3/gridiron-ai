@@ -67,12 +67,13 @@ serve(async (req) => {
 
     console.log(`League: ${leagueName}, Season: ${season}`);
 
-    // Calculate actual current NFL week based on season dates
-    // 2024 NFL Season started September 5, 2024
-    // Week 1: Sep 5-11, Week 2: Sep 12-18, etc.
-    function getCurrentNFLWeek(): number {
+    // Calculate actual current NFL week based on season year
+    // NFL seasons start in September of the previous calendar year
+    // e.g., 2025 season starts September 2024
+    function getCurrentNFLWeek(seasonYear: number): number {
       const now = new Date();
-      const seasonStart = new Date('2024-09-05T00:00:00-04:00'); // NFL Week 1 start
+      const seasonStartYear = seasonYear - 1; // Season starts in previous calendar year
+      const seasonStart = new Date(`${seasonStartYear}-09-05T00:00:00-04:00`);
       
       // If before season start, return 1
       if (now < seasonStart) return 1;
@@ -88,7 +89,7 @@ serve(async (req) => {
       return Math.min(calculatedWeek, 18);
     }
 
-    const calculatedWeek = getCurrentNFLWeek();
+    const calculatedWeek = getCurrentNFLWeek(season);
     const yahooWeek = parseInt(league.current_week || '1');
     
     // Use the higher of calculated week or Yahoo's week (in case Yahoo is behind)

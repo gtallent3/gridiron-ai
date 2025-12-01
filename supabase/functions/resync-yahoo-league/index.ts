@@ -68,11 +68,13 @@ serve(async (req) => {
     const { leagueId } = await req.json();
     console.log(`Resyncing Yahoo league: ${leagueId} for user ${user.id}`);
 
-    // Calculate actual current NFL week based on 2024 season
-    // 2024 NFL Season started September 5, 2024
-    function getCurrentNFLWeek(): number {
+    // Calculate actual current NFL week based on season year
+    // NFL seasons start in September of the previous calendar year
+    // e.g., 2025 season starts September 2024
+    function getCurrentNFLWeek(seasonYear: number): number {
       const now = new Date();
-      const seasonStart = new Date('2024-09-05T00:00:00-04:00'); // NFL Week 1 start
+      const seasonStartYear = seasonYear - 1; // Season starts in previous calendar year
+      const seasonStart = new Date(`${seasonStartYear}-09-05T00:00:00-04:00`);
       if (now < seasonStart) return 1;
       const daysSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (1000 * 60 * 60 * 24));
       const weeksSinceStart = Math.floor(daysSinceStart / 7);
@@ -93,18 +95,6 @@ serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
-    }
-    
-    // Update league's current week to actual NFL week if it's behind
-    const actualWeek = getCurrentNFLWeek();
-    if (!league.current_week || league.current_week < actualWeek) {
-      await supabase
-        .from('connected_leagues')
-        .update({ current_week: actualWeek })
-        .eq('id', leagueId);
-      
-      league.current_week = actualWeek;
-      console.log(`Updated league current week to ${actualWeek}`);
     }
 
     // Get OAuth credentials from vault
@@ -205,6 +195,39 @@ serve(async (req) => {
       : /^\d+$/.test(rawLeagueId)
         ? `nfl.l.${rawLeagueId}`
         : rawLeagueId; // fallback for already-full keys
+    
+    console.log(`Fetching league settings for: ${yahooLeagueKey}`);
+    
+    // Fetch league settings to get the season year
+    const leagueSettingsResponse = await fetchYahooAPI(
+      `https://fantasysports.yahooapis.com/fantasy/v2/league/${yahooLeagueKey}/settings?format=json`
+    );
+    
+    if (!leagueSettingsResponse.ok) {
+      throw new Error('Failed to fetch league settings from Yahoo');
+    }
+    
+    const leagueSettingsData = await leagueSettingsResponse.json();
+    const leagueSettings = leagueSettingsData.fantasy_content?.league?.[0] || {};
+    const season = parseInt(leagueSettings.season);
+    const yahooWeek = parseInt(leagueSettings.current_week || '1');
+    
+    // Calculate actual week and use the higher value
+    const calculatedWeek = getCurrentNFLWeek(season);
+    const currentWeek = Math.max(calculatedWeek, yahooWeek);
+    
+    console.log(`Season: ${season}, Yahoo week: ${yahooWeek}, Calculated week: ${calculatedWeek}, Using: ${currentWeek}`);
+    
+    // Update league's current week if it's behind
+    if (!league.current_week || league.current_week < currentWeek) {
+      await supabase
+        .from('connected_leagues')
+        .update({ current_week: currentWeek })
+        .eq('id', leagueId);
+      
+      league.current_week = currentWeek;
+      console.log(`Updated league current week to ${currentWeek}`);
+    }
     
     console.log(`Fetching teams for league (raw: ${rawLeagueId}) -> using key: ${yahooLeagueKey}`);
     const teamsResponse = await fetchYahooAPI(
