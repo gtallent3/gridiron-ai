@@ -21,10 +21,10 @@ serve(async (req) => {
 
     // Parse optional controls from request body
     let reset = false;
-    let maxBatches = 5; // number of chunks per invocation (reduced to prevent timeouts)
+    let maxBatches = 2; // SMALL batches to prevent timeouts (2 chunks = ~1000 players max)
     let startSleeperIndex = 0;
     let startNflIndex = 0;
-    let chunkSize = 500; // reduced chunk size for better reliability
+    let chunkSize = 500; // chunk size per batch
     try {
       const body = await req.json();
       reset = !!body?.reset;
