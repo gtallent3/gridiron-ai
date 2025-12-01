@@ -28,11 +28,8 @@ export function useSubscription() {
         return;
       }
       
-      const { data, error } = await supabase.functions.invoke('check-subscription', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      // The Supabase client automatically includes the Authorization header
+      const { data, error } = await supabase.functions.invoke('check-subscription');
       
       if (error) throw error;
       
