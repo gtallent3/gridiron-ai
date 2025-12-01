@@ -139,27 +139,32 @@ serve(async (req) => {
       }
     }
 
-    // Fetch projections from database
-    const projectionMap = new Map<string, number>();
-    const { data: dbProjections } = await supabase
-      .from('projected_player_stats')
-      .select('player_id, player_name, projected_fp')
-      .eq('week', currentWeek)
-      .eq('season', new Date().getFullYear())
-      .gt('projected_fp', 0);
+    // Get all canonical player IDs from roster
+    const canonicalIds = Array.from(new Set(
+      Array.from(normalizedMap.values())
+        .map(p => p.canonical_player_id)
+        .filter(Boolean)
+    ));
 
-    if (dbProjections && dbProjections.length > 0) {
-      const nameToProjectionMap = new Map<string, number>();
-      for (const proj of dbProjections) {
-        const normalizedName = proj.player_name.toLowerCase().replace(/[^a-z]/g, '');
-        nameToProjectionMap.set(normalizedName, Number(proj.projected_fp));
-      }
-      
-      for (const [sleeperId, meta] of normalizedMap.entries()) {
-        const normalizedName = meta.player_name.toLowerCase().replace(/[^a-z]/g, '');
-        const projection = nameToProjectionMap.get(normalizedName);
-        if (projection && projection > 0) {
-          projectionMap.set(sleeperId, projection);
+    // Fetch projections from player_pool_v2
+    const projectionMap = new Map<string, number>();
+    if (canonicalIds.length > 0) {
+      const { data: projections } = await supabase
+        .from('player_pool_v2')
+        .select('canonical_player_id, projected_fp')
+        .in('canonical_player_id', canonicalIds)
+        .eq('week', currentWeek)
+        .eq('season', new Date().getFullYear())
+        .not('projected_fp', 'is', null);
+
+      if (projections && projections.length > 0) {
+        for (const proj of projections) {
+          // Map canonical_player_id back to sleeper_id
+          for (const [sleeperId, meta] of normalizedMap.entries()) {
+            if (meta.canonical_player_id === proj.canonical_player_id) {
+              projectionMap.set(sleeperId, Number(proj.projected_fp) || 0);
+            }
+          }
         }
       }
     }
