@@ -449,12 +449,15 @@ serve(async (req) => {
               }
             }
 
+            // Normalize selected_position to uppercase for consistency
+            const normalizedSelectedPosition = selectedPosition ? String(selectedPosition).toUpperCase().trim() : 'BN';
+
             roster.push({
               player_id: core.player_id || '',
               player_name: core.name?.full || core.name || '',
               position: core.primary_position || core.display_position || '',
               team: core.editorial_team_abbr || '',
-              selected_position: selectedPosition || 'BN',
+              selected_position: normalizedSelectedPosition,
             });
           }
 

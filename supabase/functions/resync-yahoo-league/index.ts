@@ -438,19 +438,24 @@ serve(async (req) => {
           }
         }
 
-        // Debug: Log the raw player wrapper structure
-        console.log(`\n=== Player: ${core.name?.full || core.name} ===`);
-        console.log('Raw playerWrapper:', JSON.stringify(playerWrapper, null, 2));
-        
         let selectedPosition = getSelectedPositionFromPlayerWrapper(playerWrapper);
-        console.log(`Extracted selected_position: ${selectedPosition}`);
         
-        if (!selectedPosition) {
+        // Normalize selected_position to uppercase for consistency
+        if (selectedPosition) {
+          selectedPosition = String(selectedPosition).toUpperCase().trim();
+        }
+        
+        // If no selected_position found, use fallback
+        if (!selectedPosition || selectedPosition === '') {
           selectedPosition = core.display_position
             ?? (Array.isArray(core.eligible_positions) ? core.eligible_positions[0] : null)
             ?? 'BN';
-          console.log(`Fallback selected_position: ${selectedPosition}`);
+          if (selectedPosition) {
+            selectedPosition = String(selectedPosition).toUpperCase().trim();
+          }
         }
+        
+        console.log(`Player ${core.name?.full || core.name} - Position: ${selectedPosition}`);
         
         const updatedCanonical = canonical;
         
