@@ -926,7 +926,7 @@ export default function Admin() {
         setPopulateProgress(`Batch ${iteration}: Processing chunk starting at Sleeper[${nextSleeperIndex}], NFL[${nextNflIndex}]...`);
 
         const body: any = { 
-          maxBatches: 50,
+          maxBatches: 2, // Keep small to prevent timeouts
           startSleeperIndex: nextSleeperIndex,
           startNflIndex: nextNflIndex
         };
