@@ -2,9 +2,15 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft, Trophy } from "lucide-react";
+import { Loader2, ArrowLeft, Trophy, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from "@/components/ui/dropdown-menu";
 import { RosterView } from "@/components/league/RosterView";
 import { MatchupInsight } from "@/components/league/MatchupInsight";
 import { WaiverWire } from "@/components/league/WaiverWire";
@@ -43,6 +49,7 @@ export default function LeagueDashboard() {
   const [league, setLeague] = useState<League | null>(null);
   const [userTeam, setUserTeam] = useState<Team | null>(null);
   const [allTeams, setAllTeams] = useState<Team[]>([]);
+  const [activeTab, setActiveTab] = useState("roster");
 
   useEffect(() => {
     const checkAuthAndFetchData = async () => {
@@ -226,16 +233,33 @@ export default function LeagueDashboard() {
           <span className="sm:hidden">Back</span>
         </Button>
 
-        <Tabs defaultValue="roster" className="mt-4 sm:mt-8">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 max-w-4xl mx-auto h-auto">
-            <TabsTrigger value="roster" className="text-xs sm:text-sm py-2">
-              <span className="hidden sm:inline">My Team</span>
-              <span className="sm:hidden">Team</span>
-            </TabsTrigger>
-            <TabsTrigger value="matchup" className="text-xs sm:text-sm py-2">
-              <span className="hidden sm:inline">Matchup</span>
-              <span className="sm:hidden">Match</span>
-            </TabsTrigger>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 sm:mt-8">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 max-w-4xl mx-auto h-auto">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant={activeTab === "roster" || activeTab === "matchup" ? "default" : "ghost"}
+                  className="text-xs sm:text-sm py-2 h-auto rounded-md data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                >
+                  <span className="hidden sm:inline">
+                    {activeTab === "matchup" ? "Matchup" : "My Team"}
+                  </span>
+                  <span className="sm:hidden">
+                    {activeTab === "matchup" ? "Match" : "Team"}
+                  </span>
+                  <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-popover">
+                <DropdownMenuItem onClick={() => setActiveTab("roster")}>
+                  My Team
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setActiveTab("matchup")}>
+                  Matchup
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            
             <TabsTrigger value="trade" className="text-xs sm:text-sm py-2">
               <span className="hidden sm:inline">Trade Analyzer</span>
               <span className="sm:hidden">Trade</span>
