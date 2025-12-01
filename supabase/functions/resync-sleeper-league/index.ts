@@ -55,15 +55,20 @@ serve(async (req) => {
 
     const sleeperLeagueId = league.league_id;
 
-    // Fetch league details from Sleeper API
-    const leagueResponse = await fetch(`https://api.sleeper.app/v1/league/${sleeperLeagueId}`);
+    // Fetch league details from Sleeper API (with cache busting)
+    const cacheBuster = `?t=${Date.now()}`;
+    const leagueResponse = await fetch(`https://api.sleeper.app/v1/league/${sleeperLeagueId}${cacheBuster}`, {
+      headers: { 'Cache-Control': 'no-cache' }
+    });
     if (!leagueResponse.ok) {
       throw new Error('Failed to fetch league from Sleeper');
     }
     const leagueData = await leagueResponse.json();
 
-    // Get rosters for this league
-    const rostersResponse = await fetch(`https://api.sleeper.app/v1/league/${sleeperLeagueId}/rosters`);
+    // Get rosters for this league (with cache busting)
+    const rostersResponse = await fetch(`https://api.sleeper.app/v1/league/${sleeperLeagueId}/rosters${cacheBuster}`, {
+      headers: { 'Cache-Control': 'no-cache' }
+    });
     if (!rostersResponse.ok) {
       throw new Error('Failed to fetch rosters from Sleeper');
     }
@@ -185,9 +190,20 @@ serve(async (req) => {
       const teamName = owner?.metadata?.team_name || owner?.display_name || `Team ${r.roster_id}`;
 
       const startersSet = new Set((r.starters || []).map((id: any) => id?.toString()));
+      
+      // Log starters for debugging
+      console.log(`Team ${teamName} (roster_id: ${r.roster_id}) starters:`, Array.from(startersSet));
+      
       const rosterArray = (r.players || []).map((pid: any) => {
         const id = pid?.toString();
         const meta = normalizedMap.get(id);
+        const isStarter = startersSet.has(id);
+        
+        // Log QB players specifically
+        if (meta?.position === 'QB') {
+          console.log(`QB Player: ${meta?.player_name} (${id}) - starter: ${isStarter}`);
+        }
+        
         return {
           player_id: id,
           canonical_player_id: meta?.canonical_player_id || null,
@@ -195,7 +211,7 @@ serve(async (req) => {
           position: meta?.position || 'FLEX',
           team: meta?.team || 'NFL',
           projected: projectionMap.get(id) || 0,
-          starter: startersSet.has(id),
+          starter: isStarter,
         };
       });
 
