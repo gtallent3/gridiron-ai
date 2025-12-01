@@ -21,15 +21,19 @@ export function useSubscription() {
       
       // Check if user is authenticated first
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      if (!session?.access_token) {
         setSubscription({ subscribed: false });
         setError(null);
         setLoading(false);
         return;
       }
       
-      // The Supabase client automatically includes the Authorization header
-      const { data, error } = await supabase.functions.invoke('check-subscription');
+      // Explicitly pass the Authorization header
+      const { data, error } = await supabase.functions.invoke('check-subscription', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
       
       if (error) throw error;
       
