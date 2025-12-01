@@ -22,7 +22,7 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_ANON_KEY") ?? "",
     { 
       global: { 
-        headers: { Authorization: req.headers.get('Authorization')! } 
+        headers: { Authorization: req.headers.get('Authorization') || '' } 
       },
       auth: { persistSession: false }
     }
@@ -30,6 +30,9 @@ serve(async (req) => {
 
   try {
     logStep("Function started");
+    
+    const authHeader = req.headers.get('Authorization');
+    logStep("Authorization header present", { hasAuth: !!authHeader });
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
