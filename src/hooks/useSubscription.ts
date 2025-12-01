@@ -19,24 +19,32 @@ export function useSubscription() {
     try {
       setLoading(true);
       
-      // Check if user is authenticated first
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
+      // Get fresh session from auth
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError || !session?.access_token) {
+        console.log('No active session, skipping subscription check');
         setSubscription({ subscribed: false });
         setError(null);
         setLoading(false);
         return;
       }
       
-      // Explicitly pass the Authorization header
+      console.log('Checking subscription with session token');
+      
+      // Call function with explicit auth header
       const { data, error } = await supabase.functions.invoke('check-subscription', {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${session.access_token}`,
         },
       });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Function error:', error);
+        throw error;
+      }
       
+      console.log('Subscription check result:', data);
       setSubscription(data || { subscribed: false });
       setError(null);
     } catch (err) {
