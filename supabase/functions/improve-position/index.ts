@@ -79,10 +79,32 @@ Deno.serve(async (req) => {
     });
 
     // Get positional strengths for all teams
-    const { data: allStrengths } = await supabase
+    let { data: allStrengths } = await supabase
       .from('team_positional_strengths')
       .select('*')
       .eq('league_id', leagueId);
+
+    // If no positional strengths exist, compute them automatically
+    if (!allStrengths || allStrengths.length === 0) {
+      console.log('No positional strengths found, computing automatically...');
+      
+      const { error: computeError } = await supabase.functions.invoke('post-sync-compute', {
+        body: { leagueId }
+      });
+
+      if (computeError) {
+        console.error('Failed to compute positional strengths:', computeError);
+        throw new Error('Failed to compute positional strengths. Please try again.');
+      }
+
+      // Fetch the newly computed strengths
+      const { data: newStrengths } = await supabase
+        .from('team_positional_strengths')
+        .select('*')
+        .eq('league_id', leagueId);
+
+      allStrengths = newStrengths;
+    }
 
     const strengthsByTeam = new Map<string, Map<string, any>>();
     for (const s of allStrengths || []) {
@@ -96,7 +118,7 @@ Deno.serve(async (req) => {
     const targetPosStrength = myStrengths?.get(targetPosition);
 
     if (!targetPosStrength) {
-      throw new Error(`No positional strength data found for ${targetPosition}`);
+      throw new Error(`Failed to compute positional strength data for ${targetPosition}. Please ensure your league data is synced correctly.`);
     }
 
     // Get all PSS values for this position across league for rank estimation
