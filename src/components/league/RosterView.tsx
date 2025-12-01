@@ -144,8 +144,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
           if (league.platform === 'espn') {
             isStarter = STARTER_SLOTS.includes(player.slot);
           } else if (league.platform === 'yahoo') {
-            const sp = String(player.selected_position ?? '').toUpperCase();
-            isStarter = sp !== '' && !['BN','BENCH','IR','NA','IL','PUP'].includes(sp);
+            const sp = String(player.selected_position ?? '').toUpperCase().trim();
+            isStarter = sp !== '' && !['BN','BENCH','IR','NA','IL','PUP','RESERVE'].includes(sp);
           }
           
           const canonical = canonicalMap.get(playerId);
@@ -293,12 +293,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            // For Yahoo, use selected_position from sync (non-starters like BN/IR/NA go to bench)
-            const sp = (player.selected_position ?? '') as string;
-            const spNorm = String(sp).toUpperCase();
-            const isStarter = league.platform === 'yahoo'
-              ? (spNorm !== '' && !['BN','BENCH','IR','NA','IL','PUP'].includes(spNorm))
-              : (player.starter !== false);
+            const sp = String(player.selected_position ?? '').toUpperCase().trim();
+            const isStarter = sp !== '' && !['BN','BENCH','IR','NA','IL','PUP','RESERVE'].includes(sp);
             
             // Match by name
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
@@ -379,12 +375,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            // For Yahoo, use selected_position from sync (non-starters like BN/IR/NA go to bench)
-            const sp = (player.selected_position ?? '') as string;
-            const spNorm = String(sp).toUpperCase();
-            const isStarter = league.platform === 'yahoo' 
-              ? (spNorm !== '' && !['BN','BENCH','IR','NA','IL','PUP'].includes(spNorm))
-              : (player.starter !== false);
+            const sp = String(player.selected_position ?? '').toUpperCase().trim();
+            const isStarter = sp !== '' && !['BN','BENCH','IR','NA','IL','PUP','RESERVE'].includes(sp);
             
             // Try to find projection by ID first, then by name
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');

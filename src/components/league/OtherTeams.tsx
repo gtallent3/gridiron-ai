@@ -204,7 +204,16 @@ export function OtherTeams({ league, currentTeamId }: OtherTeamsProps) {
     setSelectedTeam(team);
   };
 
-  const filteredTeams = teams.filter(team => team.team_id !== currentTeamId);
+  // For Yahoo leagues, compare using the numeric team ID portion
+  const filteredTeams = teams.filter(team => {
+    if (league.platform === 'yahoo') {
+      // Extract numeric ID from team_key format (e.g., "nfl.l.1234.t.5" -> "5")
+      const teamNumericId = team.team_id.split('.t.').pop();
+      const currentNumericId = currentTeamId?.split('.t.').pop();
+      return teamNumericId !== currentNumericId;
+    }
+    return team.team_id !== currentTeamId;
+  });
 
   const getTeamRoster = (team: LeagueTeam) => {
     if (!team.roster || !Array.isArray(team.roster)) return [];
