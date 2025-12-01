@@ -234,7 +234,7 @@ export default function LeagueDashboard() {
         </Button>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 sm:mt-8">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5 max-w-4xl mx-auto h-auto">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 max-w-4xl mx-auto h-auto">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button 
@@ -260,6 +260,10 @@ export default function LeagueDashboard() {
               </DropdownMenuContent>
             </DropdownMenu>
             
+            <TabsTrigger value="rankings" className="text-xs sm:text-sm py-2">
+              <span className="hidden sm:inline">Rankings</span>
+              <span className="sm:hidden">Ranks</span>
+            </TabsTrigger>
             <TabsTrigger value="trade" className="text-xs sm:text-sm py-2">
               <span className="hidden sm:inline">Trade Analyzer</span>
               <span className="sm:hidden">Trade</span>
@@ -299,6 +303,10 @@ export default function LeagueDashboard() {
             />
           </TabsContent>
 
+          <TabsContent value="rankings" className="mt-4 sm:mt-6">
+            <PositionalRankings leagueId={league.id} teams={allTeams} />
+          </TabsContent>
+
           <TabsContent value="trade" className="mt-4 sm:mt-6">
             {!userTeam ? (
               <div className="text-center py-12 space-y-4">
@@ -314,7 +322,7 @@ export default function LeagueDashboard() {
                 <ComputeValuesCard leagueId={league.id} />
                 
                 <Tabs defaultValue="analyzer" className="spacing-mobile">
-                  <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 max-w-4xl mx-auto h-auto">
+                  <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 max-w-4xl mx-auto h-auto">
                     <TabsTrigger value="analyzer" className="text-xs sm:text-sm py-2 sm:py-3">
                       <span className="hidden sm:inline">Trade Analyzer</span>
                       <span className="sm:hidden">Analyzer</span>
@@ -326,10 +334,6 @@ export default function LeagueDashboard() {
                     <TabsTrigger value="improve" className="text-xs sm:text-sm py-2 sm:py-3">
                       <span className="hidden sm:inline">Improve</span>
                       <span className="sm:hidden">Improve</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="rankings" className="text-xs sm:text-sm py-2 sm:py-3">
-                      <span className="hidden sm:inline">Rankings</span>
-                      <span className="sm:hidden">Ranks</span>
                     </TabsTrigger>
                   </TabsList>
 
@@ -348,10 +352,6 @@ export default function LeagueDashboard() {
                       myTeam={userTeam}
                       allTeams={allTeams}
                     />
-                  </TabsContent>
-
-                  <TabsContent value="rankings">
-                    <PositionalRankings leagueId={league.id} teams={allTeams} />
                   </TabsContent>
                 </Tabs>
               </div>
