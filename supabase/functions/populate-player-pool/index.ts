@@ -152,6 +152,14 @@ serve(async (req) => {
         }
       });
       
+      // Debug TE specifically
+      if (position === 'TE') {
+        console.log(`TE: Found ${teamAvgs.length} teams with TE defensive data`);
+        if (teamAvgs.length > 0) {
+          console.log(`  Sample TE entries: ${teamAvgs.slice(0, 3).map(t => `${t.team}:${t.avgPoints.toFixed(2)}`).join(', ')}`);
+        }
+      }
+      
       // Sort by avg points allowed: fewest = rank 1 (hardest), most = rank 32 (easiest)
       teamAvgs.sort((a, b) => a.avgPoints - b.avgPoints);
       
@@ -160,6 +168,13 @@ serve(async (req) => {
         const avgKey = `${teamData.team}_${position}`;
         defRankAvgMap.set(avgKey, index + 1);
       });
+      
+      // Debug TE after ranking
+      if (position === 'TE') {
+        console.log(`TE: Added ${teamAvgs.length} entries to defRankAvgMap`);
+        const wasTeRankAfterLoop = defRankAvgMap.get('WAS_TE');
+        console.log(`  WAS_TE rank after loop: ${wasTeRankAfterLoop ?? 'NOT FOUND'}`);
+      }
       
       // Debug log for WR position
       if (position === 'WR') {
