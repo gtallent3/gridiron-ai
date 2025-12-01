@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@13.11.0?target=deno";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3?target=deno";
+import { createClient } from "../_shared/imports.ts";
+import Stripe from "https://esm.sh/stripe@14.14.0?target=deno";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +27,9 @@ serve(async (req) => {
       throw new Error("No Authorization header provided");
     }
 
+    // Extract the JWT token from the Authorization header
+    const jwt = authHeader.replace('Bearer ', '');
+    
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
@@ -41,7 +44,8 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    // Get user with explicit JWT token
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(jwt);
     if (userError) throw new Error(`Authentication error: ${userError.message}`);
     if (!user?.email) throw new Error("User not authenticated or email not available");
     logStep("User authenticated", { userId: user.id });
