@@ -50,6 +50,7 @@ export default function LeagueDashboard() {
   const [userTeam, setUserTeam] = useState<Team | null>(null);
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [activeTab, setActiveTab] = useState("roster");
+  const [tradeView, setTradeView] = useState("analyzer");
 
   useEffect(() => {
     const checkAuthAndFetchData = async () => {
@@ -264,10 +265,35 @@ export default function LeagueDashboard() {
               <span className="hidden sm:inline">Rankings</span>
               <span className="sm:hidden">Ranks</span>
             </TabsTrigger>
-            <TabsTrigger value="trade" className="text-xs sm:text-sm py-2">
-              <span className="hidden sm:inline">Trade Analyzer</span>
-              <span className="sm:hidden">Trade</span>
-            </TabsTrigger>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant={activeTab === "trade" ? "default" : "ghost"}
+                  className="text-xs sm:text-sm py-2 h-auto rounded-md data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  onClick={() => setActiveTab("trade")}
+                >
+                  <span className="hidden sm:inline">
+                    {tradeView === "finder" ? "Find Trades" : tradeView === "improve" ? "Improve Position" : "Trade Analyzer"}
+                  </span>
+                  <span className="sm:hidden">
+                    {tradeView === "finder" ? "Find" : tradeView === "improve" ? "Improve" : "Trade"}
+                  </span>
+                  <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-popover">
+                <DropdownMenuItem onClick={() => { setActiveTab("trade"); setTradeView("analyzer"); }}>
+                  Trade Analyzer
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setActiveTab("trade"); setTradeView("finder"); }}>
+                  Find Trades
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setActiveTab("trade"); setTradeView("improve"); }}>
+                  Improve Position
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <TabsTrigger value="waiver" className="text-xs sm:text-sm py-2">
               <span className="hidden sm:inline">Waiver Wire</span>
               <span className="sm:hidden">Waiver</span>
@@ -321,39 +347,22 @@ export default function LeagueDashboard() {
               <div className="space-y-4">
                 <ComputeValuesCard leagueId={league.id} />
                 
-                <Tabs defaultValue="analyzer" className="spacing-mobile">
-                  <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 max-w-4xl mx-auto h-auto">
-                    <TabsTrigger value="analyzer" className="text-xs sm:text-sm py-2 sm:py-3">
-                      <span className="hidden sm:inline">Trade Analyzer</span>
-                      <span className="sm:hidden">Analyzer</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="finder" className="text-xs sm:text-sm py-2 sm:py-3">
-                      <span className="hidden sm:inline">Find Trades</span>
-                      <span className="sm:hidden">Find</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="improve" className="text-xs sm:text-sm py-2 sm:py-3">
-                      <span className="hidden sm:inline">Improve</span>
-                      <span className="sm:hidden">Improve</span>
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="analyzer">
+                <div className="mt-4 sm:mt-6">
+                  {tradeView === "analyzer" && (
                     <TradeAnalyzer league={league} userTeam={userTeam} />
-                  </TabsContent>
-
-                  <TabsContent value="finder">
+                  )}
+                  {tradeView === "finder" && (
                     <TradeFinder league={league} userTeam={userTeam} allTeams={allTeams} />
-                  </TabsContent>
-
-                  <TabsContent value="improve">
+                  )}
+                  {tradeView === "improve" && (
                     <ImprovePosition 
                       leagueId={league.id}
                       myTeamId={userTeam.team_id}
                       myTeam={userTeam}
                       allTeams={allTeams}
                     />
-                  </TabsContent>
-                </Tabs>
+                  )}
+                </div>
               </div>
             )}
           </TabsContent>
