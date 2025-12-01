@@ -68,11 +68,11 @@ serve(async (req) => {
     console.log(`League: ${leagueName}, Season: ${season}`);
 
     // Calculate actual current NFL week based on season dates
-    // 2025 NFL Season started September 4, 2025
-    // Week 1: Sep 4-10, Week 2: Sep 11-17, etc.
+    // 2024 NFL Season started September 5, 2024
+    // Week 1: Sep 5-11, Week 2: Sep 12-18, etc.
     function getCurrentNFLWeek(): number {
       const now = new Date();
-      const seasonStart = new Date('2025-09-04T00:00:00-04:00'); // NFL Week 1 start
+      const seasonStart = new Date('2024-09-05T00:00:00-04:00'); // NFL Week 1 start
       
       // If before season start, return 1
       if (now < seasonStart) return 1;
