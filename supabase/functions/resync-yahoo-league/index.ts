@@ -68,10 +68,11 @@ serve(async (req) => {
     const { leagueId } = await req.json();
     console.log(`Resyncing Yahoo league: ${leagueId} for user ${user.id}`);
 
-    // Calculate actual current NFL week
+    // Calculate actual current NFL week based on 2024 season
+    // 2024 NFL Season started September 5, 2024
     function getCurrentNFLWeek(): number {
       const now = new Date();
-      const seasonStart = new Date('2025-09-04T00:00:00-04:00');
+      const seasonStart = new Date('2024-09-05T00:00:00-04:00'); // NFL Week 1 start
       if (now < seasonStart) return 1;
       const daysSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (1000 * 60 * 60 * 24));
       const weeksSinceStart = Math.floor(daysSinceStart / 7);
