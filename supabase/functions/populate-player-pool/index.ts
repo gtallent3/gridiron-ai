@@ -106,12 +106,24 @@ serve(async (req) => {
     };
 
     // Fetch defensive rankings for the season to enrich opponent_def_rank
-    const { data: defensiveRankings, error: defError } = await supabase
-      .from('defensive_rankings')
-      .select('*')
-      .eq('season', season);
-    
-    if (defError) throw defError;
+    // Fetch ALL defensive rankings with pagination (default 1000 limit is too small)
+    const defensiveRankings: any[] = [];
+    let defFrom = 0;
+    const defChunkSize = 1000;
+    while (true) {
+      const { data: batch, error: defError } = await supabase
+        .from('defensive_rankings')
+        .select('*')
+        .eq('season', season)
+        .range(defFrom, defFrom + defChunkSize - 1);
+      
+      if (defError) throw defError;
+      if (!batch || batch.length === 0) break;
+      
+      defensiveRankings.push(...batch);
+      defFrom += batch.length;
+      if (batch.length < defChunkSize) break;
+    }
     
     // Build lookup maps:
     // 1. Exact week match: "opponent_position_week" -> rank
