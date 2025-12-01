@@ -27,27 +27,32 @@ serve(async (req) => {
       throw new Error("No Authorization header provided");
     }
 
-    // Extract the JWT token from the Authorization header
+    // Extract JWT token
     const jwt = authHeader.replace('Bearer ', '');
     
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-      { 
-        global: { 
-          headers: { Authorization: authHeader } 
-        },
-        auth: { persistSession: false }
+      {
+        global: {
+          headers: { Authorization: authHeader }
+        }
       }
     );
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
 
-    // Get user with explicit JWT token
+    // Verify JWT and get user
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser(jwt);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
-    if (!user?.email) throw new Error("User not authenticated or email not available");
+    if (userError) {
+      logStep("User auth error", { error: userError.message });
+      throw new Error(`Authentication error: ${userError.message}`);
+    }
+    if (!user?.email) {
+      logStep("No user email");
+      throw new Error("User not authenticated or email not available");
+    }
     logStep("User authenticated", { userId: user.id });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
