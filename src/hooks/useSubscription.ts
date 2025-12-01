@@ -18,6 +18,16 @@ export function useSubscription() {
   const checkSubscription = async () => {
     try {
       setLoading(true);
+      
+      // Check if user is authenticated first
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setSubscription({ subscribed: false });
+        setError(null);
+        setLoading(false);
+        return;
+      }
+      
       const { data, error } = await supabase.functions.invoke('check-subscription');
       
       if (error) throw error;
