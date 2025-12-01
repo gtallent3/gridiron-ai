@@ -230,185 +230,160 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
         return;
       }
       
-      // For Sleeper, use existing logic
+      // For Sleeper, use player_pool_v2 via canonical_players
       if (league.platform === 'sleeper') {
         const starterPlayers: any[] = [];
         const benchPlayers: any[] = [];
         
-        // For historical weeks, fetch from nfl_fantasy_points
-        if (isHistorical) {
-          const now = new Date();
-          const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-          
-          // Fetch actual stats from nfl_fantasy_points table
-          const { data: statsData, error } = await supabase
-            .from('nfl_fantasy_points')
-            .select('*')
-            .eq('week', week)
-            .eq('season', inferredSeason);
-          
-          if (error) {
-            console.error('Error fetching player stats:', error);
+        const now = new Date();
+        const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
+        
+        // Step 1: Get sleeper player IDs from roster
+        const rosterPlayerIds = userTeam.roster
+          .map((p: any) => String(p.player_id ?? ''))
+          .filter(Boolean);
+        
+        // Step 2: Look up canonical_player_ids using sleeper_id
+        const { data: canonicalData } = await supabase
+          .from('canonical_players')
+          .select('id, player_name, position, team, sleeper_id')
+          .in('sleeper_id', rosterPlayerIds);
+        
+        const canonicalMap = new Map<string, any>();
+        if (canonicalData) {
+          for (const cp of canonicalData) {
+            if (cp.sleeper_id) {
+              canonicalMap.set(String(cp.sleeper_id), cp);
+            }
           }
+        }
+        
+        const canonicalIds = Array.from(canonicalMap.values()).map(cp => cp.id);
+        
+        // Step 3: Fetch from player_pool_v2
+        const { data: poolData } = await supabase
+          .from('player_pool_v2')
+          .select('*')
+          .eq('week', week)
+          .eq('season', inferredSeason)
+          .in('canonical_player_id', canonicalIds)
+          .order('actual_fp', { ascending: false, nullsFirst: false });
+        
+        const poolMap = new Map<string, any>();
+        if (poolData) {
+          for (const pool of poolData) {
+            // Prefer rows with actual stats (actual_fp > 0) over projected
+            const existing = poolMap.get(pool.canonical_player_id);
+            if (!existing || (Number(pool.actual_fp) > 0 && Number(existing.actual_fp) === 0)) {
+              poolMap.set(pool.canonical_player_id, pool);
+            }
+          }
+        }
+        
+        // Step 4: Get scoring settings
+        const { data: leagueData } = await supabase
+          .from('connected_leagues')
+          .select('scoring_settings, scoring_type')
+          .eq('id', league.id)
+          .maybeSingle();
+        
+        let scoringSettings: any = {
+          passing_yards: 0.04, passing_tds: 4, interceptions: -2,
+          rushing_yards: 0.1, rushing_tds: 6,
+          receptions: 1, receiving_yards: 0.1, receiving_tds: 6,
+          fumbles_lost: -2,
+        };
+        
+        if (leagueData?.scoring_settings) {
+          scoringSettings = { ...scoringSettings, ...(leagueData.scoring_settings as Record<string, any>) };
+        } else if (leagueData?.scoring_type === 'standard') {
+          scoringSettings.receptions = 0;
+        } else if (leagueData?.scoring_type === 'half_ppr') {
+          scoringSettings.receptions = 0.5;
+        }
+        
+        // Step 5: Build roster with stats
+        userTeam.roster.forEach((player: any) => {
+          const playerId = String(player.player_id ?? '');
+          const playerName = player.player_name || 'Unknown Player';
           
-          // Create a map by normalized player name for matching
-          const statsByName = new Map<string, any>();
-          if (statsData) {
-            for (const stat of statsData) {
-              const normalizedName = stat.player_name.toLowerCase().replace(/[^a-z]/g, '');
-              statsByName.set(normalizedName, stat);
+          // For Sleeper, check the starter boolean field
+          const isStarter = player.starter === true;
+          
+          const canonical = canonicalMap.get(playerId);
+          const poolEntry = canonical ? poolMap.get(canonical.id) : null;
+          
+          // Use canonical position first, then fall back to roster position
+          const positionName = canonical?.position || player.position || 'FLEX';
+          
+          let projectedPoints = 0;
+          let actualPoints = 0;
+          
+          if (poolEntry) {
+            // Check if player has actual stats
+            const hasActualStats = Number(poolEntry.actual_fp) > 0;
+            
+            // Build stats object from raw data
+            const stats = {
+              passing_yards: Number(poolEntry.passing_yards) || 0,
+              passing_tds: Number(poolEntry.passing_tds) || 0,
+              interceptions: Number(poolEntry.passing_ints) || 0,
+              rushing_yards: Number(poolEntry.rushing_yards) || 0,
+              rushing_tds: Number(poolEntry.rushing_tds) || 0,
+              receptions: Number(poolEntry.receptions) || 0,
+              receiving_yards: Number(poolEntry.receiving_yards) || 0,
+              receiving_tds: Number(poolEntry.receiving_tds) || 0,
+            };
+
+            const { total } = calculateFantasyPoints(stats, scoringSettings);
+
+            if (isHistorical) {
+              const statSum: number = (Object.values(stats) as number[]).reduce(
+                (s, v) => s + (Number(v) || 0),
+                0
+              );
+              actualPoints = statSum > 0
+                ? total
+                : (Number(poolEntry.actual_fp) || Number(poolEntry.composite_fp) || 0);
+            } else {
+              // For current week, match MatchupInsight logic
+              if (hasActualStats) {
+                // Player has played - calculate from actual stats
+                actualPoints = total;
+                projectedPoints = 0;
+              } else {
+                // Player hasn't played yet - show projected points
+                projectedPoints = total || Number(poolEntry.projected_fp) || Number(poolEntry.composite_fp) || 0;
+                actualPoints = 0;
+              }
             }
           }
           
-          // Get league scoring settings
-          const { data: leagueData } = await supabase
-            .from('connected_leagues')
-            .select('scoring_settings, scoring_type')
-            .eq('id', league.id)
-            .maybeSingle();
+          const playerTeam = poolEntry?.team || canonical?.team || player.team || 'NFL';
+          const isByeWeek = isTeamOnBye(playerTeam, week);
           
-          // Default scoring for Sleeper (PPR)
-          let scoringSettings: any = {
-            passing_yards: 0.04,
-            passing_tds: 4,
-            interceptions: -2,
-            rushing_yards: 0.1,
-            rushing_tds: 6,
-            receptions: 1,
-            receiving_yards: 0.1,
-            receiving_tds: 6,
-            fumbles_lost: -2,
+          const playerDataObj = {
+            id: playerId || playerName,
+            name: playerName,
+            position: positionName,
+            team: playerTeam,
+            projected: projectedPoints,
+            actualPoints: actualPoints,
+            has_actual_points: actualPoints > 0,
+            status: isStarter ? 'starter' : 'bench',
+            is_bye_week: isByeWeek,
+            injury_status: player.injury_status ?? null,
+            week: week,
+            opponent: poolEntry?.opponent,
+            opponent_def_rank: poolEntry?.opponent_def_rank,
           };
           
-          if (leagueData?.scoring_settings && typeof leagueData.scoring_settings === 'object') {
-            scoringSettings = { ...scoringSettings, ...(leagueData.scoring_settings as Record<string, any>) };
-          } else if (leagueData?.scoring_type === 'standard') {
-            scoringSettings.receptions = 0;
-          } else if (leagueData?.scoring_type === 'half_ppr') {
-            scoringSettings.receptions = 0.5;
+          if (isStarter) {
+            starterPlayers.push(playerDataObj);
+          } else {
+            benchPlayers.push(playerDataObj);
           }
-          
-          // Calculate fantasy points for each player
-          userTeam.roster.forEach((player: any) => {
-            const playerId = String(player.player_id ?? '');
-            const playerName = player.player_name || 'Unknown Player';
-            const positionName = player.position || 'FLEX';
-            // For Sleeper, check the starter boolean field
-            const isStarter = player.starter === true;
-            
-            // Match by name
-            const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
-            const stats = statsByName.get(normalizedName);
-            
-            let actualPoints = 0;
-            if (stats) {
-              // Calculate fantasy points based on stats
-              actualPoints += (stats.passing_yards || 0) * (scoringSettings.passing_yards || 0);
-              actualPoints += (stats.passing_tds || 0) * (scoringSettings.passing_tds || 0);
-              actualPoints += (stats.interceptions || 0) * (scoringSettings.interceptions || 0);
-              actualPoints += (stats.rushing_yards || 0) * (scoringSettings.rushing_yards || 0);
-              actualPoints += (stats.rushing_tds || 0) * (scoringSettings.rushing_tds || 0);
-              actualPoints += (stats.receptions || 0) * (scoringSettings.receptions || 0);
-              actualPoints += (stats.receiving_yards || 0) * (scoringSettings.receiving_yards || 0);
-              actualPoints += (stats.receiving_tds || 0) * (scoringSettings.receiving_tds || 0);
-              actualPoints += (stats.fumbles_lost || 0) * (scoringSettings.fumbles_lost || 0);
-              actualPoints += (stats.passing_2pt_conversions || 0) * (scoringSettings.passing_2pt_conversions || 2);
-              actualPoints += (stats.rushing_2pt_conversions || 0) * (scoringSettings.rushing_2pt_conversions || 2);
-              actualPoints += (stats.receiving_2pt_conversions || 0) * (scoringSettings.receiving_2pt_conversions || 2);
-            }
-            
-            const playerTeam = stats?.team || player.team || 'NFL';
-            const injuryStatus = player.injury_status ?? null;
-            const isByeWeek = isTeamOnBye(playerTeam, week);
-            
-            const playerDataObj = {
-              id: playerId || playerName,
-              name: playerName,
-              position: positionName,
-              team: playerTeam,
-              projected: 0,
-              actualPoints: Math.round(actualPoints * 100) / 100,
-              status: isStarter ? 'starter' : 'bench',
-              is_bye_week: isByeWeek,
-              injury_status: injuryStatus,
-              week: week,
-              opponent: stats?.opponent,
-              opponent_def_rank: undefined,
-            };
-            
-            if (isStarter) {
-              starterPlayers.push(playerDataObj);
-            } else {
-              benchPlayers.push(playerDataObj);
-            }
-          });
-        } else {
-          // For current/future weeks, fetch projections from projected_player_stats
-          const now = new Date();
-          const inferredSeason = now.getMonth() >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-          
-          // Fetch projected stats for this specific week
-          const { data: projectedStats, error: projError } = await supabase
-            .from('projected_player_stats')
-            .select('*')
-            .eq('week', week)
-            .eq('season', inferredSeason);
-          
-          if (projError) {
-            console.error('Error fetching projected stats:', projError);
-          }
-          
-          // Create a map by player_id and normalized name for matching
-          const projByPlayerId = new Map<string, any>();
-          const projByName = new Map<string, any>();
-          if (projectedStats) {
-            for (const proj of projectedStats) {
-              if (proj.player_id) {
-                projByPlayerId.set(proj.player_id, proj);
-              }
-              const normalizedName = proj.player_name.toLowerCase().replace(/[^a-z]/g, '');
-              projByName.set(normalizedName, proj);
-            }
-          }
-          
-          userTeam.roster.forEach((player: any) => {
-            const playerId = String(player.player_id ?? '');
-            const playerName = player.player_name || 'Unknown Player';
-            const positionName = player.position || 'FLEX';
-            // For Sleeper, check the starter boolean field
-            const isStarter = player.starter === true;
-            
-            // Try to find projection by ID first, then by name
-            const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
-            const projection = projByPlayerId.get(playerId) || projByName.get(normalizedName);
-            
-            const projectedPoints = projection?.projected_fp || player.projected || 0;
-            const playerTeam = projection?.team || player.team || 'NFL';
-            const injuryStatus = player.injury_status ?? null;
-            const isByeWeek = isTeamOnBye(playerTeam, week);
-            
-            const playerDataObj = {
-              id: playerId || playerName,
-              name: playerName,
-              position: positionName,
-              team: playerTeam,
-              projected: projectedPoints,
-              actualPoints: 0,
-              status: isStarter ? 'starter' : 'bench',
-              is_bye_week: isByeWeek,
-              injury_status: injuryStatus,
-              week: week,
-              opponent: projection?.opponent,
-              opponent_def_rank: projection?.opponent_def_rank,
-            };
-            
-            if (isStarter) {
-              starterPlayers.push(playerDataObj);
-            } else {
-              benchPlayers.push(playerDataObj);
-            }
-          });
-        }
+        });
         
         setStarters(starterPlayers);
         setBench(benchPlayers);
