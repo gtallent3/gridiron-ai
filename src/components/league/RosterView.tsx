@@ -293,8 +293,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            const sp = String(player.selected_position ?? '').toUpperCase().trim();
-            const isStarter = sp !== '' && !['BN','BENCH','IR','NA','IL','PUP','RESERVE'].includes(sp);
+            // For Sleeper, check the starter boolean field
+            const isStarter = player.starter === true;
             
             // Match by name
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
@@ -375,8 +375,8 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
             const playerId = String(player.player_id ?? '');
             const playerName = player.player_name || 'Unknown Player';
             const positionName = player.position || 'FLEX';
-            const sp = String(player.selected_position ?? '').toUpperCase().trim();
-            const isStarter = sp !== '' && !['BN','BENCH','IR','NA','IL','PUP','RESERVE'].includes(sp);
+            // For Sleeper, check the starter boolean field
+            const isStarter = player.starter === true;
             
             // Try to find projection by ID first, then by name
             const normalizedName = playerName.toLowerCase().replace(/[^a-z]/g, '');
