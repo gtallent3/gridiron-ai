@@ -68,6 +68,16 @@ serve(async (req) => {
     const { leagueId } = await req.json();
     console.log(`Resyncing Yahoo league: ${leagueId} for user ${user.id}`);
 
+    // Calculate actual current NFL week
+    function getCurrentNFLWeek(): number {
+      const now = new Date();
+      const seasonStart = new Date('2025-09-04T00:00:00-04:00');
+      if (now < seasonStart) return 1;
+      const daysSinceStart = Math.floor((now.getTime() - seasonStart.getTime()) / (1000 * 60 * 60 * 24));
+      const weeksSinceStart = Math.floor(daysSinceStart / 7);
+      return Math.min(weeksSinceStart + 1, 18);
+    }
+
     // Get league details
     const { data: league, error: leagueError } = await supabase
       .from('connected_leagues')
@@ -82,6 +92,18 @@ serve(async (req) => {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
+    }
+    
+    // Update league's current week to actual NFL week if it's behind
+    const actualWeek = getCurrentNFLWeek();
+    if (!league.current_week || league.current_week < actualWeek) {
+      await supabase
+        .from('connected_leagues')
+        .update({ current_week: actualWeek })
+        .eq('id', leagueId);
+      
+      league.current_week = actualWeek;
+      console.log(`Updated league current week to ${actualWeek}`);
     }
 
     // Get OAuth credentials from vault
@@ -650,10 +672,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Resync error:', error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
+      JSON.stringify({ error: error.message || 'Failed to resync league' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
