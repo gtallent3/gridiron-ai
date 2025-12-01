@@ -262,7 +262,7 @@ export default function LeagueDashboard() {
             </DropdownMenu>
             
             <TabsTrigger value="rankings" className="text-xs sm:text-sm py-2">
-              <span className="hidden sm:inline">Rankings</span>
+              <span className="hidden sm:inline">League Rankings</span>
               <span className="sm:hidden">Ranks</span>
             </TabsTrigger>
             
