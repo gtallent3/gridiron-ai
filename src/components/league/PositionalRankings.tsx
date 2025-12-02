@@ -17,7 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTokens } from '@/hooks/useTokens';
 import { getCurrentNFLWeek } from '@/lib/nflWeekUtils';
-import { Lock, CheckCircle, ArrowUpDown } from 'lucide-react';
+import { Lock, CheckCircle, ArrowUpDown, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface PositionalStrength {
@@ -45,6 +45,7 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   const [strengths, setStrengths] = useState<PositionalStrength[]>([]);
   const [teamValues, setTeamValues] = useState<TeamValue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [showUnlockDialog, setShowUnlockDialog] = useState(false);
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -260,6 +261,29 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
     }
   };
 
+  const handleRefreshRankings = async () => {
+    setIsRefreshing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('compute-positional-strengths', {
+        body: { leagueId },
+      });
+
+      if (error) throw error;
+
+      toast.success('Rankings refreshed successfully');
+      
+      // Refresh the data
+      await Promise.all([fetchPositionalStrengths(), fetchTeamValues()]);
+    } catch (error) {
+      console.error('Error refreshing rankings:', error);
+      toast.error('Failed to refresh rankings', {
+        description: 'Please try again.',
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   const getTeamName = (teamId: string) => {
     const team = teams.find(t => t.team_id === teamId);
     return team?.team_name || teamId;
@@ -347,18 +371,32 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                 Team strengths by position (hover for details)
               </CardDescription>
             </div>
-            {isActiveSubscriber && (
-              <Badge variant="secondary" className="gap-1">
-                <CheckCircle className="h-3 w-3" />
-                Subscriber Access
-              </Badge>
-            )}
-            {hasTokenAccess && (
-              <Badge variant="outline" className="gap-1 border-primary/50 text-primary">
-                <CheckCircle className="h-3 w-3" />
-                Token Access • {timeRemaining}
-              </Badge>
-            )}
+            <div className="flex items-center gap-2">
+              {isUnlocked && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshRankings}
+                  disabled={isRefreshing}
+                  className="gap-2"
+                >
+                  <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                </Button>
+              )}
+              {isActiveSubscriber && (
+                <Badge variant="secondary" className="gap-1">
+                  <CheckCircle className="h-3 w-3" />
+                  Subscriber Access
+                </Badge>
+              )}
+              {hasTokenAccess && (
+                <Badge variant="outline" className="gap-1 border-primary/50 text-primary">
+                  <CheckCircle className="h-3 w-3" />
+                  Token Access • {timeRemaining}
+                </Badge>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
