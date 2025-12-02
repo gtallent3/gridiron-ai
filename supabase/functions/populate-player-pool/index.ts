@@ -204,6 +204,40 @@ serve(async (req) => {
     console.log(`WAS_TE defensive rank in map: ${wasTeRank ?? 'NOT FOUND'}`);
     console.log(`Total TE entries in map: ${Array.from(defRankAvgMap.keys()).filter(k => k.endsWith('_TE')).length}`);
 
+    // Fetch injury status data for the season
+    const injuryData: Array<{ player_name: string; week: number; status: string | null; status_explanation: string | null }> = [];
+    let injFrom = 0;
+    const injChunkSize = 1000;
+    while (true) {
+      const { data: batch, error: injError } = await supabase
+        .from('player_injury_status')
+        .select('player_name, week, status, status_explanation')
+        .eq('season', season)
+        .range(injFrom, injFrom + injChunkSize - 1);
+      
+      if (injError) throw injError;
+      if (!batch || batch.length === 0) break;
+      
+      injuryData.push(...batch);
+      injFrom += batch.length;
+      if (batch.length < injChunkSize) break;
+    }
+    
+    // Build injury lookup map: "normalized_player_name_week" -> { status, explanation }
+    const injuryMap = new Map<string, { status: string | null; explanation: string | null }>();
+    const normalizePlayerName = (name: string): string => {
+      return name.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+    };
+    
+    for (const inj of injuryData) {
+      if (inj.player_name) {
+        const key = `${normalizePlayerName(inj.player_name)}_${inj.week}`;
+        injuryMap.set(key, { status: inj.status, explanation: inj.status_explanation });
+      }
+    }
+    
+    console.log(`Loaded ${injuryData.length} injury records, ${injuryMap.size} unique player-week entries`);
+
     let sleeperInserted = 0;
     let nflInserted = 0;
 
@@ -252,6 +286,10 @@ serve(async (req) => {
             defRank = defRankAvgMap.get(avgKey) ?? null;
           }
           
+          // Look up injury status
+          const injuryKey = `${normalizePlayerName(canonical.player_name)}_${proj.week}`;
+          const injury = injuryMap.get(injuryKey);
+          
           poolRecords.push({
             canonical_player_id: canonical.id,
             player_name: canonical.player_name,
@@ -274,7 +312,9 @@ serve(async (req) => {
             ros_sos_rank: proj.ros_sos_rank,
             playoff_sos_rank: proj.playoff_sos_rank,
             bye_week: proj.bye_week || false,
-            raw_source_ids: { sleeper_id: proj.player_id }
+            raw_source_ids: { sleeper_id: proj.player_id },
+            injury_status: injury?.status ?? null,
+            injury_status_explanation: injury?.explanation ?? null
           });
         }
 
@@ -347,6 +387,10 @@ serve(async (req) => {
             defRank = defRankAvgMap.get(avgKey) ?? null;
           }
           
+          // Look up injury status
+          const injuryKey = `${normalizePlayerName(canonical.player_name)}_${actual.week}`;
+          const injury = injuryMap.get(injuryKey);
+          
           poolRecords.push({
             canonical_player_id: canonical.id,
             player_name: canonical.player_name,
@@ -366,7 +410,9 @@ serve(async (req) => {
             receiving_tds: actual.receiving_tds,
             opponent: normalizedOpp,
             opponent_def_rank: defRank,
-            raw_source_ids: { nfl_id: actual.player_id }
+            raw_source_ids: { nfl_id: actual.player_id },
+            injury_status: injury?.status ?? null,
+            injury_status_explanation: injury?.explanation ?? null
           });
         }
 

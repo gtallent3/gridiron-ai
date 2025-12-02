@@ -817,6 +817,8 @@ export type Database = {
           composite_fp: number | null
           created_at: string
           id: string
+          injury_status: string | null
+          injury_status_explanation: string | null
           opponent: string | null
           opponent_def_rank: number | null
           passing_ints: number | null
@@ -846,6 +848,8 @@ export type Database = {
           composite_fp?: number | null
           created_at?: string
           id?: string
+          injury_status?: string | null
+          injury_status_explanation?: string | null
           opponent?: string | null
           opponent_def_rank?: number | null
           passing_ints?: number | null
@@ -875,6 +879,8 @@ export type Database = {
           composite_fp?: number | null
           created_at?: string
           id?: string
+          injury_status?: string | null
+          injury_status_explanation?: string | null
           opponent?: string | null
           opponent_def_rank?: number | null
           passing_ints?: number | null
