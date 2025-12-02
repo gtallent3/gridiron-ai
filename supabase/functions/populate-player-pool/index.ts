@@ -229,6 +229,27 @@ serve(async (req) => {
       return name.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
     };
     
+    // Name alias map: fantasy nickname -> legal name (as it appears in nflverse)
+    // This handles cases where fantasy platforms use nicknames but injury data uses legal names
+    const nameAliasMap: Record<string, string> = {
+      'bucky irving': "mar'keise irving",
+      'hollywood brown': 'marquise brown',
+      'tank dell': 'nathaniel dell',
+      'chig okonkwo': 'chigoziem okonkwo',
+      'gabe davis': 'gabriel davis',
+      'scotty miller': 'scott miller',
+      'mike williams': 'michael williams',
+      'robbie chosen': 'robbie anderson',
+      'chosen anderson': 'robbie anderson',
+    };
+    
+    // Resolve fantasy name to legal name for injury lookup
+    const resolveInjuryName = (fantasyName: string): string => {
+      const normalized = normalizePlayerName(fantasyName);
+      const lowerName = fantasyName.toLowerCase().trim();
+      return nameAliasMap[lowerName] ? normalizePlayerName(nameAliasMap[lowerName]) : normalized;
+    };
+    
     for (const inj of injuryData) {
       if (inj.player_name) {
         const key = `${normalizePlayerName(inj.player_name)}_${inj.week}`;
@@ -288,8 +309,8 @@ serve(async (req) => {
             defRank = defRankAvgMap.get(avgKey) ?? null;
           }
           
-          // Look up injury status
-          const injuryKey = `${normalizePlayerName(canonical.player_name)}_${proj.week}`;
+          // Look up injury status (use alias resolution for nickname -> legal name mapping)
+          const injuryKey = `${resolveInjuryName(canonical.player_name)}_${proj.week}`;
           const injury = injuryMap.get(injuryKey);
           
           poolRecords.push({
@@ -391,8 +412,8 @@ serve(async (req) => {
             defRank = defRankAvgMap.get(avgKey) ?? null;
           }
           
-          // Look up injury status
-          const injuryKey = `${normalizePlayerName(canonical.player_name)}_${actual.week}`;
+          // Look up injury status (use alias resolution for nickname -> legal name mapping)
+          const injuryKey = `${resolveInjuryName(canonical.player_name)}_${actual.week}`;
           const injury = injuryMap.get(injuryKey);
           
           poolRecords.push({
