@@ -4,8 +4,18 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, Loader2, Plus, RefreshCw } from "lucide-react";
+import { CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 
 type League = {
   id: string;
@@ -21,6 +31,8 @@ export const ConnectedLeagues = () => {
   const [leagues, setLeagues] = useState<League[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [leagueToDelete, setLeagueToDelete] = useState<League | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -169,6 +181,37 @@ export const ConnectedLeagues = () => {
     }
   };
 
+  const handleDeleteLeague = async () => {
+    if (!leagueToDelete) return;
+    
+    setDeletingId(leagueToDelete.id);
+    try {
+      const { error } = await supabase
+        .from('connected_leagues')
+        .delete()
+        .eq('id', leagueToDelete.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "League Removed",
+        description: `${leagueToDelete.league_name} has been disconnected`,
+      });
+
+      await fetchLeagues();
+    } catch (error: any) {
+      console.error('Error deleting league:', error);
+      toast({
+        title: "Error",
+        description: "Failed to remove league",
+        variant: "destructive",
+      });
+    } finally {
+      setDeletingId(null);
+      setLeagueToDelete(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <Card>
@@ -230,28 +273,66 @@ export const ConnectedLeagues = () => {
                 Last synced: {new Date(league.last_synced_at).toLocaleString()}
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={(e) => handleQuickResync(e, league.id, league.platform)}
-              disabled={refreshingId === league.id}
-              className="shrink-0 self-end sm:self-center touch-target"
-            >
-              {refreshingId === league.id ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  <span className="text-xs">Syncing...</span>
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  <span className="text-xs sm:text-sm">Resync</span>
-                </>
-              )}
-            </Button>
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => handleQuickResync(e, league.id, league.platform)}
+                disabled={refreshingId === league.id}
+                className="touch-target"
+              >
+                {refreshingId === league.id ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <span className="text-xs">Syncing...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    <span className="text-xs sm:text-sm">Resync</span>
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setLeagueToDelete(league);
+                }}
+                disabled={deletingId === league.id}
+                className="touch-target text-destructive hover:text-destructive hover:bg-destructive/10"
+              >
+                {deletingId === league.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
           </div>
         ))}
       </CardContent>
+
+      <AlertDialog open={!!leagueToDelete} onOpenChange={(open) => !open && setLeagueToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove League</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove "{leagueToDelete?.league_name}"? This will disconnect your league and remove all synced data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteLeague}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Card>
   );
 };
