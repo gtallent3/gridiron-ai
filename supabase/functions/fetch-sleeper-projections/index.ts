@@ -11,17 +11,41 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Validate TASK_KEY for scheduled/automated calls
+  // Validate authorization: TASK_KEY for cron jobs OR authenticated admin user
   const taskKey = req.headers.get('x-task-key');
-  if (taskKey !== Deno.env.get('TASK_KEY')) {
-    console.error('Unauthorized: Invalid or missing TASK_KEY');
+  const authHeader = req.headers.get('Authorization');
+  let isAuthorized = false;
+
+  // Check TASK_KEY first (for cron/background jobs)
+  if (taskKey && taskKey === Deno.env.get('TASK_KEY')) {
+    isAuthorized = true;
+  }
+
+  // If no TASK_KEY, check for authenticated admin user
+  if (!isAuthorized && authHeader) {
+    const supabaseAuth = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+    const { data: { user } } = await supabaseAuth.auth.getUser();
+    if (user) {
+      const { data: roles } = await supabaseAuth.from('user_roles').select('role').eq('user_id', user.id);
+      if (roles?.some(r => r.role === 'admin')) {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
+    console.error('Unauthorized: Invalid TASK_KEY and not an admin user');
     return new Response(
       JSON.stringify({ error: 'Unauthorized' }),
       { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 
-  console.log('Fetch sleeper projections called - TASK_KEY validated');
+  console.log('Fetch sleeper projections called - authorization validated');
 
   try {
     const supabase = createClient(
