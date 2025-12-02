@@ -16,41 +16,35 @@ serve(async (req) => {
   const authHeader = req.headers.get('Authorization');
   let isAuthorized = false;
 
-  console.log('Auth check starting, hasTaskKey:', !!taskKey, 'hasAuthHeader:', !!authHeader);
-
   // Check TASK_KEY first (for cron/background jobs)
   if (taskKey && taskKey === Deno.env.get('TASK_KEY')) {
     isAuthorized = true;
-    console.log('Authorized via TASK_KEY');
   }
 
   // If no TASK_KEY, check for authenticated admin user
   if (!isAuthorized && authHeader) {
     try {
-      // Use anon client with user's token to verify the user
-      const supabaseAuth = createClient(
-        Deno.env.get('SUPABASE_URL') ?? '',
-        Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-        { global: { headers: { Authorization: authHeader } } }
-      );
-      const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
-      console.log('User lookup result:', user?.id, 'error:', userError?.message);
+      // Extract JWT from Bearer token
+      const jwt = authHeader.replace('Bearer ', '');
       
-      if (user) {
-        // Use service role client to check admin status (bypasses RLS)
-        const supabaseAdmin = createClient(
-          Deno.env.get('SUPABASE_URL') ?? '',
-          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-        );
-        const { data: roles, error: rolesError } = await supabaseAdmin
+      // Use service role client to verify user and check admin
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      
+      // Get user from JWT
+      const { data: { user }, error: userError } = await supabaseAdmin.auth.getUser(jwt);
+      
+      if (user && !userError) {
+        // Check admin status
+        const { data: roles } = await supabaseAdmin
           .from('user_roles')
           .select('role')
           .eq('user_id', user.id);
-        console.log('Roles lookup result:', roles, 'error:', rolesError?.message);
         
         if (roles?.some(r => r.role === 'admin')) {
           isAuthorized = true;
-          console.log('Authorized via admin role');
         }
       }
     } catch (err) {

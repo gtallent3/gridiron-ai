@@ -21,22 +21,21 @@ serve(async (req) => {
   }
 
   if (!isAuthorized && authHeader) {
-    const supabaseAuth = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
-    const { data: { user } } = await supabaseAuth.auth.getUser();
-    if (user) {
-      // Use service role client to check admin status (bypasses RLS)
+    try {
+      const jwt = authHeader.replace('Bearer ', '');
       const supabaseAdmin = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       );
-      const { data: roles } = await supabaseAdmin.from('user_roles').select('role').eq('user_id', user.id);
-      if (roles?.some(r => r.role === 'admin')) {
-        isAuthorized = true;
+      const { data: { user } } = await supabaseAdmin.auth.getUser(jwt);
+      if (user) {
+        const { data: roles } = await supabaseAdmin.from('user_roles').select('role').eq('user_id', user.id);
+        if (roles?.some(r => r.role === 'admin')) {
+          isAuthorized = true;
+        }
       }
+    } catch (err) {
+      console.error('Auth check error:', err);
     }
   }
 
