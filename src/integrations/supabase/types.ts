@@ -695,6 +695,42 @@ export type Database = {
           },
         ]
       }
+      player_injury_status: {
+        Row: {
+          created_at: string | null
+          id: string
+          player_name: string
+          season: number
+          status: string | null
+          status_description: string | null
+          team: string | null
+          updated_at: string | null
+          week: number
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          player_name: string
+          season?: number
+          status?: string | null
+          status_description?: string | null
+          team?: string | null
+          updated_at?: string | null
+          week: number
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          player_name?: string
+          season?: number
+          status?: string | null
+          status_description?: string | null
+          team?: string | null
+          updated_at?: string | null
+          week?: number
+        }
+        Relationships: []
+      }
       player_pool: {
         Row: {
           created_at: string | null
