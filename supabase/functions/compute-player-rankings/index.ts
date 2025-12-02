@@ -463,13 +463,28 @@ serve(async (req) => {
       }
     }
 
+    // Automatically compute trade values after rankings are updated
+    console.log('Chaining to compute-trade-value-index...');
+    try {
+      const { error: tradeValueError } = await supabase.functions.invoke('compute-trade-value-index', {
+        body: {}
+      });
+      if (tradeValueError) {
+        console.error('Trade value computation failed:', tradeValueError);
+      } else {
+        console.log('Trade values computed successfully');
+      }
+    } catch (tvError) {
+      console.error('Error invoking compute-trade-value-index:', tvError);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         playersProcessed: dedupedRankings.length,
         season,
         currentWeek,
-        message: 'Player rankings computed and saved',
+        message: 'Player rankings and trade values computed and saved',
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
