@@ -122,6 +122,10 @@ export default function Admin() {
   const [teamSchedulesFetching, setTeamSchedulesFetching] = useState(false);
   const [teamSchedulesResult, setTeamSchedulesResult] = useState<any>(null);
 
+  // Injury Data State
+  const [injuryIngesting, setInjuryIngesting] = useState(false);
+  const [injuryResult, setInjuryResult] = useState<any>(null);
+
   // Player Pool State
   const [playerPoolComputing, setPlayerPoolComputing] = useState(false);
   const [playerPoolResult, setPlayerPoolResult] = useState<any>(null);
@@ -753,6 +757,40 @@ export default function Admin() {
       setTeamSchedulesResult({ error: error.message });
     } finally {
       setTeamSchedulesFetching(false);
+    }
+  };
+
+  // NFL INJURIES
+  const handleIngestNflInjuries = async () => {
+    setInjuryIngesting(true);
+    setInjuryResult(null);
+    
+    try {
+      toast({
+        title: "Starting Injury Data Ingestion",
+        description: "Fetching roster/injury data from nflverse...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('ingest-nfl-injuries', {
+        body: { season: 2025 }
+      });
+
+      if (error) throw error;
+
+      setInjuryResult(data);
+      toast({
+        title: "Injury Data Ingested ✅",
+        description: `Processed ${data.total_records || 0} injury records`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ingestion Error",
+        description: error.message || "Failed to ingest injury data",
+        variant: "destructive",
+      });
+      setInjuryResult({ error: error.message });
+    } finally {
+      setInjuryIngesting(false);
     }
   };
 
@@ -1595,6 +1633,29 @@ export default function Admin() {
                         {teamSchedulesFetching && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {teamSchedulesFetching ? "Ingesting..." : "Ingest Schedules"}
                       </Button>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Ingest NFL Injuries</p>
+                      <p className="text-xs text-muted-foreground">Fetches injury/roster status from nflverse</p>
+                      <Button 
+                        onClick={handleIngestNflInjuries} 
+                        disabled={injuryIngesting}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {injuryIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {injuryIngesting ? "Ingesting..." : "Ingest Injuries"}
+                      </Button>
+                      {injuryResult && (
+                        <div className="p-2 border rounded text-xs">
+                          {injuryResult.error ? (
+                            <span className="text-destructive">Error: {injuryResult.error}</span>
+                          ) : (
+                            <span className="text-green-600">✅ {injuryResult.total_records} records</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
