@@ -6,6 +6,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-task-key',
 };
 
+// Injury code explanations
+const INJURY_CODE_EXPLANATIONS: Record<string, string> = {
+  "ACT": "Active",
+  "QST": "Questionable",
+  "OUT": "Out (will not play)",
+  "DNL": "Did Not List",
+  "NA": "Not Active",
+  "SUS": "Suspended",
+  "IR": "Injured Reserve",
+  "IR-P": "Injured Reserve - Designated to Return",
+  "PUP": "Physically Unable to Perform",
+  "NFI": "Non-Football Injury",
+  "DEV": "Practice Squad",
+  "RES": "Reserve List",
+  "Q": "Questionable",
+  "D": "Doubtful",
+  "O": "Out",
+  "DNP": "Did Not Practice",
+  "LP": "Limited Participant",
+  "FP": "Full Participant",
+  "P01": "Practice report entry 1",
+  "P02": "Practice report entry 2",
+  "P03": "Practice report entry 3",
+};
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -114,6 +139,7 @@ serve(async (req) => {
       season: number;
       status: string | null;
       status_description: string;
+      status_explanation: string;
     }> = [];
 
     const seenKeys = new Set<string>();
@@ -135,6 +161,9 @@ serve(async (req) => {
       const week = parseInt(values[weekIdx], 10) || 0;
       const status = values[statusIdx]?.trim() || null;
       const statusDescription = values[statusDescIdx]?.trim() || '';
+      
+      // Get explanation from lookup table
+      const statusExplanation = status ? (INJURY_CODE_EXPLANATIONS[status] || '') : '';
 
       // Skip invalid weeks
       if (week < 1 || week > 22) continue;
@@ -150,7 +179,8 @@ serve(async (req) => {
         week,
         season,
         status,
-        status_description: statusDescription
+        status_description: statusDescription,
+        status_explanation: statusExplanation
       });
     }
 

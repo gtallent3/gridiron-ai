@@ -703,6 +703,7 @@ export type Database = {
           season: number
           status: string | null
           status_description: string | null
+          status_explanation: string | null
           team: string | null
           updated_at: string | null
           week: number
@@ -714,6 +715,7 @@ export type Database = {
           season?: number
           status?: string | null
           status_description?: string | null
+          status_explanation?: string | null
           team?: string | null
           updated_at?: string | null
           week: number
@@ -725,6 +727,7 @@ export type Database = {
           season?: number
           status?: string | null
           status_description?: string | null
+          status_explanation?: string | null
           team?: string | null
           updated_at?: string | null
           week?: number
