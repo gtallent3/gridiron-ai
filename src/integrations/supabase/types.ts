@@ -251,6 +251,7 @@ export type Database = {
           auto_refresh: boolean | null
           created_at: string | null
           current_week: number | null
+          display_order: number | null
           id: string
           last_synced_at: string | null
           league_id: string
@@ -268,6 +269,7 @@ export type Database = {
           auto_refresh?: boolean | null
           created_at?: string | null
           current_week?: number | null
+          display_order?: number | null
           id?: string
           last_synced_at?: string | null
           league_id: string
@@ -285,6 +287,7 @@ export type Database = {
           auto_refresh?: boolean | null
           created_at?: string | null
           current_week?: number | null
+          display_order?: number | null
           id?: string
           last_synced_at?: string | null
           league_id?: string

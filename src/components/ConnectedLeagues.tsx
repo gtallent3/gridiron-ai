@@ -4,7 +4,7 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { CheckCircle2, GripVertical, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   AlertDialog,
@@ -16,6 +16,23 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 type League = {
   id: string;
@@ -25,6 +42,112 @@ type League = {
   scoring_type: string;
   scoring_settings?: any;
   last_synced_at: string;
+  display_order: number;
+};
+
+interface SortableLeagueItemProps {
+  league: League;
+  refreshingId: string | null;
+  deletingId: string | null;
+  onResync: (e: React.MouseEvent, leagueId: string, platform: string) => void;
+  onDelete: (league: League) => void;
+  onNavigate: (id: string) => void;
+  getDisplayScoringType: (lg: any) => string;
+}
+
+const SortableLeagueItem = ({
+  league,
+  refreshingId,
+  deletingId,
+  onResync,
+  onDelete,
+  onNavigate,
+  getDisplayScoringType,
+}: SortableLeagueItemProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: league.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-lg border-2 border-primary/40 hover:border-primary/60 transition-colors bg-background"
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing touch-none p-1 -ml-1 text-muted-foreground hover:text-foreground"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="h-5 w-5" />
+      </div>
+      <div
+        className="space-y-1 flex-1 min-w-0 cursor-pointer"
+        onClick={() => onNavigate(league.id)}
+      >
+        <div className="flex items-center gap-2 flex-wrap">
+          <h4 className="font-semibold break-words">{league.league_name}</h4>
+          <Badge variant="outline" className="shrink-0">{league.platform.toUpperCase()}</Badge>
+          <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+        </div>
+        <p className="text-sm text-muted-foreground break-words">
+          {league.league_size} teams • {getDisplayScoringType(league).replace("_", " ").toUpperCase()}
+        </p>
+        <p className="text-xs text-muted-foreground break-words">
+          Last synced: {new Date(league.last_synced_at).toLocaleString()}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => onResync(e, league.id, league.platform)}
+          disabled={refreshingId === league.id}
+          className="touch-target"
+        >
+          {refreshingId === league.id ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <span className="text-xs">Syncing...</span>
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              <span className="text-xs sm:text-sm">Resync</span>
+            </>
+          )}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(league);
+          }}
+          disabled={deletingId === league.id}
+          className="touch-target text-destructive hover:text-destructive hover:bg-destructive/10"
+        >
+          {deletingId === league.id ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Trash2 className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+    </div>
+  );
 };
 
 export const ConnectedLeagues = () => {
@@ -35,6 +158,17 @@ export const ConnectedLeagues = () => {
   const [leagueToDelete, setLeagueToDelete] = useState<League | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const getDisplayScoringType = (lg: any) => {
     const defaultType = lg.scoring_type;
@@ -67,7 +201,7 @@ export const ConnectedLeagues = () => {
       const { data, error } = await supabase
         .from('connected_leagues')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('display_order', { ascending: true });
 
       if (error) throw error;
       setLeagues(data || []);
@@ -83,8 +217,44 @@ export const ConnectedLeagues = () => {
     }
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = leagues.findIndex((l) => l.id === active.id);
+      const newIndex = leagues.findIndex((l) => l.id === over.id);
+
+      const newLeagues = arrayMove(leagues, oldIndex, newIndex);
+      setLeagues(newLeagues);
+
+      // Update display_order in database
+      try {
+        const updates = newLeagues.map((league, index) => ({
+          id: league.id,
+          display_order: index + 1,
+        }));
+
+        for (const update of updates) {
+          await supabase
+            .from('connected_leagues')
+            .update({ display_order: update.display_order })
+            .eq('id', update.id);
+        }
+      } catch (error) {
+        console.error('Error saving league order:', error);
+        toast({
+          title: "Error",
+          description: "Failed to save league order",
+          variant: "destructive",
+        });
+        // Revert on error
+        fetchLeagues();
+      }
+    }
+  };
+
   const handleQuickResync = async (e: React.MouseEvent, leagueId: string, platform: string) => {
-    e.stopPropagation(); // Prevent navigation
+    e.stopPropagation();
     
     setRefreshingId(leagueId);
     try {
@@ -110,7 +280,6 @@ export const ConnectedLeagues = () => {
           description: data?.message || "Your league has been updated",
         });
       } else if (platform === 'sleeper') {
-        // Get the Sleeper username from the user's profile
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) throw new Error('Not authenticated');
 
@@ -245,7 +414,7 @@ export const ConnectedLeagues = () => {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>Connected Leagues</CardTitle>
-            <CardDescription>Your synced fantasy football leagues</CardDescription>
+            <CardDescription>Drag to reorder your leagues</CardDescription>
           </div>
           <Button onClick={() => navigate('/connect-league')} variant="outline" size="sm">
             <Plus className="mr-2 h-4 w-4" />
@@ -254,64 +423,29 @@ export const ConnectedLeagues = () => {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {leagues.map((league) => (
-          <div
-            key={league.id}
-            className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 p-4 rounded-lg border-2 border-primary/40 hover:border-primary/60 transition-colors cursor-pointer"
-            onClick={() => navigate(`/league/${league.id}`)}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={leagues.map((l) => l.id)}
+            strategy={verticalListSortingStrategy}
           >
-            <div className="space-y-1 flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="font-semibold break-words">{league.league_name}</h4>
-                <Badge variant="outline" className="shrink-0">{league.platform.toUpperCase()}</Badge>
-                <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
-              </div>
-              <p className="text-sm text-muted-foreground break-words">
-                {league.league_size} teams • {getDisplayScoringType(league).replace("_", " ").toUpperCase()}
-              </p>
-              <p className="text-xs text-muted-foreground break-words">
-                Last synced: {new Date(league.last_synced_at).toLocaleString()}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => handleQuickResync(e, league.id, league.platform)}
-                disabled={refreshingId === league.id}
-                className="touch-target"
-              >
-                {refreshingId === league.id ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    <span className="text-xs">Syncing...</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    <span className="text-xs sm:text-sm">Resync</span>
-                  </>
-                )}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setLeagueToDelete(league);
-                }}
-                disabled={deletingId === league.id}
-                className="touch-target text-destructive hover:text-destructive hover:bg-destructive/10"
-              >
-                {deletingId === league.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-              </Button>
-            </div>
-          </div>
-        ))}
+            {leagues.map((league) => (
+              <SortableLeagueItem
+                key={league.id}
+                league={league}
+                refreshingId={refreshingId}
+                deletingId={deletingId}
+                onResync={handleQuickResync}
+                onDelete={setLeagueToDelete}
+                onNavigate={(id) => navigate(`/league/${id}`)}
+                getDisplayScoringType={getDisplayScoringType}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       </CardContent>
 
       <AlertDialog open={!!leagueToDelete} onOpenChange={(open) => !open && setLeagueToDelete(null)}>
