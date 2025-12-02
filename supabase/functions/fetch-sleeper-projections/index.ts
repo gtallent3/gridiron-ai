@@ -11,7 +11,17 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('Fetch sleeper projections called - no auth required');
+  // Validate TASK_KEY for scheduled/automated calls
+  const taskKey = req.headers.get('x-task-key');
+  if (taskKey !== Deno.env.get('TASK_KEY')) {
+    console.error('Unauthorized: Invalid or missing TASK_KEY');
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized' }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+
+  console.log('Fetch sleeper projections called - TASK_KEY validated');
 
   try {
     const supabase = createClient(
