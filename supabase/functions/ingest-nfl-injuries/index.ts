@@ -9,6 +9,7 @@ const corsHeaders = {
 // Injury code explanations
 const INJURY_CODE_EXPLANATIONS: Record<string, string> = {
   "ACT": "Active",
+  "INA": "Inactive for game",
   "QST": "Questionable",
   "OUT": "Out (will not play)",
   "DNL": "Did Not List",
