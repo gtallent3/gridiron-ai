@@ -261,6 +261,8 @@ serve(async (req) => {
           .in('player_id', idsChunk)
           .not('player_name', 'is', null)
           .not('position', 'is', null)
+          .order('player_id', { ascending: true })
+          .order('week', { ascending: true })
           .range(pageFrom, pageFrom + pageSize - 1);
 
         if (projError) throw projError;
@@ -362,6 +364,8 @@ serve(async (req) => {
           .in('player_id', idsChunk)
           .not('player_name', 'is', null)
           .not('position', 'is', null)
+          .order('player_id', { ascending: true })
+          .order('week', { ascending: true })
           .range(pageFrom, pageFrom + pageSize - 1);
 
         if (actualsError) throw actualsError;
