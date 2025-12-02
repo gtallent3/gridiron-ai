@@ -23,6 +23,7 @@ serve(async (req) => {
 
   // If no TASK_KEY, check for authenticated admin user
   if (!isAuthorized && authHeader) {
+    // Use anon client with user's token to verify the user
     const supabaseAuth = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -30,7 +31,12 @@ serve(async (req) => {
     );
     const { data: { user } } = await supabaseAuth.auth.getUser();
     if (user) {
-      const { data: roles } = await supabaseAuth.from('user_roles').select('role').eq('user_id', user.id);
+      // Use service role client to check admin status (bypasses RLS)
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      const { data: roles } = await supabaseAdmin.from('user_roles').select('role').eq('user_id', user.id);
       if (roles?.some(r => r.role === 'admin')) {
         isAuthorized = true;
       }
