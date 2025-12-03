@@ -17,7 +17,7 @@ serve(async (req) => {
     return name
       .toLowerCase()
       .replace(/\./g, '')
-      .replace(/['’]/g, '')
+      .replace(/['']/g, '')
       .replace(/-/g, ' ')
       .replace(/\b(jr|sr|ii|iii|iv)\b/g, '')
       .replace(/\s+/g, ' ')
@@ -93,12 +93,16 @@ serve(async (req) => {
       }
       targetPositions = [pos];
     } else {
-      targetPositions = userStrengths
-        .filter(s => s.rank >= 6 || s.z_score < -0.3)
-        .filter(s => s.position !== 'K' && s.position !== 'DST' && s.position !== 'DEF' && s.position !== 'D/ST')
+      // For general queries, target all skill positions, prioritizing weak positions
+      const skillPositions = ['QB', 'RB', 'WR', 'TE'];
+      const weakPositions = userStrengths
+        .filter(s => skillPositions.includes(s.position) && (s.rank >= 6 || s.z_score < -0.3))
         .sort((a, b) => a.z_score - b.z_score)
         .slice(0, 2)
         .map(s => s.position);
+      
+      // If no weak positions found, include all skill positions
+      targetPositions = weakPositions.length > 0 ? weakPositions : skillPositions;
     }
 
     console.log('Target positions to improve:', targetPositions);
@@ -113,75 +117,56 @@ serve(async (req) => {
       throw new Error('No roster data available');
     }
 
-    // Get player rankings
-    const playerIds = [...new Set(rosters.map(r => r.player_id))];
-    const { data: rankings } = await supabase
+    // Get ALL player rankings (not just league players) to use as value reference
+    const { data: allRankings } = await supabase
       .from('player_rankings')
       .select('player_id, player_name, position, team, trade_value, avg_projected_ppg_ros')
       .eq('season', 2025)
-      .in('player_id', playerIds);
-
-    const rankingsMap = new Map(rankings?.map(r => [r.player_id, r]) || []);
-
-    // Fallback map by name+position from trade_value_weekly to handle ID mismatches
-    const { data: tvw } = await supabase
-      .from('trade_value_weekly')
-      .select('player_name, position, trade_value, meta_proj_ros_ppg')
+      .gt('trade_value', 0)
       .order('trade_value', { ascending: false })
-      .limit(2000);
+      .limit(500);
 
-    const tvwMap = new Map<string, { trade_value: number; projected_ppg: number }>();
-    const tvwByLast = new Map<string, { trade_value: number; projected_ppg: number }>();
-    (tvw || []).forEach(r => {
-      const nameNorm = normalizeName(r.player_name);
-      const posNorm = (r.position || '').toUpperCase();
-      const key = `${nameNorm}|${posNorm}`;
-      const last = nameNorm.split(' ').pop() || '';
-      const lastKey = `${last}|${posNorm}`;
-      const obj = {
-        trade_value: Number(r.trade_value) || 0,
-        projected_ppg: Number(r.meta_proj_ros_ppg) || 0,
-      };
-      if (!tvwMap.has(key)) tvwMap.set(key, obj);
-      // Keep highest value for last-name map
-      const prev = tvwByLast.get(lastKey);
-      if (!prev || obj.trade_value > prev.trade_value) tvwByLast.set(lastKey, obj);
+    // Create maps for both ID and name-based lookups
+    const rankingsById = new Map((allRankings || []).map(r => [r.player_id, r]));
+    const rankingsByName = new Map<string, any>();
+    (allRankings || []).forEach(r => {
+      const key = `${normalizeName(r.player_name)}|${r.position}`;
+      if (!rankingsByName.has(key)) {
+        rankingsByName.set(key, r);
+      }
     });
 
-    // Organize rosters by team
+    console.log(`Loaded ${allRankings?.length || 0} player rankings`);
+
+    // Organize rosters by team with trade values
     const teamRosters = new Map<string, any[]>();
     rosters.forEach(r => {
       if (!teamRosters.has(r.team_id)) {
         teamRosters.set(r.team_id, []);
       }
-      const ranking = rankingsMap.get(r.player_id);
-      let trade_value = ranking?.trade_value || 0;
-      let projected_ppg = ranking?.avg_projected_ppg_ros || 0;
-      if (!trade_value || trade_value === 0) {
-        const nameNorm = normalizeName(r.player_name);
-        const posNorm = (r.position || '').toUpperCase();
-        const key = `${nameNorm}|${posNorm}`;
-        const lastKey = `${(nameNorm.split(' ').pop() || '')}|${posNorm}`;
-        const tv = tvwMap.get(key) || tvwByLast.get(lastKey);
-        if (tv) {
-          trade_value = tv.trade_value || trade_value;
-          projected_ppg = tv.projected_ppg || projected_ppg;
-        }
+      
+      // Try ID lookup first, then name lookup
+      let ranking = rankingsById.get(r.player_id);
+      if (!ranking) {
+        const nameKey = `${normalizeName(r.player_name)}|${(r.position || '').toUpperCase()}`;
+        ranking = rankingsByName.get(nameKey);
       }
+      
       teamRosters.get(r.team_id)!.push({
         player_id: r.player_id,
         player_name: r.player_name,
         position: r.position,
-        trade_value,
-        projected_ppg
+        trade_value: ranking?.trade_value || 0,
+        projected_ppg: ranking?.avg_projected_ppg_ros || 0
       });
     });
 
     const userRoster = teamRosters.get(userTeamId) || [];
+    console.log(`User roster has ${userRoster.length} players`);
 
     // Find user's strong positions to trade from
     const tradeablePositions = userStrengths
-      .filter(s => s.z_score > 0.5 && s.rank <= 4)
+      .filter(s => s.z_score > 0.3 && s.rank <= 5)
       .map(s => s.position);
 
     console.log('Can trade from strong positions:', tradeablePositions);
@@ -195,18 +180,18 @@ serve(async (req) => {
       
       // Find teams strong at this position
       const strongTeams = strengths
-        .filter(s => s.position === targetPos && s.rank <= 3 && s.team_id !== userTeamId)
+        .filter(s => s.position === targetPos && s.rank <= 4 && s.team_id !== userTeamId)
         .map(s => s.team_id);
 
       // Look at players in this position from strong teams
-      for (const teamId of strongTeams.slice(0, 3)) {
+      for (const teamId of strongTeams.slice(0, 4)) {
         const teamRoster = teamRosters.get(teamId) || [];
         const teamStrengths = strengths.filter(s => s.team_id === teamId);
         const teamStrengthMap = new Map(teamStrengths.map(s => [s.position, s]));
 
         // Find their top players at target position (exclude K and DST)
         const topPlayers = teamRoster
-          .filter(p => p.position === targetPos && p.trade_value > 5)
+          .filter(p => p.position === targetPos && p.trade_value > 3)
           .filter(p => p.position !== 'K' && p.position !== 'DST' && p.position !== 'DEF' && p.position !== 'D/ST')
           .sort((a, b) => b.trade_value - a.trade_value)
           .slice(0, 3);
@@ -222,12 +207,15 @@ serve(async (req) => {
             .filter(p => {
               // Never offer K or DST
               if (p.position === 'K' || p.position === 'DST' || p.position === 'DEF' || p.position === 'D/ST') return false;
-              // Must be in a position we're strong at OR they're weak at
+              // Must have some trade value
+              if (p.trade_value <= 0) return false;
+              // Check if fair value (within 50% range)
+              const fairValue = p.trade_value >= target.trade_value * 0.5 && 
+                               p.trade_value <= target.trade_value * 1.5;
+              // Prefer positions we're strong at or they're weak at
               const inOurStrength = tradeablePositions.includes(p.position);
               const inTheirWeakness = theirWeakPositions.includes(p.position);
-              const fairValue = p.trade_value >= target.trade_value * 0.8 && 
-                               p.trade_value <= target.trade_value * 1.2;
-              return (inOurStrength || inTheirWeakness) && fairValue && p.trade_value > 0;
+              return fairValue && (inOurStrength || inTheirWeakness);
             })
             .sort((a, b) => Math.abs(a.trade_value - target.trade_value) - Math.abs(b.trade_value - target.trade_value))
             .slice(0, 2);
@@ -260,129 +248,69 @@ serve(async (req) => {
                 addresses_their_weakness: theirPosStrength ? theirPosStrength.rank >= 6 : false,
                 trading_from_your_strength: tradeablePositions.includes(offer.position)
               },
-              rationale: `Trade ${offer.player_name} (your #${userStrengthMap.get(offer.position)?.rank} ${offer.position}) for ${target.player_name} to improve your #${targetPosStrength?.rank} ${targetPos} position. They are #${theirPosStrength?.rank} at ${offer.position}.`
+              rationale: `Trade ${offer.player_name} (your #${userStrengthMap.get(offer.position)?.rank || '?'} ${offer.position}) for ${target.player_name} to improve your #${targetPosStrength?.rank || '?'} ${targetPos} position.`
             });
           }
         }
       }
     }
 
-    // If nothing found with strict criteria, apply a relaxed fallback to avoid empty results
+    // Fallback: if no strict suggestions, relax criteria
     if (suggestions.length === 0) {
-      console.log('No suggestions from strict criteria, applying relaxed fallback targeting top players');
-      // Fallback A: use players from teamRosters with non-zero trade values
-      const candidateTargetsA: any[] = [];
+      console.log('No suggestions from strict criteria, applying relaxed fallback');
+      
+      // Find any valuable players on other teams at target positions
       for (const [teamId, roster] of teamRosters.entries()) {
         if (teamId === userTeamId) continue;
-        for (const p of roster) {
-          // Exclude K and DST
-          if (p.position === 'K' || p.position === 'DST' || p.position === 'DEF' || p.position === 'D/ST') continue;
-          if (targetPositions.includes(p.position) && (p.trade_value || 0) > 10) {
-            candidateTargetsA.push({ ...p, teamId });
-          }
-        }
-      }
-      candidateTargetsA.sort((a, b) => b.trade_value - a.trade_value);
-      const topTargetsA = candidateTargetsA.slice(0, 8);
-      for (const target of topTargetsA) {
-        const offer = userRoster
-          .filter(p => (p.trade_value || 0) > 0)
-          .filter(p => p.position !== 'K' && p.position !== 'DST' && p.position !== 'DEF' && p.position !== 'D/ST')
-          .sort((a, b) => Math.abs((a.trade_value || 0) - target.trade_value) - Math.abs((b.trade_value || 0) - target.trade_value))[0];
-        if (offer) {
-          const targetPosStrength = userStrengthMap.get(target.position);
-          const teamStrengths = strengths.filter(s => s.team_id === target.teamId);
-          const theirPosStrength = teamStrengths.find(s => s.position === offer.position);
-          suggestions.push({
-            target_player: {
-              name: target.player_name,
-              position: target.position,
-              trade_value: Math.round((target.trade_value || 0) * 10) / 10,
-              projected_ppg: Math.round((target.projected_ppg || 0) * 10) / 10
-            },
-            offer_player: {
-              name: offer.player_name,
-              position: offer.position,
-              trade_value: Math.round((offer.trade_value || 0) * 10) / 10,
-              projected_ppg: Math.round((offer.projected_ppg || 0) * 10) / 10
-            },
-            target_team_id: target.teamId,
-            your_position_rank: targetPosStrength?.rank || 0,
-            your_position_z_score: targetPosStrength ? Math.round(targetPosStrength.z_score * 100) / 100 : 0,
-            their_position_rank: theirPosStrength?.rank || 0,
-            their_position_z_score: theirPosStrength ? Math.round(theirPosStrength.z_score * 100) / 100 : 0,
-            value_difference: Math.round(((target.trade_value || 0) - (offer.trade_value || 0)) * 10) / 10,
-            strategic_fit: {
-              improves_your_weakness: targetPosStrength ? targetPosStrength.rank >= 6 : false,
-              addresses_their_weakness: theirPosStrength ? theirPosStrength.rank >= 6 : false,
-              trading_from_your_strength: tradeablePositions.includes(offer.position)
-            },
-            rationale: `Fallback A: Trade ${offer.player_name} for ${target.player_name} to improve ${target.position}.`
-          });
-        }
-      }
-
-      // Fallback B: if still empty, build targets from trade_value_weekly and map to league rosters by name+position
-      if (suggestions.length === 0) {
-        console.log('Fallback A produced no results, applying Fallback B from trade_value_weekly');
-        const namePosToTeam = new Map<string, string>();
-        for (const [teamId, roster] of teamRosters.entries()) {
-          for (const p of roster) {
-            const key = `${normalizeName(p.player_name)}|${(p.position || '').toUpperCase()}`;
-            if (!namePosToTeam.has(key)) namePosToTeam.set(key, teamId);
-          }
-        }
-        const topTvw = (tvw || [])
-          .filter(r => targetPositions.includes((r.position || '').toUpperCase()))
-          .filter(r => {
-            const pos = (r.position || '').toUpperCase();
-            return pos !== 'K' && pos !== 'DST' && pos !== 'DEF' && pos !== 'D/ST';
-          })
-          .sort((a, b) => Number(b.trade_value) - Number(a.trade_value))
-          .slice(0, 100);
-        for (const r of topTvw) {
-          const key = `${normalizeName(r.player_name)}|${(r.position || '').toUpperCase()}`;
-          const teamId = namePosToTeam.get(key);
-          if (!teamId || teamId === userTeamId) continue;
-          const trade_value = Number(r.trade_value) || 0;
-          const projected_ppg = Number(r.meta_proj_ros_ppg) || 0;
-          if (trade_value <= 10) continue;
+        
+        for (const player of roster) {
+          if (!targetPositions.includes(player.position)) continue;
+          if (player.position === 'K' || player.position === 'DST') continue;
+          if (player.trade_value <= 3) continue;
+          
+          // Find any reasonable offer from user's roster
           const offer = userRoster
-            .filter(p => (p.trade_value || 0) > 0)
-            .filter(p => p.position !== 'K' && p.position !== 'DST' && p.position !== 'DEF' && p.position !== 'D/ST')
-            .sort((a, b) => Math.abs((a.trade_value || 0) - trade_value) - Math.abs((b.trade_value || 0) - trade_value))[0];
-          if (!offer) continue;
-          const targetPosStrength = userStrengthMap.get(r.position || '');
-          const teamStrengths = strengths.filter(s => s.team_id === teamId);
-          const theirPosStrength = teamStrengths.find(s => s.position === offer.position);
-          suggestions.push({
-            target_player: {
-              name: r.player_name,
-              position: r.position,
-              trade_value: Math.round(trade_value * 10) / 10,
-              projected_ppg: Math.round(projected_ppg * 10) / 10
-            },
-            offer_player: {
-              name: offer.player_name,
-              position: offer.position,
-              trade_value: Math.round((offer.trade_value || 0) * 10) / 10,
-              projected_ppg: Math.round((offer.projected_ppg || 0) * 10) / 10
-            },
-            target_team_id: teamId,
-            your_position_rank: targetPosStrength?.rank || 0,
-            your_position_z_score: targetPosStrength ? Math.round(targetPosStrength.z_score * 100) / 100 : 0,
-            their_position_rank: theirPosStrength?.rank || 0,
-            their_position_z_score: theirPosStrength ? Math.round(theirPosStrength.z_score * 100) / 100 : 0,
-            value_difference: Math.round((trade_value - (offer.trade_value || 0)) * 10) / 10,
-            strategic_fit: {
-              improves_your_weakness: targetPosStrength ? targetPosStrength.rank >= 6 : false,
-              addresses_their_weakness: theirPosStrength ? theirPosStrength.rank >= 6 : false,
-              trading_from_your_strength: tradeablePositions.includes(offer.position)
-            },
-            rationale: `Fallback B: Trade ${offer.player_name} for ${r.player_name} to improve ${r.position}.`
-          });
+            .filter(p => p.trade_value > 0)
+            .filter(p => p.position !== 'K' && p.position !== 'DST')
+            .filter(p => Math.abs(p.trade_value - player.trade_value) <= Math.max(player.trade_value * 0.6, 10))
+            .sort((a, b) => Math.abs(a.trade_value - player.trade_value) - Math.abs(b.trade_value - player.trade_value))[0];
+          
+          if (offer) {
+            const targetPosStrength = userStrengthMap.get(player.position);
+            const teamStrengths = strengths.filter(s => s.team_id === teamId);
+            const theirPosStrength = teamStrengths.find(s => s.position === offer.position);
+            
+            suggestions.push({
+              target_player: {
+                name: player.player_name,
+                position: player.position,
+                trade_value: Math.round(player.trade_value * 10) / 10,
+                projected_ppg: Math.round(player.projected_ppg * 10) / 10
+              },
+              offer_player: {
+                name: offer.player_name,
+                position: offer.position,
+                trade_value: Math.round(offer.trade_value * 10) / 10,
+                projected_ppg: Math.round(offer.projected_ppg * 10) / 10
+              },
+              target_team_id: teamId,
+              your_position_rank: targetPosStrength?.rank || 0,
+              your_position_z_score: targetPosStrength ? Math.round(targetPosStrength.z_score * 100) / 100 : 0,
+              their_position_rank: theirPosStrength?.rank || 0,
+              their_position_z_score: theirPosStrength ? Math.round(theirPosStrength.z_score * 100) / 100 : 0,
+              value_difference: Math.round((player.trade_value - offer.trade_value) * 10) / 10,
+              strategic_fit: {
+                improves_your_weakness: targetPosStrength ? targetPosStrength.rank >= 6 : false,
+                addresses_their_weakness: theirPosStrength ? theirPosStrength.rank >= 6 : false,
+                trading_from_your_strength: tradeablePositions.includes(offer.position)
+              },
+              rationale: `Trade ${offer.player_name} for ${player.player_name} to improve your ${player.position} depth.`
+            });
+          }
+          
           if (suggestions.length >= 10) break;
         }
+        if (suggestions.length >= 10) break;
       }
     }
 
@@ -399,6 +327,8 @@ serve(async (req) => {
       // Then by value fairness
       return Math.abs(a.value_difference) - Math.abs(b.value_difference);
     });
+
+    console.log(`Returning ${suggestions.length} trade suggestions`);
 
     return new Response(
       JSON.stringify({ 
