@@ -2011,7 +2011,7 @@ export default function Admin() {
                         This fetches actual weekly player stats from nflfastR for the 2025 season and calculates fantasy points (Standard, PPR, Half-PPR) based on real game data.
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Data includes passing, rushing, receiving stats and is stored in the <code className="text-xs bg-background px-1 py-0.5 rounded">nfl_fantasy_points</code> table.
+                        Data includes passing, rushing, receiving stats and is stored in the <code className="text-xs bg-background px-1 py-0.5 rounded">actual_weekly_points</code> table.
                       </p>
                     </div>
 

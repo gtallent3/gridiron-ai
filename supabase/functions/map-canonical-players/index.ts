@@ -88,7 +88,7 @@ serve(async (req) => {
       from = 0;
       while (true) {
         const { data: nflBatch, error } = await supabase
-          .from('nfl_fantasy_points')
+          .from('actual_weekly_points')
           .select('player_id, player_name, position, team')
           .gte('season', 2024)
           .not('player_id', 'is', null)

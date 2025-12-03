@@ -57,7 +57,7 @@ serve(async (req) => {
     
     // Get the latest week with actual stats to determine current week
     const { data: latestActualWeeks } = await supabase
-      .from('nfl_fantasy_points')
+      .from('actual_weekly_points')
       .select('week')
       .eq('season', season)
       .order('week', { ascending: false })
@@ -97,7 +97,7 @@ serve(async (req) => {
     
     while (true) {
       const { data: actuals, error: actualsError } = await supabase
-        .from('nfl_fantasy_points')
+        .from('actual_weekly_points')
         .select('*')
         .eq('season', season)
         .lt('week', currentWeek)

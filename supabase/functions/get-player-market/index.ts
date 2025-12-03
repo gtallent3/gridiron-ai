@@ -27,9 +27,9 @@ serve(async (req) => {
 
     console.log(`Fetching player market: Season ${season}, Week ${week}, Position ${position}, Status ${status}`);
 
-    // Try to get actuals from nfl_fantasy_points
+    // Try to get actuals from actual_weekly_points
     let query = supabase
-      .from('nfl_fantasy_points')
+      .from('actual_weekly_points')
       .select('*')
       .eq('season', season)
       .eq('week', week);

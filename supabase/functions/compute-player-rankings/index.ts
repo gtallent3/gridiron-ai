@@ -29,7 +29,7 @@ serve(async (req) => {
       .order('week', { ascending: false })
       .limit(1);
     
-    // Determine current week (max of latest actuals between player_pool_v2 and nfl_fantasy_points) + 1
+    // Determine current week (max of latest actuals between player_pool_v2 and actual_weekly_points) + 1
     let currentWeek = 1;
     let latestV2Week = 0;
     let latestNflWeek = 0;
@@ -39,7 +39,7 @@ serve(async (req) => {
     }
 
     const { data: nflLatest, error: nflWeekErr } = await supabase
-      .from('nfl_fantasy_points')
+      .from('actual_weekly_points')
       .select('week')
       .eq('season', season)
       .order('week', { ascending: false })
@@ -57,9 +57,9 @@ serve(async (req) => {
 
     const pageSize = 1000;
 
-    // Fetch actuals from nfl_fantasy_points
+    // Fetch actuals from actual_weekly_points
     const { data: nflActualsData, error: nflActualsError } = await supabase
-      .from('nfl_fantasy_points')
+      .from('actual_weekly_points')
       .select('player_id, player_name, position, team, week, fantasy_points_ppr, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds')
       .eq('season', season)
       .lte('week', currentWeek)
@@ -144,13 +144,13 @@ serve(async (req) => {
       return `${normalizeName(row.player_name)}:${row.position}`;
     };
 
-    // Collect ALL actuals from nfl_fantasy_points with pagination
+    // Collect ALL actuals from actual_weekly_points with pagination
     let nflActuals = nflActualsData || [];
     if (nflActuals.length === pageSize) {
       let from = pageSize;
       while (true) {
         const { data: more, error: moreErr } = await supabase
-          .from('nfl_fantasy_points')
+          .from('actual_weekly_points')
           .select('player_id, player_name, position, team, week, fantasy_points_ppr, passing_yards, passing_tds, passing_ints, rushing_yards, rushing_tds, receptions, receiving_yards, receiving_tds')
           .eq('season', season)
           .lte('week', currentWeek)
@@ -167,7 +167,7 @@ serve(async (req) => {
       }
     }
 
-    // Map nfl_fantasy_points to actuals with canonical_player_id
+    // Map actual_weekly_points to actuals with canonical_player_id
     const actualsBeforeFilter = nflActuals.map((nfl: any) => ({
       canonical_player_id: nflIdToCanonical.get(nfl.player_id) || null,
       player_name: nfl.player_name,
@@ -213,7 +213,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`Fetched ${actuals.length} actuals from nfl_fantasy_points and ${projections.length} projections from player_pool_v2`);
+    console.log(`Fetched ${actuals.length} actuals from actual_weekly_points and ${projections.length} projections from player_pool_v2`);
     
     // Debug: Check specific players' raw data
     const debugPlayers = ['Justin Jefferson', 'Michael Pittman', 'TreVeyon Henderson'];
