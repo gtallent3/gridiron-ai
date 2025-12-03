@@ -166,10 +166,10 @@ serve(async (req) => {
         receiving_air_yards: parseFloat(r.receiving_air_yards) || 0,
         receiving_epa: parseFloat(r.receiving_epa) || 0,
         target_share: parseFloat(r.target_share) || 0,
-        // Snap counts
-        snap_counts: parseInt(r.offense_snaps) || 0,
-        snap_pct: parseFloat(r.offense_pct) || 0,
-        routes_run: parseInt(r.routes) || 0,
+        // Snap counts - NOTE: not available in stats_player_week CSV, would need snap_counts release
+        snap_counts: 0,
+        snap_pct: 0,
+        routes_run: 0,
         // Fantasy points
         fantasy_points: parseFloat(r.fantasy_points) || 0,
         fantasy_points_ppr: parseFloat(r.fantasy_points_ppr) || 0,
