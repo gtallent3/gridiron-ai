@@ -614,11 +614,53 @@ RULES:
                       data_source: 'suggest-trade-targets'
                     };
                   } else {
+                    // PRE-FORMAT the response here to bypass the second AI call truncation issue
+                    const sug = suggestions.suggestions.slice(0, 5); // Top 5 suggestions
+                    const targetPositions = suggestions.target_positions || [];
+                    
+                    let formattedResponse = `Based on your team's positional strengths and weaknesses, here are trade targets to consider:\n\n`;
+                    
+                    if (targetPositions.length > 0) {
+                      formattedResponse += `Positions to upgrade: ${targetPositions.join(', ')}\n\n`;
+                    }
+                    
+                    sug.forEach((s: any, idx: number) => {
+                      const target = s.target_player;
+                      const offer = s.offer_player;
+                      const fit = s.strategic_fit || {};
+                      
+                      formattedResponse += `${idx + 1}. Target: ${target.name} (${target.position})\n`;
+                      formattedResponse += `   Trade Value: ${target.trade_value} | Proj PPG: ${target.projected_ppg}\n`;
+                      formattedResponse += `   Offer: ${offer.name} (${offer.position})\n`;
+                      formattedResponse += `   Trade Value: ${offer.trade_value} | Proj PPG: ${offer.projected_ppg}\n`;
+                      
+                      const valueDiff = s.value_difference || 0;
+                      if (Math.abs(valueDiff) <= 5) {
+                        formattedResponse += `   Value Gap: Fair trade (${valueDiff > 0 ? '+' : ''}${valueDiff})\n`;
+                      } else if (valueDiff > 0) {
+                        formattedResponse += `   Value Gap: You may need to add (+${valueDiff})\n`;
+                      } else {
+                        formattedResponse += `   Value Gap: You're overpaying (${valueDiff})\n`;
+                      }
+                      
+                      // Strategic notes
+                      const notes: string[] = [];
+                      if (fit.improves_your_weakness) notes.push('Fills your weakness');
+                      if (fit.addresses_their_weakness) notes.push('Helps their need');
+                      if (fit.trading_from_your_strength) notes.push('Trading from strength');
+                      if (notes.length > 0) {
+                        formattedResponse += `   Why: ${notes.join(', ')}\n`;
+                      }
+                      
+                      formattedResponse += '\n';
+                    });
+                    
+                    formattedResponse += `These suggestions are based on positional rankings across your league. Look for deals where both teams improve.`;
+                    
+                    // Store formatted response to stream directly
                     toolResult = {
-                      suggestions: suggestions.suggestions,
-                      target_positions: suggestions.target_positions,
-                      user_team_id: suggestions.user_team_id,
-                      note: 'Pre-analyzed strategic trade suggestions based on positional strengths and weaknesses',
+                      __preformatted: true,
+                      response: formattedResponse,
                       data_source: 'suggest-trade-targets'
                     };
                   }
@@ -645,105 +687,131 @@ RULES:
               }
             }
             
-            // Make second AI call with tool results to get final answer
-            console.log('Making second AI call with tool results');
-            // Compact tool messages to avoid exceeding model input size limits
-            const MAX_TOOL_TOTAL = 1500;
-            const MAX_TOOL_PER = 800;
-            const compactToolMessages = toolMessages.map((m) => {
-              let c = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
-              if (c.length > MAX_TOOL_PER) c = c.slice(0, MAX_TOOL_PER) + '... [truncated]';
-              return { ...m, content: c };
-            });
-            // Enforce total cap across all tool messages
-            let running = 0;
-            for (const m of compactToolMessages) {
-              if (running >= MAX_TOOL_TOTAL) {
-                m.content = '';
-                continue;
+            // Check if any tool result has preformatted response (skip second AI call)
+            const preformattedResult = toolMessages.find(m => {
+              try {
+                const parsed = typeof m.content === 'string' ? JSON.parse(m.content) : m.content;
+                return parsed.__preformatted === true;
+              } catch {
+                return false;
               }
-              if (running + m.content.length > MAX_TOOL_TOTAL) {
-                m.content = m.content.slice(0, MAX_TOOL_TOTAL - running) + '...';
-                running = MAX_TOOL_TOTAL;
-              } else {
-                running += m.content.length;
-              }
-            }
-            const finalMessages = [
-              { role: 'system', content: systemPrompt },
-              ...messages,
-              ...compactToolMessages
-            ];
-            console.log('Second call message count:', finalMessages.length);
-            console.log('Tool messages being sent:', JSON.stringify(compactToolMessages, null, 2));
-            
-            const secondAiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${lovableApiKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: 'google/gemini-2.5-flash',
-                messages: finalMessages,
-                stream: true,
-              }),
             });
             
-            console.log('Second AI response status:', secondAiResponse.status);
-            
-            if (!secondAiResponse.ok) {
-              const errorText = await secondAiResponse.text();
-              console.error('Second AI call failed:', secondAiResponse.status, errorText);
-              const errorMessage = 'Sorry, I had trouble generating a response after analyzing the data. Please try asking again.';
-              fullContent = errorMessage;
-              controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: errorMessage })}\n\n`));
+            if (preformattedResult) {
+              // Stream preformatted response directly - no need for second AI call
+              console.log('Streaming preformatted response directly');
+              try {
+                const parsed = typeof preformattedResult.content === 'string' 
+                  ? JSON.parse(preformattedResult.content) 
+                  : preformattedResult.content;
+                fullContent = parsed.response || '';
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: fullContent })}\n\n`));
+              } catch (e) {
+                console.error('Error parsing preformatted response:', e);
+                fullContent = 'I found some trade suggestions but had trouble formatting them. Please try again.';
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: fullContent })}\n\n`));
+              }
             } else {
-              console.log('Second AI response OK, starting to read stream...');
-              const secondReader = secondAiResponse.body?.getReader();
-              let secondBuffer = '';
-              let chunkCount = 0;
-              let contentReceived = false;
-              
-              while (true) {
-                const { done, value } = await secondReader!.read();
-                if (done) {
-                  console.log('Second AI stream done. Chunks received:', chunkCount, 'Content received:', contentReceived);
-                  break;
+              // Make second AI call with tool results to get final answer
+              console.log('Making second AI call with tool results');
+              // Compact tool messages to avoid exceeding model input size limits
+              const MAX_TOOL_TOTAL = 1500;
+              const MAX_TOOL_PER = 800;
+              const compactToolMessages = toolMessages.map((m) => {
+                let c = typeof m.content === 'string' ? m.content : JSON.stringify(m.content);
+                if (c.length > MAX_TOOL_PER) c = c.slice(0, MAX_TOOL_PER) + '... [truncated]';
+                return { ...m, content: c };
+              });
+              // Enforce total cap across all tool messages
+              let running = 0;
+              for (const m of compactToolMessages) {
+                if (running >= MAX_TOOL_TOTAL) {
+                  m.content = '';
+                  continue;
                 }
+                if (running + m.content.length > MAX_TOOL_TOTAL) {
+                  m.content = m.content.slice(0, MAX_TOOL_TOTAL - running) + '...';
+                  running = MAX_TOOL_TOTAL;
+                } else {
+                  running += m.content.length;
+                }
+              }
+              const finalMessages = [
+                { role: 'system', content: systemPrompt },
+                ...messages,
+                ...compactToolMessages
+              ];
+              console.log('Second call message count:', finalMessages.length);
+              console.log('Tool messages being sent:', JSON.stringify(compactToolMessages, null, 2));
+              
+              const secondAiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${lovableApiKey}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  model: 'google/gemini-2.5-flash',
+                  messages: finalMessages,
+                  stream: true,
+                }),
+              });
+              
+              console.log('Second AI response status:', secondAiResponse.status);
+              
+              if (!secondAiResponse.ok) {
+                const errorText = await secondAiResponse.text();
+                console.error('Second AI call failed:', secondAiResponse.status, errorText);
+                const errorMessage = 'Sorry, I had trouble generating a response after analyzing the data. Please try asking again.';
+                fullContent = errorMessage;
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: errorMessage })}\n\n`));
+              } else {
+                console.log('Second AI response OK, starting to read stream...');
+                const secondReader = secondAiResponse.body?.getReader();
+                let secondBuffer = '';
+                let chunkCount = 0;
+                let contentReceived = false;
+                
+                while (true) {
+                  const { done, value } = await secondReader!.read();
+                  if (done) {
+                    console.log('Second AI stream done. Chunks received:', chunkCount, 'Content received:', contentReceived);
+                    break;
+                  }
 
-                chunkCount++;
-                secondBuffer += decoder.decode(value, { stream: true });
-                const lines = secondBuffer.split('\n');
-                secondBuffer = lines.pop() || '';
+                  chunkCount++;
+                  secondBuffer += decoder.decode(value, { stream: true });
+                  const lines = secondBuffer.split('\n');
+                  secondBuffer = lines.pop() || '';
 
-                for (const line of lines) {
-                  if (!line.trim() || line.startsWith(':')) continue;
-                  if (!line.startsWith('data: ')) continue;
+                  for (const line of lines) {
+                    if (!line.trim() || line.startsWith(':')) continue;
+                    if (!line.startsWith('data: ')) continue;
 
-                  const data = line.slice(6);
-                  if (data === '[DONE]') continue;
+                    const data = line.slice(6);
+                    if (data === '[DONE]') continue;
 
-                  try {
-                    const parsed = JSON.parse(data);
-                    const delta = parsed.choices?.[0]?.delta;
+                    try {
+                      const parsed = JSON.parse(data);
+                      const delta = parsed.choices?.[0]?.delta;
 
-                    if (delta?.content) {
-                      contentReceived = true;
-                      fullContent += delta.content;
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: delta.content })}\n\n`));
+                      if (delta?.content) {
+                        contentReceived = true;
+                        fullContent += delta.content;
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: delta.content })}\n\n`));
+                      }
+                    } catch (e) {
+                      console.error('Error parsing second AI response:', e, 'Line:', line);
                     }
-                  } catch (e) {
-                    console.error('Error parsing second AI response:', e, 'Line:', line);
                   }
                 }
-              }
-              
-              if (!contentReceived) {
-                console.error('No content received from second AI call!');
-                const fallbackMessage = 'I analyzed your league data but had trouble formatting the response. Let me try a different approach - can you be more specific about which position you want to upgrade?';
-                fullContent = fallbackMessage;
-                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: fallbackMessage })}\n\n`));
+                
+                if (!contentReceived) {
+                  console.error('No content received from second AI call!');
+                  const fallbackMessage = 'I analyzed your league data but had trouble formatting the response. Let me try a different approach - can you be more specific about which position you want to upgrade?';
+                  fullContent = fallbackMessage;
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'content', content: fallbackMessage })}\n\n`));
+                }
               }
             }
           }
