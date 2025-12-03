@@ -103,8 +103,8 @@ serve(async (req) => {
 
     console.log(`Fetching nflverse player stats for season ${season}...`);
 
-    // Build the nflverse URL
-    const url = `https://github.com/nflverse/nflverse-data/releases/download/player_stats/player_stats_${season}.csv`;
+    // Build the nflverse URL - using stats_player release tag and stats_player_week file pattern
+    const url = `https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_${season}.csv`;
     
     console.log(`Downloading from: ${url}`);
 
