@@ -1561,7 +1561,9 @@ export default function Admin() {
                   <CardContent className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Fetch Sleeper Projections</p>
-                      <p className="text-xs text-muted-foreground">Fetches & normalizes weekly projections</p>
+                      <p className="text-xs text-muted-foreground">
+                        <strong>Run weekly</strong> — Updates fantasy point projections (pts_ppr, passing yards, TDs, etc.) for specified weeks
+                      </p>
                       <div className="flex gap-2">
                         <Input
                           type="number"
@@ -1595,7 +1597,9 @@ export default function Admin() {
 
                     <div className="space-y-2">
                       <p className="text-sm font-medium">Ingest Sleeper Players</p>
-                      <p className="text-xs text-muted-foreground">Fetches all player data from Sleeper API</p>
+                      <p className="text-xs text-muted-foreground">
+                        <strong>Run rarely</strong> — Fetches master player list (names, positions, teams). Only needed at season start or for new players
+                      </p>
                       <Button 
                         onClick={handleIngestSleeperPlayers} 
                         disabled={playersIngesting}
