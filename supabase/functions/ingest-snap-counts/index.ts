@@ -54,6 +54,26 @@ function normalizeName(name: string): string {
     .trim();
 }
 
+// Convert abbreviated name (A.Abdullah) to normalized form for matching
+function normalizeAbbreviatedName(name: string): string {
+  // Handle format like "A.Abdullah" -> extract just the last name portion
+  const parts = name.split('.');
+  if (parts.length >= 2) {
+    // Get the last name (after the last period)
+    const lastName = parts[parts.length - 1].toLowerCase().replace(/[^a-z]/g, '').trim();
+    return lastName;
+  }
+  return name.toLowerCase().replace(/[^a-z]/g, '').trim();
+}
+
+// Extract last name from full name for matching
+function extractLastName(fullName: string): string {
+  const normalized = normalizeName(fullName);
+  const parts = normalized.split(' ');
+  // Return last word as last name
+  return parts[parts.length - 1] || normalized;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -133,7 +153,7 @@ serve(async (req) => {
       });
     }
 
-    // Build a map of player name + week -> snap data (only offense positions)
+    // Build a map of last_name + team + week -> snap data (only offense positions)
     const snapMap = new Map<string, { snapCount: number; snapPct: number }>();
     const offensePositions = ['QB', 'RB', 'WR', 'TE', 'FB', 'HB'];
     
@@ -141,6 +161,7 @@ serve(async (req) => {
       const playerName = r.player;
       const week = parseInt(r.week) || 0;
       const position = r.position?.toUpperCase() || '';
+      const team = (r.team || '').toUpperCase();
       const snapCount = parseInt(r.offense_snaps) || 0;
       const snapPct = parseFloat(r.offense_pct) || 0;
 
@@ -149,16 +170,22 @@ serve(async (req) => {
         continue;
       }
 
-      const key = `${normalizeName(playerName)}_${week}`;
+      // Use last name + team + week as key for better matching
+      const lastName = extractLastName(playerName);
+      const key = `${lastName}_${team}_${week}`;
       snapMap.set(key, { snapCount, snapPct });
     }
 
     console.log(`Built snap map with ${snapMap.size} unique player-week entries`);
+    
+    // Log some sample keys for debugging
+    const sampleKeys = Array.from(snapMap.keys()).slice(0, 5);
+    console.log(`Sample snap map keys: ${sampleKeys.join(', ')}`);
 
     // Fetch existing player_stats for this season
     const { data: existingStats, error: fetchError } = await supabase
       .from('player_stats')
-      .select('id, player_name, week')
+      .select('id, player_name, team, week')
       .eq('season', season);
 
     if (fetchError) {
@@ -167,11 +194,14 @@ serve(async (req) => {
 
     console.log(`Found ${existingStats?.length || 0} player_stats records for season ${season}`);
 
-    // Match and prepare updates
+    // Match and prepare updates using last name + team + week
     const updates: { id: string; snap_counts: number; snap_pct: number }[] = [];
     
     for (const stat of existingStats || []) {
-      const key = `${normalizeName(stat.player_name)}_${stat.week}`;
+      // Extract last name from abbreviated format (e.g., "A.Abdullah" -> "abdullah")
+      const lastName = normalizeAbbreviatedName(stat.player_name);
+      const team = (stat.team || '').toUpperCase();
+      const key = `${lastName}_${team}_${stat.week}`;
       const snapData = snapMap.get(key);
       
       if (snapData) {
@@ -182,6 +212,13 @@ serve(async (req) => {
         });
       }
     }
+    
+    // Log some sample stats keys for debugging
+    const sampleStatKeys = (existingStats || []).slice(0, 5).map(s => {
+      const lastName = normalizeAbbreviatedName(s.player_name);
+      return `${lastName}_${(s.team || '').toUpperCase()}_${s.week}`;
+    });
+    console.log(`Sample player_stats keys: ${sampleStatKeys.join(', ')}`);
 
     console.log(`Matched ${updates.length} records for update`);
 
