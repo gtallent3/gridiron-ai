@@ -902,6 +902,87 @@ export type Database = {
         }
         Relationships: []
       }
+      player_stats: {
+        Row: {
+          created_at: string | null
+          fantasy_points: number | null
+          fantasy_points_ppr: number | null
+          headshot_url: string | null
+          id: string
+          passing_interceptions: number | null
+          passing_tds: number | null
+          passing_yards: number | null
+          player_display_name: string | null
+          player_id: string
+          player_name: string
+          position: string | null
+          position_group: string | null
+          receiving_tds: number | null
+          receiving_yards: number | null
+          receptions: number | null
+          rushing_tds: number | null
+          rushing_yards: number | null
+          season: number
+          season_type: string | null
+          targets: number | null
+          team: string | null
+          updated_at: string | null
+          week: number
+        }
+        Insert: {
+          created_at?: string | null
+          fantasy_points?: number | null
+          fantasy_points_ppr?: number | null
+          headshot_url?: string | null
+          id?: string
+          passing_interceptions?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          player_display_name?: string | null
+          player_id: string
+          player_name: string
+          position?: string | null
+          position_group?: string | null
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          season: number
+          season_type?: string | null
+          targets?: number | null
+          team?: string | null
+          updated_at?: string | null
+          week: number
+        }
+        Update: {
+          created_at?: string | null
+          fantasy_points?: number | null
+          fantasy_points_ppr?: number | null
+          headshot_url?: string | null
+          id?: string
+          passing_interceptions?: number | null
+          passing_tds?: number | null
+          passing_yards?: number | null
+          player_display_name?: string | null
+          player_id?: string
+          player_name?: string
+          position?: string | null
+          position_group?: string | null
+          receiving_tds?: number | null
+          receiving_yards?: number | null
+          receptions?: number | null
+          rushing_tds?: number | null
+          rushing_yards?: number | null
+          season?: number
+          season_type?: string | null
+          targets?: number | null
+          team?: string | null
+          updated_at?: string | null
+          week?: number
+        }
+        Relationships: []
+      }
       player_value_cache: {
         Row: {
           consistency_multiplier: number

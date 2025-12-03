@@ -130,6 +130,10 @@ export default function Admin() {
   const [playerPoolComputing, setPlayerPoolComputing] = useState(false);
   const [playerPoolResult, setPlayerPoolResult] = useState<any>(null);
 
+  // Player Stats (nflverse) State
+  const [playerStatsIngesting, setPlayerStatsIngesting] = useState(false);
+  const [playerStatsResult, setPlayerStatsResult] = useState<any>(null);
+
   useEffect(() => {
     checkAuth();
   }, []);
@@ -825,6 +829,40 @@ export default function Admin() {
       setPlayerPoolResult({ error: error.message });
     } finally {
       setPlayerPoolComputing(false);
+    }
+  };
+
+  // PLAYER STATS (nflverse)
+  const handleIngestPlayerStats = async () => {
+    setPlayerStatsIngesting(true);
+    setPlayerStatsResult(null);
+    
+    try {
+      toast({
+        title: "Starting Player Stats Ingestion",
+        description: "Fetching weekly player stats from nflverse...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('ingest-player-stats', {
+        body: { season: 2025 }
+      });
+
+      if (error) throw error;
+
+      setPlayerStatsResult(data);
+      toast({
+        title: "Player Stats Ingested ✅",
+        description: `Processed ${data.processed || 0} player-week records`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ingestion Error",
+        description: error.message || "Failed to ingest player stats",
+        variant: "destructive",
+      });
+      setPlayerStatsResult({ error: error.message });
+    } finally {
+      setPlayerStatsIngesting(false);
     }
   };
 
@@ -1657,6 +1695,31 @@ export default function Admin() {
                             <span className="text-destructive">Error: {injuryResult.error}</span>
                           ) : (
                             <span className="text-green-600">✅ {injuryResult.total_records} records</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Ingest Player Stats (nflverse)</p>
+                      <p className="text-xs text-muted-foreground">
+                        Fetches detailed weekly player stats (passing, rushing, receiving, fantasy points) from nflverse GitHub
+                      </p>
+                      <Button 
+                        onClick={handleIngestPlayerStats} 
+                        disabled={playerStatsIngesting}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {playerStatsIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {playerStatsIngesting ? "Ingesting..." : "Ingest Player Stats"}
+                      </Button>
+                      {playerStatsResult && (
+                        <div className="p-2 border rounded text-xs">
+                          {playerStatsResult.error ? (
+                            <span className="text-destructive">Error: {playerStatsResult.error}</span>
+                          ) : (
+                            <span className="text-green-600">✅ {playerStatsResult.processed} records from {playerStatsResult.total_csv_records} CSV rows</span>
                           )}
                         </div>
                       )}

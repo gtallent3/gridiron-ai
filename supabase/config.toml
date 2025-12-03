@@ -143,3 +143,6 @@ verify_jwt = true
 
 [functions.find-trades]
 verify_jwt = true
+
+[functions.ingest-player-stats]
+verify_jwt = true
