@@ -146,3 +146,6 @@ verify_jwt = true
 
 [functions.ingest-player-stats]
 verify_jwt = true
+
+[functions.ingest-snap-counts]
+verify_jwt = true

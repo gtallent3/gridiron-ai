@@ -133,6 +133,10 @@ export default function Admin() {
   // Player Stats (nflverse) State
   const [playerStatsIngesting, setPlayerStatsIngesting] = useState(false);
   const [playerStatsResult, setPlayerStatsResult] = useState<any>(null);
+  
+  // Snap Counts State
+  const [snapCountsIngesting, setSnapCountsIngesting] = useState(false);
+  const [snapCountsResult, setSnapCountsResult] = useState<any>(null);
 
   useEffect(() => {
     checkAuth();
@@ -863,6 +867,40 @@ export default function Admin() {
       setPlayerStatsResult({ error: error.message });
     } finally {
       setPlayerStatsIngesting(false);
+    }
+  };
+
+  // SNAP COUNTS (nflverse)
+  const handleIngestSnapCounts = async () => {
+    setSnapCountsIngesting(true);
+    setSnapCountsResult(null);
+    
+    try {
+      toast({
+        title: "Starting Snap Counts Ingestion",
+        description: "Fetching snap count data from nflverse...",
+      });
+
+      const { data, error } = await supabase.functions.invoke('ingest-snap-counts', {
+        body: { season: 2025 }
+      });
+
+      if (error) throw error;
+
+      setSnapCountsResult(data);
+      toast({
+        title: "Snap Counts Ingested ✅",
+        description: `Updated ${data.updated || 0} player_stats records`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ingestion Error",
+        description: error.message || "Failed to ingest snap counts",
+        variant: "destructive",
+      });
+      setSnapCountsResult({ error: error.message });
+    } finally {
+      setSnapCountsIngesting(false);
     }
   };
 
@@ -1720,6 +1758,31 @@ export default function Admin() {
                             <span className="text-destructive">Error: {playerStatsResult.error}</span>
                           ) : (
                             <span className="text-green-600">✅ {playerStatsResult.processed} records from {playerStatsResult.total_csv_records} CSV rows</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium">Ingest Snap Counts (nflverse)</p>
+                      <p className="text-xs text-muted-foreground">
+                        Updates player_stats with snap counts and snap percentage data. Run after Player Stats ingestion.
+                      </p>
+                      <Button 
+                        onClick={handleIngestSnapCounts} 
+                        disabled={snapCountsIngesting}
+                        size="sm"
+                        className="w-full"
+                      >
+                        {snapCountsIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {snapCountsIngesting ? "Ingesting..." : "Ingest Snap Counts"}
+                      </Button>
+                      {snapCountsResult && (
+                        <div className="p-2 border rounded text-xs">
+                          {snapCountsResult.error ? (
+                            <span className="text-destructive">Error: {snapCountsResult.error}</span>
+                          ) : (
+                            <span className="text-green-600">✅ {snapCountsResult.updated} records updated ({snapCountsResult.skipped} skipped)</span>
                           )}
                         </div>
                       )}
