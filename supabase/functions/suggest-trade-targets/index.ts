@@ -322,25 +322,43 @@ serve(async (req) => {
       }
     }
 
-    // Final sort by strategic fit and value fairness
+    // Final sort by strategic fit, value fairness, and target trade value (quality)
     suggestions.sort((a, b) => {
-      // Prioritize improving weaknesses
-      if (a.strategic_fit.improves_your_weakness && !b.strategic_fit.improves_your_weakness) return -1;
-      if (!a.strategic_fit.improves_your_weakness && b.strategic_fit.improves_your_weakness) return 1;
-      
-      // Then by addressing their weakness
-      if (a.strategic_fit.addresses_their_weakness && !b.strategic_fit.addresses_their_weakness) return -1;
-      if (!a.strategic_fit.addresses_their_weakness && b.strategic_fit.addresses_their_weakness) return 1;
-      
-      // Then by value fairness
-      return Math.abs(a.value_difference) - Math.abs(b.value_difference);
+      // Score each suggestion for quality
+      const scoreA = (a.strategic_fit.improves_your_weakness ? 3 : 0) +
+                     (a.strategic_fit.addresses_their_weakness ? 2 : 0) +
+                     (a.strategic_fit.trading_from_your_strength ? 1 : 0) +
+                     (Math.abs(a.value_difference) <= 5 ? 2 : 0) +
+                     (a.target_player.trade_value >= 20 ? 1 : 0);
+      const scoreB = (b.strategic_fit.improves_your_weakness ? 3 : 0) +
+                     (b.strategic_fit.addresses_their_weakness ? 2 : 0) +
+                     (b.strategic_fit.trading_from_your_strength ? 1 : 0) +
+                     (Math.abs(b.value_difference) <= 5 ? 2 : 0) +
+                     (b.target_player.trade_value >= 20 ? 1 : 0);
+      return scoreB - scoreA;
     });
 
-    console.log(`Returning ${suggestions.length} trade suggestions`);
+    // Deduplicate: only 1 suggestion per target position for diversity
+    const seenPositions = new Set<string>();
+    const seenTargetPlayers = new Set<string>();
+    const diverseSuggestions = suggestions.filter(s => {
+      const pos = s.target_player.position;
+      const targetName = s.target_player.name;
+      // Skip if we already have this position or this exact player
+      if (seenPositions.has(pos) || seenTargetPlayers.has(targetName)) return false;
+      seenPositions.add(pos);
+      seenTargetPlayers.add(targetName);
+      return true;
+    });
+
+    // Take only top 3 most impactful suggestions
+    const finalSuggestions = diverseSuggestions.slice(0, 3);
+
+    console.log(`Returning ${finalSuggestions.length} high-quality trade suggestions`);
 
     return new Response(
       JSON.stringify({ 
-        suggestions: suggestions.slice(0, 10),
+        suggestions: finalSuggestions,
         target_positions: targetPositions,
         user_team_id: userTeamId
       }),

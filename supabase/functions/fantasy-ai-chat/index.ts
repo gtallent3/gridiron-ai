@@ -615,47 +615,37 @@ RULES:
                     };
                   } else {
                     // PRE-FORMAT the response here to bypass the second AI call truncation issue
-                    const sug = suggestions.suggestions.slice(0, 5); // Top 5 suggestions
+                    const sug = suggestions.suggestions || [];
                     const targetPositions = suggestions.target_positions || [];
                     
-                    let formattedResponse = `Based on your team's positional strengths and weaknesses, here are trade targets to consider:\n\n`;
-                    
-                    if (targetPositions.length > 0) {
-                      formattedResponse += `Positions to upgrade: ${targetPositions.join(', ')}\n\n`;
-                    }
+                    let formattedResponse = `Here are my top trade recommendations:\n\n`;
                     
                     sug.forEach((s: any, idx: number) => {
                       const target = s.target_player;
                       const offer = s.offer_player;
                       const fit = s.strategic_fit || {};
-                      
-                      formattedResponse += `${idx + 1}. Target: ${target.name} (${target.position})\n`;
-                      formattedResponse += `   Trade Value: ${target.trade_value} | Proj PPG: ${target.projected_ppg}\n`;
-                      formattedResponse += `   Offer: ${offer.name} (${offer.position})\n`;
-                      formattedResponse += `   Trade Value: ${offer.trade_value} | Proj PPG: ${offer.projected_ppg}\n`;
-                      
                       const valueDiff = s.value_difference || 0;
-                      if (Math.abs(valueDiff) <= 5) {
-                        formattedResponse += `   Value Gap: Fair trade (${valueDiff > 0 ? '+' : ''}${valueDiff})\n`;
-                      } else if (valueDiff > 0) {
-                        formattedResponse += `   Value Gap: You may need to add (+${valueDiff})\n`;
-                      } else {
-                        formattedResponse += `   Value Gap: You're overpaying (${valueDiff})\n`;
-                      }
                       
-                      // Strategic notes
-                      const notes: string[] = [];
-                      if (fit.improves_your_weakness) notes.push('Fills your weakness');
-                      if (fit.addresses_their_weakness) notes.push('Helps their need');
-                      if (fit.trading_from_your_strength) notes.push('Trading from strength');
-                      if (notes.length > 0) {
-                        formattedResponse += `   Why: ${notes.join(', ')}\n`;
-                      }
+                      formattedResponse += `${idx + 1}. Trade ${offer.name} for ${target.name}\n`;
+                      formattedResponse += `   You send: ${offer.name} (${offer.position}, TV: ${offer.trade_value})\n`;
+                      formattedResponse += `   You get: ${target.name} (${target.position}, TV: ${target.trade_value})\n`;
                       
+                      // Build why this trade makes sense
+                      const reasons: string[] = [];
+                      if (fit.improves_your_weakness) reasons.push(`upgrades your weak ${target.position} position`);
+                      if (fit.addresses_their_weakness) reasons.push(`fills their ${offer.position} need`);
+                      if (fit.trading_from_your_strength) reasons.push(`you have ${offer.position} depth`);
+                      if (Math.abs(valueDiff) <= 5) reasons.push('fair value');
+                      
+                      if (reasons.length > 0) {
+                        formattedResponse += `   Why: ${reasons.join(', ')}\n`;
+                      }
                       formattedResponse += '\n';
                     });
                     
-                    formattedResponse += `These suggestions are based on positional rankings across your league. Look for deals where both teams improve.`;
+                    if (sug.length === 0) {
+                      formattedResponse = `I couldn't find strong trade targets right now. Your roster may be well-balanced or there aren't clear upgrade opportunities in your league.`;
+                    }
                     
                     // Store formatted response to stream directly
                     toolResult = {
