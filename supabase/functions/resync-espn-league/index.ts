@@ -741,7 +741,7 @@ serve(async (req) => {
     }
 
     // Player data already synced from rosters and waivers above
-    // post-sync-compute will map to sleeper_projections and nfl_fantasy_points
+    // post-sync-compute will map to sleeper_projections and actual_weekly_points
     console.log('Player data synced from rosters and waivers');
 
     // Trigger post-sync compute for trade intelligence

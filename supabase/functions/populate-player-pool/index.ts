@@ -379,7 +379,7 @@ serve(async (req) => {
       let totalUpsertedForChunk = 0;
       while (true) {
         const { data: actuals, error: actualsError } = await supabase
-          .from('nfl_fantasy_points')
+          .from('actual_weekly_points')
           .select('*')
           .eq('season', season)
           .in('player_id', idsChunk)

@@ -216,10 +216,10 @@ serve(async (req) => {
         }
       }
 
-      // Batch insert stats for this week into nfl_fantasy_points
+      // Batch insert stats for this week into actual_weekly_points
       if (playerStatsToInsert.length > 0) {
         await supabase
-          .from('nfl_fantasy_points')
+          .from('actual_weekly_points')
           .upsert(playerStatsToInsert.map(s => ({
             player_id: s.player_id,
             player_name: s.player_name,

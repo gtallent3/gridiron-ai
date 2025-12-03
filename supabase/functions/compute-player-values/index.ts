@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
 
     // Fetch recent actual stats for consistency calculation
     const { data: actuals, error: actualsError } = await supabase
-      .from('nfl_fantasy_points')
+      .from('actual_weekly_points')
       .select('*')
       .eq('season', season)
       .gte('week', Math.max(1, currentWeek - 5))

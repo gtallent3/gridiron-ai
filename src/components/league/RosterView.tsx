@@ -52,7 +52,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [statsDialogOpen, setStatsDialogOpen] = useState(false);
   const hasAutoSetSelectedWeek = useRef(false);
 
-  // Fetch stats with calculated fantasy points from nfl_fantasy_points table
+  // Fetch stats with calculated fantasy points from actual_weekly_points table
   const fetchWeeklyStats = async (week: number) => {
     if (!userTeam?.roster || !Array.isArray(userTeam.roster)) return;
     

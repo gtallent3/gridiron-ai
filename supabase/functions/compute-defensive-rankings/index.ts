@@ -78,7 +78,7 @@ serve(async (req) => {
 
     for (const currentWeek of weeks) {
       const { data: weekStats, error: statsError } = await supabase
-        .from('nfl_fantasy_points')
+        .from('actual_weekly_points')
         .select('*')
         .eq('season', season)
         .eq('week', currentWeek)

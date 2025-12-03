@@ -242,7 +242,7 @@ Deno.serve(async (req) => {
       const batch = records.slice(i, i + batchSize);
       
       const { error } = await supabase
-        .from('nfl_fantasy_points')
+        .from('actual_weekly_points')
         .upsert(batch, { 
           onConflict: 'player_id,week,season',
           ignoreDuplicates: false 
