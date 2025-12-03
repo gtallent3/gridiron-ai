@@ -52,7 +52,19 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { season = 2025, currentWeek = 10 } = await req.json();
+    // Calculate current NFL week dynamically
+    const getNflWeek = (): number => {
+      const seasonStart = new Date('2025-09-04'); // NFL 2025 season start (Thursday Week 1)
+      const now = new Date();
+      const diffMs = now.getTime() - seasonStart.getTime();
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const week = Math.floor(diffDays / 7) + 1;
+      return Math.max(1, Math.min(week, 18)); // Clamp between 1 and 18
+    };
+
+    const body = await req.json().catch(() => ({}));
+    const season = body.season || 2025;
+    const currentWeek = body.currentWeek || getNflWeek();
     
     console.log(`Computing team SOS for season ${season}, current week ${currentWeek}`);
 
