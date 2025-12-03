@@ -43,7 +43,7 @@ export const FreeStartSitDemo = () => {
     const timer = setTimeout(async () => {
       try {
         const { data, error } = await supabase
-          .from('projected_player_stats')
+          .from('sleeper_projections')
           .select('player_name, team, position')
           .ilike('player_name', `%${player1}%`)
           .eq('week', 9)
@@ -84,7 +84,7 @@ export const FreeStartSitDemo = () => {
     const timer = setTimeout(async () => {
       try {
         const { data, error } = await supabase
-          .from('projected_player_stats')
+          .from('sleeper_projections')
           .select('player_name, team, position')
           .ilike('player_name', `%${player2}%`)
           .eq('week', 9)

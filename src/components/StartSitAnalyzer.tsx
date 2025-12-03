@@ -32,7 +32,7 @@ export const StartSitAnalyzer = () => {
     const timer = setTimeout(async () => {
       try {
         const { data, error } = await supabase
-          .from('projected_player_stats')
+          .from('sleeper_projections')
           .select('player_name, team, position')
           .ilike('player_name', `%${player1}%`)
           .eq('week', nflWeek.week)
@@ -73,7 +73,7 @@ export const StartSitAnalyzer = () => {
     const timer = setTimeout(async () => {
       try {
         const { data, error } = await supabase
-          .from('projected_player_stats')
+          .from('sleeper_projections')
           .select('player_name, team, position')
           .ilike('player_name', `%${player2}%`)
           .eq('week', nflWeek.week)
