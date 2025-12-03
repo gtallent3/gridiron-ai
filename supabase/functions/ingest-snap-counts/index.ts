@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3?target=deno";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -43,6 +43,15 @@ function parseCSV(csvText: string): Record<string, string>[] {
   }
   
   return records;
+}
+
+// Normalize player name for matching
+function normalizeName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 serve(async (req) => {
@@ -111,10 +120,6 @@ serve(async (req) => {
     const csvText = await response.text();
     console.log(`Downloaded ${csvText.length} bytes of CSV data`);
 
-    // Log headers to debug column names
-    const firstLine = csvText.split('\n')[0];
-    console.log(`CSV headers: ${firstLine}`);
-
     const records = parseCSV(csvText);
     console.log(`Parsed ${records.length} records from CSV`);
 
@@ -128,62 +133,93 @@ serve(async (req) => {
       });
     }
 
-    // Log first record to see available columns
-    console.log('Sample record columns:', Object.keys(records[0]));
+    // Build a map of player name + week -> snap data (only offense positions)
+    const snapMap = new Map<string, { snapCount: number; snapPct: number }>();
+    const offensePositions = ['QB', 'RB', 'WR', 'TE', 'FB', 'HB'];
+    
+    for (const r of records) {
+      const playerName = r.player;
+      const week = parseInt(r.week) || 0;
+      const position = r.position?.toUpperCase() || '';
+      const snapCount = parseInt(r.offense_snaps) || 0;
+      const snapPct = parseFloat(r.offense_pct) || 0;
 
-    // Build updates - match by player_id, season, week
-    let updated = 0;
-    let skipped = 0;
-    const BATCH_SIZE = 100;
+      // Only include offensive skill positions
+      if (!playerName || !week || !offensePositions.includes(position)) {
+        continue;
+      }
 
-    for (let i = 0; i < records.length; i += BATCH_SIZE) {
-      const batch = records.slice(i, i + BATCH_SIZE);
+      const key = `${normalizeName(playerName)}_${week}`;
+      snapMap.set(key, { snapCount, snapPct });
+    }
+
+    console.log(`Built snap map with ${snapMap.size} unique player-week entries`);
+
+    // Fetch existing player_stats for this season
+    const { data: existingStats, error: fetchError } = await supabase
+      .from('player_stats')
+      .select('id, player_name, week')
+      .eq('season', season);
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch player_stats: ${fetchError.message}`);
+    }
+
+    console.log(`Found ${existingStats?.length || 0} player_stats records for season ${season}`);
+
+    // Match and prepare updates
+    const updates: { id: string; snap_counts: number; snap_pct: number }[] = [];
+    
+    for (const stat of existingStats || []) {
+      const key = `${normalizeName(stat.player_name)}_${stat.week}`;
+      const snapData = snapMap.get(key);
       
-      for (const r of batch) {
-        const playerId = r.player_id || r.pfr_player_id || r.gsis_id;
-        const week = parseInt(r.week) || 0;
-        const snapCount = parseInt(r.offense_snaps) || 0;
-        const snapPct = parseFloat(r.offense_pct) || 0;
+      if (snapData) {
+        updates.push({
+          id: stat.id,
+          snap_counts: snapData.snapCount,
+          snap_pct: snapData.snapPct
+        });
+      }
+    }
 
-        if (!playerId || !week) {
-          skipped++;
-          continue;
-        }
+    console.log(`Matched ${updates.length} records for update`);
 
-        // Update existing player_stats record
-        const { error } = await supabase
+    // Batch update in chunks
+    const BATCH_SIZE = 500;
+    let updated = 0;
+    
+    for (let i = 0; i < updates.length; i += BATCH_SIZE) {
+      const batch = updates.slice(i, i + BATCH_SIZE);
+      
+      // Use upsert with id to update existing records
+      for (const update of batch) {
+        const { error: updateError } = await supabase
           .from('player_stats')
           .update({
-            snap_counts: snapCount,
-            snap_pct: snapPct,
+            snap_counts: update.snap_counts,
+            snap_pct: update.snap_pct,
             updated_at: new Date().toISOString()
           })
-          .eq('player_id', playerId)
-          .eq('season', season)
-          .eq('week', week);
+          .eq('id', update.id);
 
-        if (error) {
-          // Record might not exist in player_stats - that's okay
-          skipped++;
-        } else {
+        if (!updateError) {
           updated++;
         }
       }
 
-      // Log progress
-      if ((i + BATCH_SIZE) % 1000 === 0) {
-        console.log(`Processed ${Math.min(i + BATCH_SIZE, records.length)} / ${records.length} records`);
-      }
+      console.log(`Updated batch ${Math.floor(i / BATCH_SIZE) + 1}, total updated: ${updated}`);
     }
 
-    console.log(`Snap counts update complete: ${updated} records updated, ${skipped} skipped`);
+    console.log(`Snap counts update complete: ${updated} records updated`);
 
     return new Response(JSON.stringify({
       success: true,
       season,
       total_csv_records: records.length,
+      snap_map_entries: snapMap.size,
+      matched: updates.length,
       updated,
-      skipped,
       message: `Updated ${updated} player_stats records with snap count data`
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
