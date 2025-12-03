@@ -904,11 +904,17 @@ export type Database = {
       }
       player_stats: {
         Row: {
+          attempts: number | null
+          carries: number | null
+          completions: number | null
           created_at: string | null
           fantasy_points: number | null
           fantasy_points_ppr: number | null
           headshot_url: string | null
           id: string
+          opponent_team: string | null
+          passing_air_yards: number | null
+          passing_epa: number | null
           passing_interceptions: number | null
           passing_tds: number | null
           passing_yards: number | null
@@ -917,24 +923,36 @@ export type Database = {
           player_name: string
           position: string | null
           position_group: string | null
+          receiving_air_yards: number | null
+          receiving_epa: number | null
           receiving_tds: number | null
           receiving_yards: number | null
           receptions: number | null
+          routes_run: number | null
+          rushing_epa: number | null
           rushing_tds: number | null
           rushing_yards: number | null
           season: number
-          season_type: string | null
+          snap_counts: number | null
+          snap_pct: number | null
+          target_share: number | null
           targets: number | null
           team: string | null
           updated_at: string | null
           week: number
         }
         Insert: {
+          attempts?: number | null
+          carries?: number | null
+          completions?: number | null
           created_at?: string | null
           fantasy_points?: number | null
           fantasy_points_ppr?: number | null
           headshot_url?: string | null
           id?: string
+          opponent_team?: string | null
+          passing_air_yards?: number | null
+          passing_epa?: number | null
           passing_interceptions?: number | null
           passing_tds?: number | null
           passing_yards?: number | null
@@ -943,24 +961,36 @@ export type Database = {
           player_name: string
           position?: string | null
           position_group?: string | null
+          receiving_air_yards?: number | null
+          receiving_epa?: number | null
           receiving_tds?: number | null
           receiving_yards?: number | null
           receptions?: number | null
+          routes_run?: number | null
+          rushing_epa?: number | null
           rushing_tds?: number | null
           rushing_yards?: number | null
           season: number
-          season_type?: string | null
+          snap_counts?: number | null
+          snap_pct?: number | null
+          target_share?: number | null
           targets?: number | null
           team?: string | null
           updated_at?: string | null
           week: number
         }
         Update: {
+          attempts?: number | null
+          carries?: number | null
+          completions?: number | null
           created_at?: string | null
           fantasy_points?: number | null
           fantasy_points_ppr?: number | null
           headshot_url?: string | null
           id?: string
+          opponent_team?: string | null
+          passing_air_yards?: number | null
+          passing_epa?: number | null
           passing_interceptions?: number | null
           passing_tds?: number | null
           passing_yards?: number | null
@@ -969,13 +999,19 @@ export type Database = {
           player_name?: string
           position?: string | null
           position_group?: string | null
+          receiving_air_yards?: number | null
+          receiving_epa?: number | null
           receiving_tds?: number | null
           receiving_yards?: number | null
           receptions?: number | null
+          routes_run?: number | null
+          rushing_epa?: number | null
           rushing_tds?: number | null
           rushing_yards?: number | null
           season?: number
-          season_type?: string | null
+          snap_counts?: number | null
+          snap_pct?: number | null
+          target_share?: number | null
           targets?: number | null
           team?: string | null
           updated_at?: string | null
