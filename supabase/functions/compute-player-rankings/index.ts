@@ -254,6 +254,27 @@ serve(async (req) => {
       }
     }
 
+    // Fetch SOS data DIRECTLY from strength_of_schedule table (not from player_pool_v2)
+    const { data: sosData, error: sosError } = await supabase
+      .from('strength_of_schedule')
+      .select('team, position, ros_sos_rank, playoff_sos_rank')
+      .eq('season', season);
+    
+    if (sosError) {
+      console.error('Error fetching SOS data:', sosError);
+    }
+    
+    // Build SOS lookup map: team:position -> { ros_sos_rank, playoff_sos_rank }
+    const sosMap = new Map<string, { ros_sos_rank: number | null, playoff_sos_rank: number | null }>();
+    for (const sos of sosData || []) {
+      const key = `${sos.team}:${sos.position}`;
+      sosMap.set(key, {
+        ros_sos_rank: sos.ros_sos_rank,
+        playoff_sos_rank: sos.playoff_sos_rank
+      });
+    }
+    console.log(`Loaded ${sosMap.size} SOS entries from strength_of_schedule table`);
+
     // Build a complete player map from both actuals and projections
     // Use canonical_player_id as primary key, fallback to normalized_name:position
     const allPlayers = new Map<string, { player_id: string, player_name: string, position: string, team: string }>();
@@ -385,12 +406,11 @@ serve(async (req) => {
         }));
       }
 
-      // Get SOS rankings from projections (use the latest week's projection with SOS data for most current schedule)
-      const projWithSos = projs
-        .filter(p => p.ros_sos_rank != null || p.playoff_sos_rank != null)
-        .sort((a, b) => b.week - a.week)[0]; // Get most recent week with SOS data
-      const rosSosRank = projWithSos?.ros_sos_rank ?? null;
-      const playoffSosRank = projWithSos?.playoff_sos_rank ?? null;
+      // Get SOS rankings directly from strength_of_schedule via sosMap (team:position lookup)
+      const sosKey = `${playerInfo.team}:${playerInfo.position}`;
+      const sos = sosMap.get(sosKey);
+      const rosSosRank = sos?.ros_sos_rank ?? null;
+      const playoffSosRank = sos?.playoff_sos_rank ?? null;
 
       // Get bye week from player_pool_v2 data using canonical_player_id directly
       // Only look up if playerInfo.player_id is a UUID (canonical_player_id), not a fallback key
