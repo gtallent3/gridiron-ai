@@ -118,6 +118,17 @@ Deno.serve(async (req) => {
     for (const [key, agg] of defAgg) {
       if (agg.count > 0) defRankMap.set(key, agg.sum / agg.count);
     }
+    
+    // Debug: Log sample TE entries
+    const teEntries = Array.from(defRankMap.entries()).filter(([k]) => k.endsWith(':TE'));
+    console.log(`TE defRankMap entries (${teEntries.length}):`, JSON.stringify(teEntries.slice(0, 10)));
+    
+    // Debug: Check ARI's opponents in defRankMap
+    const ariOpponents = ['LA', 'HOU', 'ATL', 'CIN'];
+    for (const opp of ariOpponents) {
+      const teKey = `${opp}:TE`;
+      console.log(`defRankMap.get('${teKey}') = ${defRankMap.get(teKey)}`);
+    }
 
     // Calculate SOS for each team and position
     const positions = ['QB', 'RB', 'WR', 'TE'];
@@ -148,6 +159,16 @@ Deno.serve(async (req) => {
         const rosRanks = rosWeeks
           .map(s => defRankMap.get(`${s.opponent}:${position}`))
           .filter(r => r !== undefined) as number[];
+        
+        // Debug: Log ARI TE calculation
+        if (team === 'ARI' && position === 'TE') {
+          console.log(`ARI TE rosWeeks:`, rosWeeks.map(s => ({ week: s.week, opponent: s.opponent })));
+          console.log(`ARI TE lookups:`, rosWeeks.map(s => ({
+            key: `${s.opponent}:${position}`,
+            value: defRankMap.get(`${s.opponent}:${position}`)
+          })));
+          console.log(`ARI TE rosRanks:`, rosRanks);
+        }
         
         const rosAvg = rosRanks.length > 0 
           ? rosRanks.reduce((a, b) => a + b, 0) / rosRanks.length 
