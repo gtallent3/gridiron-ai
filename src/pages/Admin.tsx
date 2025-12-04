@@ -1130,7 +1130,7 @@ export default function Admin() {
       });
       
       const { data, error } = await supabase.functions.invoke('compute-team-sos', {
-        body: { season: 2025, currentWeek: 10 },
+        body: { season: 2025 },
       });
 
       if (error) throw error;
