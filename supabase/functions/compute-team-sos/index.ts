@@ -68,31 +68,50 @@ Deno.serve(async (req) => {
     
     console.log(`Computing team SOS for season ${season}, current week ${currentWeek}`);
 
-    // Fetch schedules and defensive rankings (season-to-date) in parallel
-    const [schedulesResult, defRankingsResult] = await Promise.all([
-      supabase
-        .from('team_schedules')
-        .select('team, week, opponent')
-        .eq('season', season)
-        .gte('week', currentWeek),
-      supabase
+    // Fetch schedules
+    const schedulesResult = await supabase
+      .from('team_schedules')
+      .select('team, week, opponent')
+      .eq('season', season)
+      .gte('week', currentWeek);
+    
+    // Fetch defensive rankings in batches to avoid 1000 row limit
+    // There are ~1600 rows (32 teams * 4 positions * ~13 weeks)
+    const defRankings: any[] = [];
+    const batchSize = 1000;
+    let offset = 0;
+    let hasMore = true;
+    
+    while (hasMore) {
+      const { data: batch, error: batchError } = await supabase
         .from('defensive_rankings')
         .select('team, position, week, rank')
         .eq('season', season)
         .lt('week', currentWeek)
-        .limit(10000)
-    ]);
+        .range(offset, offset + batchSize - 1);
+      
+      if (batchError) {
+        console.error('Defensive rankings fetch error:', batchError);
+        throw new Error(`Failed to fetch defensive rankings: ${batchError.message}`);
+      }
+      
+      if (batch && batch.length > 0) {
+        defRankings.push(...batch);
+        offset += batch.length;
+        hasMore = batch.length === batchSize;
+      } else {
+        hasMore = false;
+      }
+    }
+    
+    const defRankingsResult = { data: defRankings, error: null };
 
     const { data: schedules, error: schedError } = schedulesResult;
-    const { data: defRanks, error: defError } = defRankingsResult;
+    const defRanks = defRankingsResult.data;
 
     if (schedError) {
       console.error('Schedule fetch error:', schedError);
       throw new Error(`Failed to fetch schedules: ${schedError.message}`);
-    }
-    if (defError) {
-      console.error('Defensive rankings fetch error:', defError);
-      throw new Error(`Failed to fetch defensive rankings: ${defError.message}`);
     }
 
     if (!schedules || schedules.length === 0) {
