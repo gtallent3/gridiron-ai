@@ -258,7 +258,8 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
               AI Assistant
             </CardTitle>
             <p className="text-sm text-muted-foreground">
-              Ask for quick, league-specific fantasy advice
+              <span className="hidden sm:inline">Ask for quick, league-specific fantasy advice</span>
+              <span className="sm:hidden">Quick fantasy advice</span>
             </p>
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-xs flex items-center gap-1">

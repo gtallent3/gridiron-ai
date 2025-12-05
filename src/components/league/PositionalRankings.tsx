@@ -368,7 +368,8 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
             <div>
               <CardTitle>League Positional Rankings</CardTitle>
               <CardDescription>
-                Team strengths by position (hover for details)
+                <span className="hidden sm:inline">Team strengths by position (hover for details)</span>
+                <span className="sm:hidden">Tap position for details</span>
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -409,7 +410,8 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                   </div>
                   <h3 className="text-xl font-semibold">Unlock Positional Rankings</h3>
                   <p className="text-muted-foreground">
-                    Get detailed positional strength analysis for 7 days
+                    <span className="hidden sm:inline">Get detailed positional strength analysis for 7 days</span>
+                    <span className="sm:hidden">Unlock for 7 days</span>
                   </p>
                   <div className="flex flex-col gap-2">
                     <Button 
