@@ -353,14 +353,16 @@ serve(async (req) => {
       }
     }
 
-    // Update canonical players with ESPN IDs
+    // Update canonical players with ESPN IDs - batch update for speed
     if (playersToUpdate.length > 0) {
-      for (const update of playersToUpdate) {
-        await supabase
-          .from('canonical_players')
-          .update({ espn_id: update.espn_id })
-          .eq('id', update.id);
-      }
+      await Promise.all(
+        playersToUpdate.map(update =>
+          supabase
+            .from('canonical_players')
+            .update({ espn_id: update.espn_id })
+            .eq('id', update.id)
+        )
+      );
       console.log(`Updated ${playersToUpdate.length} canonical players with ESPN IDs`);
     }
 
@@ -600,40 +602,55 @@ serve(async (req) => {
           console.error('Resync: Non-JSON waiver response from ESPN');
         }
       }
+      // Collect missing canonical players for batch insert
+      const missingPlayers: { espnId: string; player: any }[] = [];
+      for (const playerData of waiverPlayers) {
+        const player = playerData.player;
+        const espnId = player?.id?.toString();
+        if (!espnId) continue;
+        if (!canonicalMap.has(espnId)) {
+          missingPlayers.push({ espnId, player });
+        }
+      }
+      
+      // Batch insert missing canonical players
+      if (missingPlayers.length > 0) {
+        const newPlayers = missingPlayers.map(({ espnId, player }) => ({
+          espn_id: espnId,
+          player_name: player?.fullName || 'Unknown',
+          position: player?.defaultPositionId?.toString() || 'FLEX',
+          team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA',
+        }));
+        
+        const { data: inserted } = await supabase
+          .from('canonical_players')
+          .upsert(newPlayers, { onConflict: 'espn_id' })
+          .select('id, espn_id, sleeper_id, nfl_id, player_name, position, team');
+        
+        if (inserted) {
+          for (const p of inserted) {
+            if (p.espn_id) {
+              canonicalMap.set(p.espn_id, {
+                id: p.id,
+                player_name: p.player_name,
+                position: p.position,
+                team: p.team,
+                sleeper_id: p.sleeper_id,
+                nfl_id: p.nfl_id,
+              });
+            }
+          }
+          console.log(`Batch inserted ${inserted.length} missing canonical players for waivers`);
+        }
+      }
+      
       const waiverRows: any[] = [];
       for (const playerData of waiverPlayers) {
         const player = playerData.player;
         const espnId = player?.id?.toString();
         if (!espnId) continue;
         
-        let canonical = canonicalMap.get(espnId) || null;
-        if (!canonical) {
-          // Create missing canonical player
-          const newPlayer = {
-            espn_id: espnId,
-            player_name: player?.fullName || 'Unknown',
-            position: player?.defaultPositionId?.toString() || 'FLEX',
-            team: player?.proTeamId ? getTeamAbbreviation(player.proTeamId) : 'FA',
-          };
-          const { data: inserted } = await supabase
-            .from('canonical_players')
-            .upsert([newPlayer], { onConflict: 'espn_id' })
-            .select('id, espn_id, sleeper_id, nfl_id, player_name, position, team')
-            .single();
-          
-          if (inserted) {
-            canonical = {
-              id: inserted.id,
-              player_name: inserted.player_name,
-              position: inserted.position,
-              team: inserted.team,
-              sleeper_id: inserted.sleeper_id,
-              nfl_id: inserted.nfl_id,
-            };
-            canonicalMap.set(espnId, canonical);
-          }
-        }
-        
+        const canonical = canonicalMap.get(espnId);
         if (!canonical) continue;
         
         const ownership = playerData.ownership || {};
@@ -705,36 +722,6 @@ serve(async (req) => {
           ignoreDuplicates: false 
         });
         console.log(`Resync: inserted ${waiverRows.length} waiver players for week ${currentWeek}`);
-        
-        // Also upsert to projected_player_stats so UI can query it
-        const projectedRows = waiverRows
-          .filter(row => row.projected_fp > 0)
-          .map(row => ({
-            player_id: row.player_id,
-            player_name: row.player_name,
-            team: row.team,
-            position: row.position,
-            season: row.season,
-            week: row.week,
-            source: row.source || 'espn_projection',
-            stats: row.stats || {},
-            applied_breakdown: row.applied_breakdown || {},
-            projected_fp: row.projected_fp,
-            waiver_status: row.waiver_status,
-            percent_owned: row.percent_owned || 0,
-            percent_started: row.percent_started || 0,
-            provider_ids: row.provider_ids || {},
-            confidence: row.confidence || 0.8,
-            last_updated: new Date().toISOString(),
-          }));
-        
-        if (projectedRows.length > 0) {
-          await supabase.from('projected_player_stats').upsert(projectedRows, {
-            onConflict: 'player_id,season,week,source',
-            ignoreDuplicates: false
-          });
-          console.log(`Resync: also inserted ${projectedRows.length} waiver projections into projected_player_stats`);
-        }
       }
     } catch (waiverErr) {
       console.error('Resync: waiver sync error', waiverErr);
