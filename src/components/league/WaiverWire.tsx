@@ -273,10 +273,11 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
                 AI Waiver Recommendations
               </CardTitle>
               <CardDescription>
-                Get AI-powered add/drop suggestions from available free agents
+                <span className="hidden sm:inline">Get AI-powered add/drop suggestions from available free agents</span>
+                <span className="sm:hidden">AI add/drop suggestions</span>
               </CardDescription>
             </div>
-            <Button 
+            <Button
               onClick={analyzeWaivers} 
               disabled={isAnalyzing}
               variant="glow"
@@ -353,7 +354,10 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>Available Free Agents</CardTitle>
-              <CardDescription>Top projected available players</CardDescription>
+              <CardDescription>
+                <span className="hidden sm:inline">Top projected available players</span>
+                <span className="sm:hidden">Top available players</span>
+              </CardDescription>
             </div>
             <div className="flex gap-2 flex-wrap">
               {positions.map((pos) => (
