@@ -265,81 +265,81 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
   return (
     <div className="space-y-6">
       <Card className="border-2 border-accent/50 bg-gradient-to-br from-accent/5 to-primary/5">
-        <CardHeader>
-          <div className="flex justify-between items-start">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
             <div>
-              <CardTitle className="flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                AI Waiver Recommendations
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                <span className="hidden sm:inline">AI Waiver Recommendations</span>
+                <span className="sm:hidden">AI Waivers</span>
               </CardTitle>
-              <CardDescription>
-                <span className="hidden sm:inline">Get AI-powered add/drop suggestions from available free agents</span>
-                <span className="sm:hidden">AI add/drop suggestions</span>
+              <CardDescription className="text-xs sm:text-sm mt-1">
+                <span className="hidden sm:inline">Get AI-powered add/drop suggestions</span>
+                <span className="sm:hidden">AI-powered suggestions</span>
               </CardDescription>
             </div>
             <Button
               onClick={analyzeWaivers} 
               disabled={isAnalyzing}
               variant="glow"
+              size="sm"
+              className="w-full sm:w-auto"
             >
               {isAnalyzing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing...
+                  <span className="hidden sm:inline">Analyzing...</span>
+                  <span className="sm:hidden">Loading</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="mr-2 h-4 w-4" />
-                  Analyze Waivers
+                  Analyze
                 </>
               )}
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 sm:p-6">
           {recommendations.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <p>Click "Analyze Waivers" to get AI-powered add/drop recommendations</p>
+            <div className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
+              <p className="hidden sm:block">Click "Analyze" to get AI-powered recommendations</p>
+              <p className="sm:hidden">Tap Analyze for AI picks</p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {recommendations.map((player) => (
                 <Card key={player.id} className="bg-background/50 border-green-500/30">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col md:flex-row gap-4 items-start justify-between">
-                      <div className="flex-1 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20">
-                            RECOMMENDED
-                          </Badge>
-                          <span className="font-semibold text-lg">{player.name}</span>
-                          <Badge>{player.position}</Badge>
-                          <span className="text-sm text-muted-foreground">{player.team}</span>
-                        </div>
-                        
-                        {player.recommendation && (
-                          <>
-                            <p className="text-sm text-muted-foreground">
-                              {player.recommendation.reasoning}
-                            </p>
-                            <div className="flex items-center gap-2 text-sm">
-                              {player.recommendation.projectedGain > 0 && (
-                                <>
-                                  <span className="text-green-500 font-semibold">
-                                    +{player.recommendation.projectedGain} pts projected
-                                  </span>
-                                  <span className="text-muted-foreground">•</span>
-                                </>
-                              )}
-                              <span className="text-muted-foreground">
-                                {player.recommendation.dropPlayer 
-                                  ? `Drop: ${player.recommendation.dropPlayer}`
-                                  : 'Consider adding to roster'}
-                              </span>
-                            </div>
-                          </>
-                        )}
+                  <CardContent className="p-3 sm:p-4">
+                    <div className="space-y-2 sm:space-y-3">
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
+                        <Badge variant="outline" className="bg-green-500/10 text-green-500 border-green-500/20 text-[10px] sm:text-xs">
+                          ADD
+                        </Badge>
+                        <span className="font-semibold text-sm sm:text-lg">{player.name}</span>
+                        <Badge className="text-[10px] sm:text-xs">{player.position}</Badge>
+                        <span className="text-xs sm:text-sm text-muted-foreground">{player.team}</span>
                       </div>
+                      
+                      {player.recommendation && (
+                        <>
+                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-2 sm:line-clamp-none">
+                            {player.recommendation.reasoning}
+                          </p>
+                          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs sm:text-sm">
+                            {player.recommendation.projectedGain > 0 && (
+                              <span className="text-green-500 font-semibold">
+                                +{player.recommendation.projectedGain} pts
+                              </span>
+                            )}
+                            {player.recommendation.dropPlayer && (
+                              <span className="text-muted-foreground">
+                                Drop: {player.recommendation.dropPlayer}
+                              </span>
+                            )}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -350,21 +350,21 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
       </Card>
 
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3">
             <div>
-              <CardTitle>Available Free Agents</CardTitle>
-              <CardDescription>
-                <span className="hidden sm:inline">Top projected available players</span>
-                <span className="sm:hidden">Top available players</span>
+              <CardTitle className="text-base sm:text-lg">Free Agents</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Top available players
               </CardDescription>
             </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-1.5 sm:gap-2 flex-wrap">
               {positions.map((pos) => (
                 <Button
                   key={pos}
                   variant={selectedPosition === pos ? "default" : "outline"}
                   size="sm"
+                  className="h-7 px-2 sm:h-8 sm:px-3 text-xs sm:text-sm"
                   onClick={() => setSelectedPosition(pos)}
                 >
                   {pos}
@@ -384,15 +384,14 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full text-sm">
                 <thead className="border-b bg-muted/50">
                   <tr>
-                    <th className="text-left p-3 font-medium">Player</th>
-                    <th className="text-center p-3 font-medium">Pos</th>
-                    <th className="text-center p-3 font-medium">Team</th>
-                    <th className="text-center p-3 font-medium">Matchup</th>
-                    <th className="text-center p-3 font-medium">Def Rank</th>
-                    <th className="text-right p-3 font-medium">Projected</th>
+                    <th className="text-left p-2 sm:p-3 font-medium">Player</th>
+                    <th className="text-center p-2 sm:p-3 font-medium hidden sm:table-cell">Team</th>
+                    <th className="text-center p-2 sm:p-3 font-medium hidden md:table-cell">Matchup</th>
+                    <th className="text-center p-2 sm:p-3 font-medium">Rank</th>
+                    <th className="text-right p-2 sm:p-3 font-medium">Proj</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -401,22 +400,26 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
                       key={player.id} 
                       className={`border-b hover:bg-muted/30 transition-colors ${index % 2 === 0 ? 'bg-background' : 'bg-muted/10'}`}
                     >
-                      <td className="p-3 font-medium">
-                        {player.name}
+                      <td className="p-2 sm:p-3">
+                        <div className="flex flex-col">
+                          <span className="font-medium text-xs sm:text-sm">{player.name}</span>
+                          <span className="text-xs text-muted-foreground sm:hidden">
+                            {player.position} • {player.team}
+                            {player.byeWeek && ' • BYE'}
+                          </span>
+                        </div>
+                        <Badge variant="outline" className="hidden sm:inline-flex text-xs mt-1">{player.position}</Badge>
                         {player.byeWeek && (
-                          <Badge variant="secondary" className="ml-2 text-xs">BYE</Badge>
+                          <Badge variant="secondary" className="ml-1 text-xs hidden sm:inline-flex">BYE</Badge>
                         )}
                       </td>
-                      <td className="p-3 text-center">
-                        <Badge variant="outline">{player.position}</Badge>
-                      </td>
-                      <td className="p-3 text-center text-muted-foreground">{player.team}</td>
-                      <td className="p-3 text-center text-muted-foreground">
+                      <td className="p-2 sm:p-3 text-center text-muted-foreground hidden sm:table-cell text-xs sm:text-sm">{player.team}</td>
+                      <td className="p-2 sm:p-3 text-center text-muted-foreground hidden md:table-cell text-xs sm:text-sm">
                         {player.byeWeek ? '-' : `vs ${player.opponent}`}
                       </td>
-                      <td className="p-3 text-center">
+                      <td className="p-2 sm:p-3 text-center">
                         {player.byeWeek ? (
-                          <span className="text-muted-foreground">-</span>
+                          <span className="text-muted-foreground text-xs">-</span>
                         ) : player.oppDefRank ? (
                           <Badge 
                             variant={
@@ -424,18 +427,18 @@ export function WaiverWire({ league, userTeam, allTeams }: WaiverWireProps) {
                               player.oppDefRank >= 11 ? "secondary" : 
                               "destructive"
                             }
-                            className={
+                            className={`text-xs ${
                               player.oppDefRank >= 23 ? "bg-green-500/10 text-green-600 border-green-500/30" : 
                               ""
-                            }
+                            }`}
                           >
                             #{player.oppDefRank}
                           </Badge>
                         ) : (
-                          <span className="text-muted-foreground">N/A</span>
+                          <span className="text-muted-foreground text-xs">-</span>
                         )}
                       </td>
-                      <td className="p-3 text-right font-semibold">{player.projected}</td>
+                      <td className="p-2 sm:p-3 text-right font-semibold text-xs sm:text-sm">{player.projected}</td>
                     </tr>
                   ))}
                 </tbody>

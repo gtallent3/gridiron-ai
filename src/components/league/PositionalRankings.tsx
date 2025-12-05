@@ -363,38 +363,40 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
   return (
     <>
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
+        <CardHeader className="pb-3">
+          <div className="flex flex-col gap-3">
             <div>
-              <CardTitle>League Positional Rankings</CardTitle>
-              <CardDescription>
-                <span className="hidden sm:inline">Team strengths by position (hover for details)</span>
-                <span className="sm:hidden">Tap position for details</span>
+              <CardTitle className="text-base sm:text-lg">Positional Rankings</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                <span className="hidden sm:inline">Team strengths by position</span>
+                <span className="sm:hidden">Team strengths</span>
               </CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {isUnlocked && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleRefreshRankings}
                   disabled={isRefreshing}
-                  className="gap-2"
+                  className="gap-1.5 h-7 text-xs sm:h-8 sm:text-sm"
                 >
-                  <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                  <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  <span className="hidden sm:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                  <span className="sm:hidden">{isRefreshing ? '...' : 'Refresh'}</span>
                 </Button>
               )}
               {isActiveSubscriber && (
-                <Badge variant="secondary" className="gap-1">
-                  <CheckCircle className="h-3 w-3" />
-                  Subscriber Access
+                <Badge variant="secondary" className="gap-1 text-[10px] sm:text-xs">
+                  <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                  <span className="hidden sm:inline">Subscriber</span>
+                  <span className="sm:hidden">Sub</span>
                 </Badge>
               )}
               {hasTokenAccess && (
-                <Badge variant="outline" className="gap-1 border-primary/50 text-primary">
-                  <CheckCircle className="h-3 w-3" />
-                  Token Access • {timeRemaining}
+                <Badge variant="outline" className="gap-1 border-primary/50 text-primary text-[10px] sm:text-xs">
+                  <CheckCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                  {timeRemaining}
                 </Badge>
               )}
             </div>
@@ -404,33 +406,35 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
           <div className="relative">
             {!isUnlocked && (
               <div className="absolute inset-0 z-10 bg-background/80 backdrop-blur-md rounded-md flex items-center justify-center">
-                <div className="text-center space-y-4 max-w-md p-6">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-2">
-                    <Lock className="h-8 w-8 text-primary" />
+                <div className="text-center space-y-3 sm:space-y-4 max-w-md p-4 sm:p-6">
+                  <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-primary/10 mb-1 sm:mb-2">
+                    <Lock className="h-6 w-6 sm:h-8 sm:w-8 text-primary" />
                   </div>
-                  <h3 className="text-xl font-semibold">Unlock Positional Rankings</h3>
-                  <p className="text-muted-foreground">
-                    <span className="hidden sm:inline">Get detailed positional strength analysis for 7 days</span>
-                    <span className="sm:hidden">Unlock for 7 days</span>
+                  <h3 className="text-lg sm:text-xl font-semibold">Unlock Rankings</h3>
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Detailed positional analysis for 7 days
                   </p>
                   <div className="flex flex-col gap-2">
                     <Button 
                       onClick={() => setShowUnlockDialog(true)}
                       disabled={isUnlocking}
-                      size="lg"
+                      size="default"
+                      className="text-sm"
                     >
-                      {isUnlocking ? 'Unlocking...' : 'Reveal Rankings (5 Tokens)'}
+                      {isUnlocking ? 'Unlocking...' : 'Reveal (5 Tokens)'}
                     </Button>
                     <Button 
                       variant="outline" 
                       onClick={() => window.location.href = '/shop'}
+                      size="sm"
+                      className="text-xs sm:text-sm"
                     >
-                      Subscribe for Unlimited Access
+                      Subscribe for Unlimited
                     </Button>
                   </div>
                   {balance !== null && !hasUnlimited && (
-                    <p className="text-sm text-muted-foreground">
-                      Your balance: {balance} token{balance !== 1 ? 's' : ''}
+                    <p className="text-xs sm:text-sm text-muted-foreground">
+                      Balance: {balance} token{balance !== 1 ? 's' : ''}
                     </p>
                   )}
                 </div>
@@ -441,26 +445,27 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                 <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="min-w-[150px]">Team</TableHead>
+                <TableHead className="min-w-[100px] sm:min-w-[150px] text-xs sm:text-sm">Team</TableHead>
                 {positions.map(pos => (
                   <TableHead 
                     key={pos} 
-                    className="text-center min-w-[100px] cursor-pointer hover:bg-accent transition-colors"
+                    className="text-center min-w-[50px] sm:min-w-[100px] cursor-pointer hover:bg-accent transition-colors text-xs sm:text-sm"
                     onClick={() => handleSort(pos)}
                   >
-                    <div className="flex items-center justify-center gap-1">
+                    <div className="flex items-center justify-center gap-0.5 sm:gap-1">
                       {pos}
-                      {sortBy === pos && <ArrowUpDown className="h-3 w-3" />}
+                      {sortBy === pos && <ArrowUpDown className="h-2.5 w-2.5 sm:h-3 sm:w-3" />}
                     </div>
                   </TableHead>
                 ))}
                 <TableHead 
-                  className="text-center min-w-[120px] cursor-pointer hover:bg-accent transition-colors font-semibold"
+                  className="text-center min-w-[60px] sm:min-w-[120px] cursor-pointer hover:bg-accent transition-colors font-semibold text-xs sm:text-sm"
                   onClick={() => handleSort('TOTAL')}
                 >
-                  <div className="flex items-center justify-center gap-1">
-                    Total Value
-                    {sortBy === 'TOTAL' && <ArrowUpDown className="h-3 w-3" />}
+                  <div className="flex items-center justify-center gap-0.5 sm:gap-1">
+                    <span className="hidden sm:inline">Total Value</span>
+                    <span className="sm:hidden">Total</span>
+                    {sortBy === 'TOTAL' && <ArrowUpDown className="h-2.5 w-2.5 sm:h-3 sm:w-3" />}
                   </div>
                 </TableHead>
               </TableRow>
@@ -470,30 +475,30 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                 const teamValue = teamValues.find(tv => tv.team_id === teamId);
                 return (
                 <TableRow key={teamId}>
-                  <TableCell className="font-medium">
-                    {getTeamName(teamId)}
+                  <TableCell className="font-medium text-xs sm:text-sm py-2 sm:py-4">
+                    <span className="line-clamp-1">{getTeamName(teamId)}</span>
                   </TableCell>
                   {positions.map(pos => {
                     const strength = teamStrengths.find(s => s.position === pos);
                     if (!strength) {
-                      return <TableCell key={pos} className="text-center">-</TableCell>;
+                      return <TableCell key={pos} className="text-center text-xs sm:text-sm">-</TableCell>;
                     }
 
                     return (
-                      <TableCell key={pos} className="text-center">
+                      <TableCell key={pos} className="text-center py-2 sm:py-4">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <div className="flex flex-col items-center gap-1">
+                              <div className="flex flex-col items-center gap-0.5 sm:gap-1">
                                 <Badge
                                   variant="outline"
-                                  className={getRankColor(strength.z_score)}
+                                  className={`text-[10px] sm:text-xs ${getRankColor(strength.z_score)}`}
                                 >
                                   #{strength.rank}
                                 </Badge>
-                                <div className="w-full bg-secondary rounded-full h-1.5">
+                                <div className="w-full bg-secondary rounded-full h-1 sm:h-1.5 hidden sm:block">
                                   <div
-                                    className={`h-1.5 rounded-full transition-all ${
+                                    className={`h-1 sm:h-1.5 rounded-full transition-all ${
                                       strength.z_score > 0.5
                                         ? 'bg-green-500'
                                         : strength.z_score < -0.5
@@ -525,19 +530,19 @@ export function PositionalRankings({ leagueId, teams }: PositionalRankingsProps)
                       </TableCell>
                     );
                   })}
-                  <TableCell className="text-center">
+                  <TableCell className="text-center py-2 sm:py-4">
                     {teamValue ? (
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className="flex flex-col items-center gap-1">
+                            <div className="flex flex-col items-center gap-0.5 sm:gap-1">
                               <Badge
                                 variant="outline"
-                                className="bg-primary/10 text-primary font-semibold"
+                                className="bg-primary/10 text-primary font-semibold text-[10px] sm:text-xs"
                               >
                                 #{teamValue.rank}
                               </Badge>
-                              <span className="text-xs text-muted-foreground">
+                              <span className="text-[10px] sm:text-xs text-muted-foreground">
                                 {teamValue.total_value.toFixed(0)}
                               </span>
                             </div>
