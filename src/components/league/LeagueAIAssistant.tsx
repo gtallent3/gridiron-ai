@@ -251,25 +251,26 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
   return (
     <div className="max-w-4xl mx-auto">
       <Card className="border-border/50 bg-card/50 backdrop-blur-sm shadow-lg">
-        <CardHeader className="border-b border-border/50">
+        <CardHeader className="border-b border-border/50 pb-3">
           <div className="space-y-2">
-            <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5 text-primary" />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               AI Assistant
             </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              <span className="hidden sm:inline">Ask for quick, league-specific fantasy advice</span>
-              <span className="sm:hidden">Quick fantasy advice</span>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              <span className="hidden sm:inline">Ask for league-specific fantasy advice</span>
+              <span className="sm:hidden">Fantasy advice</span>
             </p>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs flex items-center gap-1">
-                <Coins className="h-3 w-3" />
-                1 token per question
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <Badge variant="outline" className="text-[10px] sm:text-xs flex items-center gap-1">
+                <Coins className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                <span className="hidden sm:inline">1 token/question</span>
+                <span className="sm:hidden">1 token</span>
               </Badge>
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-[10px] sm:text-xs">
                 {league.scoring_type}
               </Badge>
-              <Badge variant="outline" className="text-xs">
+              <Badge variant="outline" className="text-[10px] sm:text-xs">
                 {league.league_size} teams
               </Badge>
             </div>
@@ -277,7 +278,7 @@ export const LeagueAIAssistant = ({ league, userTeam }: LeagueAIAssistantProps) 
         </CardHeader>
         <CardContent className="p-0">
           {/* Messages */}
-          <div className="h-[500px] overflow-y-auto p-6 space-y-4">
+          <div className="h-[350px] sm:h-[500px] overflow-y-auto p-4 sm:p-6 space-y-4">
             {messages.map((message, index) => (
               <div
                 key={index}
