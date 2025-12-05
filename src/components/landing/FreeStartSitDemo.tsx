@@ -8,6 +8,7 @@ import { Lock, Sparkles, TrendingUp, AlertCircle, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useStartSitAnalysis } from "@/hooks/useStartSitAnalysis";
+import { getCurrentNFLWeek } from "@/lib/nflWeekUtils";
 
 export const FreeStartSitDemo = () => {
   const [player1, setPlayer1] = useState("");
@@ -32,6 +33,9 @@ export const FreeStartSitDemo = () => {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Get current NFL week
+  const { week: currentWeek, season: currentSeason } = getCurrentNFLWeek();
+
   // Fetch player suggestions for player 1
   useEffect(() => {
     if (player1.length < 2) {
@@ -46,8 +50,8 @@ export const FreeStartSitDemo = () => {
           .from('sleeper_projections')
           .select('player_name, team, position')
           .ilike('player_name', `%${player1}%`)
-          .eq('week', 9)
-          .eq('season', 2025)
+          .eq('week', currentWeek)
+          .eq('season', currentSeason)
           .order('player_name')
           .limit(20);
 
@@ -71,7 +75,7 @@ export const FreeStartSitDemo = () => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [player1]);
+  }, [player1, currentWeek, currentSeason]);
 
   // Fetch player suggestions for player 2
   useEffect(() => {
@@ -87,8 +91,8 @@ export const FreeStartSitDemo = () => {
           .from('sleeper_projections')
           .select('player_name, team, position')
           .ilike('player_name', `%${player2}%`)
-          .eq('week', 9)
-          .eq('season', 2025)
+          .eq('week', currentWeek)
+          .eq('season', currentSeason)
           .order('player_name')
           .limit(20);
 
@@ -112,7 +116,7 @@ export const FreeStartSitDemo = () => {
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [player2]);
+  }, [player2, currentWeek, currentSeason]);
 
   const handleAnalyze = async () => {
     if (player1 && player2) {
@@ -123,11 +127,13 @@ export const FreeStartSitDemo = () => {
   const selectPlayer1 = (playerName: string) => {
     setPlayer1(playerName);
     setShowPlayer1Dropdown(false);
+    setPlayer1Suggestions([]);
   };
 
   const selectPlayer2 = (playerName: string) => {
     setPlayer2(playerName);
     setShowPlayer2Dropdown(false);
+    setPlayer2Suggestions([]);
   };
 
   const scrollToSection = (id: string) => {
