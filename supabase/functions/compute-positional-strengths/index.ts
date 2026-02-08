@@ -1,9 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3?target=deno";
+import { getCorsHeaders } from "../_shared/cors.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
 
 // Default lineup requirements
 const DEFAULT_STARTERS: Record<string, number> = {
@@ -40,6 +37,7 @@ const POSITION_WEIGHTS: Record<string, number[]> = {
 const FLEX_WEIGHTS = [1.50, 0.60];
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }

@@ -1,11 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3?target=deno';
+import { getCorsHeaders } from "../_shared/cors.ts";
+import { decrypt } from "../_shared/crypto.ts";
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
 
 /** ESPN slotId map (players endpoint) */
 const SLOT_NAME_TO_ID: Record<string, number> = {
@@ -56,6 +53,7 @@ function computeAppliedTotal(applied: Record<string, any> | undefined, fallback:
 type CountsOverride = Partial<Record<SlotName, number>>;
 
 Deno.serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -163,8 +161,8 @@ Deno.serve(async (req) => {
         }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      swidVal = cred.swid_encrypted;
-      espnS2Val = cred.espn_s2_encrypted;
+      swidVal = await decrypt(cred.swid_encrypted);
+      espnS2Val = await decrypt(cred.espn_s2_encrypted);
     }
 
     const swidCookie = swidVal!.startsWith('{') ? swidVal! : `{${swidVal}}`;

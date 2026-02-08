@@ -78,11 +78,9 @@ export default function ConnectLeague() {
           if (tokenError) throw tokenError;
 
           console.log('Token exchange successful, processing league data...');
-          console.log('Full tokenData:', JSON.stringify(tokenData, null, 2));
 
           // Get list of leagues from the games data
           const games = tokenData.gamesData?.fantasy_content?.users?.[0]?.user?.[1]?.games;
-          console.log('Games data:', JSON.stringify(games, null, 2));
           
           if (!games) {
             throw new Error('No NFL leagues found in Yahoo account');
