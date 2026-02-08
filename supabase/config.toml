@@ -149,3 +149,6 @@ verify_jwt = true
 
 [functions.ingest-snap-counts]
 verify_jwt = true
+
+[functions.validate-espn-credentials]
+verify_jwt = false
