@@ -26,7 +26,9 @@ export const Layout = ({ children }: LayoutProps) => {
   return (
     <div className="min-h-screen bg-background">
       <Header user={user} />
-      {children}
+      <main className="pt-16" style={{ paddingTop: 'calc(4rem + env(safe-area-inset-top, 0px))' }}>
+        {children}
+      </main>
     </div>
   );
 };

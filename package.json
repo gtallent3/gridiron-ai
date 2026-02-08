@@ -8,13 +8,22 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "npm run build && npx cap sync",
+    "cap:ios": "npm run build && npx cap sync ios && npx cap open ios",
+    "cap:android": "npm run build && npx cap sync android && npx cap open android",
+    "cap:assets": "npx @capacitor/assets generate --iconBackgroundColor '#333333' --splashBackgroundColor '#1a1a2e' --splashBackgroundColorDark '#1a1a2e'"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
+    "@capacitor/app": "^7.1.1",
     "@capacitor/cli": "^7.4.4",
     "@capacitor/core": "^7.4.4",
+    "@capacitor/haptics": "^7.0.3",
     "@capacitor/ios": "^7.4.4",
+    "@capacitor/keyboard": "^7.0.4",
+    "@capacitor/splash-screen": "^7.0.4",
+    "@capacitor/status-bar": "^7.0.4",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -70,6 +79,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^22.16.5",
