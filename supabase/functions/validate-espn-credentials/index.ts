@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
 import { getCorsHeaders } from "../_shared/cors.ts";
+import { encrypt } from "../_shared/crypto.ts";
 
 Deno.serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -75,8 +76,9 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // TODO: Add encryption when CREDENTIALS_ENCRYPTION_KEY is configured
-    // See _shared/crypto.ts for AES-256-GCM encrypt/decrypt utilities
+    // Encrypt credentials before storing
+    const swidEncrypted = await encrypt(swid);
+    const espnS2Encrypted = await encrypt(espn_s2);
 
     // Store credentials with 90-day expiration
     const expiresAt = new Date();
@@ -87,8 +89,8 @@ Deno.serve(async (req) => {
       .upsert({
         user_id: user.id,
         league_id: leagueId,
-        swid_encrypted: swid,
-        espn_s2_encrypted: espn_s2,
+        swid_encrypted: swidEncrypted,
+        espn_s2_encrypted: espnS2Encrypted,
         expires_at: expiresAt.toISOString(),
         last_synced_at: new Date().toISOString(),
       }, {

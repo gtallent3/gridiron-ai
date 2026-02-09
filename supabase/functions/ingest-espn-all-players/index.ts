@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3?target=deno';
 import { getCorsHeaders } from "../_shared/cors.ts";
-// TODO: import { decrypt } from "../_shared/crypto.ts"; when CREDENTIALS_ENCRYPTION_KEY is configured
+import { decrypt } from "../_shared/crypto.ts";
 
 
 /** ESPN slotId map (players endpoint) */
@@ -161,8 +161,8 @@ Deno.serve(async (req) => {
         }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
-      swidVal = cred.swid_encrypted;
-      espnS2Val = cred.espn_s2_encrypted;
+      swidVal = await decrypt(cred.swid_encrypted);
+      espnS2Val = await decrypt(cred.espn_s2_encrypted);
     }
 
     const swidCookie = swidVal!.startsWith('{') ? swidVal! : `{${swidVal}}`;
