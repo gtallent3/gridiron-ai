@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PlayerStatsDialog } from "./PlayerStatsDialog";
-import { getCurrentNFLWeek } from "@/lib/nflWeekUtils";
+import { getCurrentNFLWeek, SeasonState } from "@/lib/nflWeekUtils";
+import { useSeasonState } from "@/hooks/useSeasonState";
 import { isTeamOnBye } from "@/lib/byeWeekSchedule";
 import { calculateFantasyPoints } from "@/lib/fantasyPointsCalculator";
 
@@ -45,6 +46,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [selectedPlayers, setSelectedPlayers] = useState<string[]>([]);
   const [starters, setStarters] = useState<any[]>([]);
   const [bench, setBench] = useState<any[]>([]);
+  const { isInSeason } = useSeasonState();
   const [selectedWeek, setSelectedWeek] = useState<number>(league.current_week || getCurrentNFLWeek().week);
   const [providerCurrentWeek, setProviderCurrentWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -59,7 +61,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
     setLoading(true);
     try {
       const leagueCurrentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
-      const isHistorical = week < leagueCurrentWeek;
+      const isHistorical = !isInSeason || week < leagueCurrentWeek;
       
       // For ESPN and Yahoo, use player_pool_v2 via canonical_players
       if (league.platform === 'espn' || league.platform === 'yahoo') {
@@ -536,9 +538,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   }, [selectedWeek, userTeam, league.platform]);
 
   const handleWeekChange = (direction: 'prev' | 'next') => {
-    const currentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
+    const minWeek = isInSeason ? (providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week) : 1;
     setSelectedWeek(prev => {
-      if (direction === 'prev' && prev > currentWeek) return prev - 1;
+      if (direction === 'prev' && prev > minWeek) return prev - 1;
       if (direction === 'next' && prev < 18) return prev + 1;
       return prev;
     });
@@ -595,8 +597,9 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
 
   // Calculate week status first (needed for projection calculations)
   const currentWeek = providerCurrentWeek ?? league.current_week ?? getCurrentNFLWeek().week;
-  const isHistoricalWeek = selectedWeek < currentWeek;
-  const isFutureWeek = selectedWeek > currentWeek;
+  const isHistoricalWeek = !isInSeason || selectedWeek < currentWeek;
+  const isFutureWeek = isInSeason && selectedWeek > currentWeek;
+  const minWeek = isInSeason ? currentWeek : 1;
 
   const totalProjected = sortedStarters.reduce((sum, p) => {
     // For current week, use actual points if available, otherwise use projected
@@ -628,7 +631,7 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                 variant="outline"
                 size="sm"
                 onClick={() => handleWeekChange('prev')}
-                disabled={selectedWeek <= currentWeek || loading}
+                disabled={selectedWeek <= minWeek || loading}
                 className="touch-target"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -650,11 +653,11 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent className="bg-card z-50 max-h-[300px]">
-                    {Array.from({ length: maxWeek - currentWeek + 1 }, (_, i) => currentWeek + i).map(w => (
+                    {Array.from({ length: maxWeek - minWeek + 1 }, (_, i) => minWeek + i).map(w => (
                       <SelectItem key={w} value={String(w)}>
                         Week {w}
-                        {w === currentWeek && <span className="ml-1 text-xs text-primary">(Current)</span>}
-                        {w > currentWeek && <span className="ml-1 text-xs text-muted-foreground">(Future)</span>}
+                        {isInSeason && w === currentWeek && <span className="ml-1 text-xs text-primary">(Current)</span>}
+                        {isInSeason && w > currentWeek && <span className="ml-1 text-xs text-muted-foreground">(Future)</span>}
                       </SelectItem>
                     ))}
                   </SelectContent>

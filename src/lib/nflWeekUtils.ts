@@ -10,11 +10,19 @@
  * - Otherwise show current week
  */
 
+export enum SeasonState {
+  IN_SEASON = 'IN_SEASON',
+  POSTSEASON = 'POSTSEASON',
+  OFFSEASON = 'OFFSEASON',
+  PRE_SEASON = 'PRE_SEASON',
+}
+
 export interface NFLWeekInfo {
   week: number;
   season: number;
   label: string;
   isOffseason: boolean;
+  seasonState: SeasonState;
 }
 
 /**
@@ -52,6 +60,7 @@ export function getCurrentNFLWeek(): NFLWeekInfo {
       season: 2026,
       label: 'Offseason',
       isOffseason: true,
+      seasonState: SeasonState.OFFSEASON,
     };
   }
   
@@ -62,6 +71,7 @@ export function getCurrentNFLWeek(): NFLWeekInfo {
       season,
       label: 'Preseason',
       isOffseason: true,
+      seasonState: SeasonState.PRE_SEASON,
     };
   }
   
@@ -91,6 +101,7 @@ export function getCurrentNFLWeek(): NFLWeekInfo {
       season,
       label: 'Season Complete',
       isOffseason: true,
+      seasonState: SeasonState.POSTSEASON,
     };
   }
   
@@ -99,6 +110,7 @@ export function getCurrentNFLWeek(): NFLWeekInfo {
     season,
     label: `Week ${week}`,
     isOffseason: false,
+    seasonState: SeasonState.IN_SEASON,
   };
 }
 

@@ -5,11 +5,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, Trophy, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  DropdownMenu, 
-  DropdownMenuContent, 
-  DropdownMenuItem, 
-  DropdownMenuTrigger 
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { RosterView } from "@/components/league/RosterView";
 import { MatchupInsight } from "@/components/league/MatchupInsight";
@@ -23,6 +23,8 @@ import { LeagueAIAssistant } from "@/components/league/LeagueAIAssistant";
 import { PositionalRankings } from "@/components/league/PositionalRankings";
 import { ImprovePosition } from "@/components/league/ImprovePosition";
 import { ComputeValuesCard } from "@/components/league/ComputeValuesCard";
+import { OffseasonBanner } from "@/components/OffseasonBanner";
+import { useSeasonState } from "@/hooks/useSeasonState";
 
 type League = {
   id: string;
@@ -45,6 +47,7 @@ export default function LeagueDashboard() {
   const { leagueId } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { seasonState, isInSeason } = useSeasonState();
   const [loading, setLoading] = useState(true);
   const [league, setLeague] = useState<League | null>(null);
   const [userTeam, setUserTeam] = useState<Team | null>(null);
@@ -221,6 +224,9 @@ export default function LeagueDashboard() {
     );
   }
 
+  // In offseason, collapse grid to only visible tabs
+  const tabCols = isInSeason ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-2 sm:grid-cols-4";
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 mt-16">
       <div className="container mx-auto px-4 sm:px-6 py-4 sm:py-6">
@@ -234,70 +240,83 @@ export default function LeagueDashboard() {
           <span className="sm:hidden">Back</span>
         </Button>
 
+        {!isInSeason && <OffseasonBanner seasonState={seasonState} />}
+
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 sm:mt-8">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 max-w-4xl mx-auto h-auto">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant={activeTab === "roster" || activeTab === "matchup" ? "default" : "ghost"}
-                  className="text-xs sm:text-sm py-2 h-auto rounded-md data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-                >
-                  <span className="hidden sm:inline">
-                    {activeTab === "matchup" ? "Matchup" : "My Team"}
-                  </span>
-                  <span className="sm:hidden">
-                    {activeTab === "matchup" ? "Match" : "Team"}
-                  </span>
-                  <ChevronDown className="ml-1 h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-popover">
-                <DropdownMenuItem onClick={() => setActiveTab("roster")}>
-                  My Team
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setActiveTab("matchup")}>
-                  Matchup
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            
+          <TabsList className={`grid w-full ${tabCols} max-w-4xl mx-auto h-auto`}>
+            {isInSeason ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={activeTab === "roster" || activeTab === "matchup" ? "default" : "ghost"}
+                    className="text-xs sm:text-sm py-2 h-auto rounded-md data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                  >
+                    <span className="hidden sm:inline">
+                      {activeTab === "matchup" ? "Matchup" : "My Team"}
+                    </span>
+                    <span className="sm:hidden">
+                      {activeTab === "matchup" ? "Match" : "Team"}
+                    </span>
+                    <ChevronDown className="ml-1 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="bg-popover">
+                  <DropdownMenuItem onClick={() => setActiveTab("roster")}>
+                    My Team
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActiveTab("matchup")}>
+                    Matchup
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <TabsTrigger value="roster" className="text-xs sm:text-sm py-2">
+                <span className="hidden sm:inline">My Team</span>
+                <span className="sm:hidden">Team</span>
+              </TabsTrigger>
+            )}
+
             <TabsTrigger value="rankings" className="text-xs sm:text-sm py-2">
               <span className="hidden sm:inline">League Rankings</span>
               <span className="sm:hidden">Ranks</span>
             </TabsTrigger>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button 
-                  variant={activeTab === "trade" ? "default" : "ghost"}
-                  className="text-xs sm:text-sm py-2 h-auto rounded-md data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
-                  onClick={() => setActiveTab("trade")}
-                >
-                  <span className="hidden sm:inline">
-                    {tradeView === "finder" ? "Find Trades" : tradeView === "improve" ? "Improve Position" : "Trade Analyzer"}
-                  </span>
-                  <span className="sm:hidden">
-                    {tradeView === "finder" ? "Find" : tradeView === "improve" ? "Improve" : "Trade"}
-                  </span>
-                  <ChevronDown className="ml-1 h-3 w-3" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="bg-popover">
-                <DropdownMenuItem onClick={() => { setActiveTab("trade"); setTradeView("analyzer"); }}>
-                  Trade Analyzer
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setActiveTab("trade"); setTradeView("finder"); }}>
-                  Find Trades
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setActiveTab("trade"); setTradeView("improve"); }}>
-                  Improve Position
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <TabsTrigger value="waiver" className="text-xs sm:text-sm py-2">
-              <span className="hidden sm:inline">Waiver Wire</span>
-              <span className="sm:hidden">Waiver</span>
-            </TabsTrigger>
+
+            {isInSeason && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant={activeTab === "trade" ? "default" : "ghost"}
+                    className="text-xs sm:text-sm py-2 h-auto rounded-md data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow-sm"
+                    onClick={() => setActiveTab("trade")}
+                  >
+                    <span className="hidden sm:inline">
+                      {tradeView === "finder" ? "Find Trades" : tradeView === "improve" ? "Improve Position" : "Trade Analyzer"}
+                    </span>
+                    <span className="sm:hidden">
+                      {tradeView === "finder" ? "Find" : tradeView === "improve" ? "Improve" : "Trade"}
+                    </span>
+                    <ChevronDown className="ml-1 h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="bg-popover">
+                  <DropdownMenuItem onClick={() => { setActiveTab("trade"); setTradeView("analyzer"); }}>
+                    Trade Analyzer
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setActiveTab("trade"); setTradeView("finder"); }}>
+                    Find Trades
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { setActiveTab("trade"); setTradeView("improve"); }}>
+                    Improve Position
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            {isInSeason && (
+              <TabsTrigger value="waiver" className="text-xs sm:text-sm py-2">
+                <span className="hidden sm:inline">Waiver Wire</span>
+                <span className="sm:hidden">Waiver</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="ai" className="text-xs sm:text-sm py-2">
               <span className="hidden sm:inline">AI Assistant</span>
               <span className="sm:hidden">AI</span>
@@ -309,81 +328,87 @@ export default function LeagueDashboard() {
           </TabsList>
 
           <TabsContent value="roster" className="mt-4 sm:mt-6">
-            <LeagueHeader 
-              league={league} 
+            <LeagueHeader
+              league={league}
               userTeam={userTeam}
               onSyncComplete={fetchLeagueData}
             />
             <div className="mt-4 sm:mt-6">
-              <RosterView 
-                league={league} 
+              <RosterView
+                league={league}
                 userTeam={userTeam}
               />
             </div>
           </TabsContent>
 
-          <TabsContent value="matchup" className="mt-4 sm:mt-6">
-            <MatchupInsight 
-              league={league}
-              userTeam={userTeam}
-            />
-          </TabsContent>
+          {isInSeason && (
+            <TabsContent value="matchup" className="mt-4 sm:mt-6">
+              <MatchupInsight
+                league={league}
+                userTeam={userTeam}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="rankings" className="mt-4 sm:mt-6">
             <PositionalRankings leagueId={league.id} teams={allTeams} />
           </TabsContent>
 
-          <TabsContent value="trade" className="mt-4 sm:mt-6">
-            {!userTeam ? (
-              <div className="text-center py-12 space-y-4">
-                <p className="text-muted-foreground">
-                  Unable to load your team data. Please try resyncing your league.
-                </p>
-                <Button onClick={() => navigate('/')}>
-                  Back to Leagues
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <ComputeValuesCard leagueId={league.id} />
-                
-                <div className="mt-4 sm:mt-6">
-                  {tradeView === "analyzer" && (
-                    <TradeAnalyzer league={league} userTeam={userTeam} />
-                  )}
-                  {tradeView === "finder" && (
-                    <TradeFinder league={league} userTeam={userTeam} allTeams={allTeams} />
-                  )}
-                  {tradeView === "improve" && (
-                    <ImprovePosition 
-                      leagueId={league.id}
-                      myTeamId={userTeam.team_id}
-                      myTeam={userTeam}
-                      allTeams={allTeams}
-                    />
-                  )}
+          {isInSeason && (
+            <TabsContent value="trade" className="mt-4 sm:mt-6">
+              {!userTeam ? (
+                <div className="text-center py-12 space-y-4">
+                  <p className="text-muted-foreground">
+                    Unable to load your team data. Please try resyncing your league.
+                  </p>
+                  <Button onClick={() => navigate('/')}>
+                    Back to Leagues
+                  </Button>
                 </div>
-              </div>
-            )}
-          </TabsContent>
+              ) : (
+                <div className="space-y-4">
+                  <ComputeValuesCard leagueId={league.id} />
 
-          <TabsContent value="waiver" className="mt-4 sm:mt-6">
-            <WaiverWire 
-              league={league}
-              userTeam={userTeam}
-              allTeams={allTeams}
-            />
-          </TabsContent>
+                  <div className="mt-4 sm:mt-6">
+                    {tradeView === "analyzer" && (
+                      <TradeAnalyzer league={league} userTeam={userTeam} />
+                    )}
+                    {tradeView === "finder" && (
+                      <TradeFinder league={league} userTeam={userTeam} allTeams={allTeams} />
+                    )}
+                    {tradeView === "improve" && (
+                      <ImprovePosition
+                        leagueId={league.id}
+                        myTeamId={userTeam.team_id}
+                        myTeam={userTeam}
+                        allTeams={allTeams}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {isInSeason && (
+            <TabsContent value="waiver" className="mt-4 sm:mt-6">
+              <WaiverWire
+                league={league}
+                userTeam={userTeam}
+                allTeams={allTeams}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="ai" className="mt-4 sm:mt-6">
-            <LeagueAIAssistant 
+            <LeagueAIAssistant
               league={league}
               userTeam={userTeam}
             />
           </TabsContent>
 
           <TabsContent value="teams" className="mt-4 sm:mt-6">
-            <OtherTeams 
+            <OtherTeams
               league={league}
               currentTeamId={userTeam?.team_id}
             />

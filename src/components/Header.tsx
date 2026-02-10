@@ -11,23 +11,40 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSeasonState } from "@/hooks/useSeasonState";
+import { SeasonState } from "@/lib/nflWeekUtils";
 
 type HeaderProps = {
   user?: any;
 };
 
+const SEASON_BADGE_LABEL: Partial<Record<SeasonState, string>> = {
+  [SeasonState.OFFSEASON]: "Offseason",
+  [SeasonState.PRE_SEASON]: "Preseason",
+  [SeasonState.POSTSEASON]: "Postseason",
+};
+
 export const Header = ({ user }: HeaderProps) => {
   const navigate = useNavigate();
+  const { seasonState, isInSeason } = useSeasonState();
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
+
+  const badgeLabel = SEASON_BADGE_LABEL[seasonState];
+
   return <header className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-black backdrop-blur-lg" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
       <div className="container mx-auto px-4 sm:px-6">
         <div className="flex h-16 items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
             <img src={logo} alt="Gridiron GM Logo" className="h-8 w-8 sm:h-10 sm:w-10" />
             <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">Gridiron GM</h1>
+            {badgeLabel && (
+              <span className="text-xs bg-muted text-muted-foreground rounded-full px-2 py-0.5 hidden sm:inline">
+                {badgeLabel}
+              </span>
+            )}
           </div>
           
           <nav className="hidden md:flex items-center gap-6">

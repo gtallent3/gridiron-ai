@@ -11,9 +11,12 @@ import { ConnectedLeagues } from "@/components/ConnectedLeagues";
 import { StartSitAnalyzer } from "@/components/StartSitAnalyzer";
 import { PositionalRankingsSnapshot } from "@/components/PositionalRankingsSnapshot";
 import { AIAssistant } from "@/components/AIAssistant";
+import { OffseasonBanner } from "@/components/OffseasonBanner";
+import { useSeasonState } from "@/hooks/useSeasonState";
 
 const Index = () => {
   const [user, setUser] = useState<any>(null);
+  const { seasonState, isInSeason } = useSeasonState();
 
   useEffect(() => {
     // Check current session
@@ -32,19 +35,24 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header user={user} />
-      
+
       {user ? (
         // Signed-in User Experience
         <>
           <section className="pt-20 py-12">
             <div className="container mx-auto px-4">
               <div className="max-w-4xl mx-auto">
+                {!isInSeason && <OffseasonBanner seasonState={seasonState} showBackfill />}
                 <ConnectedLeagues />
               </div>
             </div>
           </section>
-          <StartSitAnalyzer />
-          <PositionalRankingsSnapshot />
+          {isInSeason && (
+            <>
+              <StartSitAnalyzer />
+              <PositionalRankingsSnapshot />
+            </>
+          )}
           <AIAssistant />
         </>
       ) : (
@@ -57,7 +65,7 @@ const Index = () => {
           <FinalCTA />
         </>
       )}
-      
+
       <Footer />
     </div>
   );

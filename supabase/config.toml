@@ -147,5 +147,11 @@ verify_jwt = true
 [functions.ingest-snap-counts]
 verify_jwt = true
 
+[functions.ingest-nfl-fantasy-points]
+verify_jwt = true
+
+[functions.populate-player-pool]
+verify_jwt = true
+
 [functions.validate-espn-credentials]
 verify_jwt = false
