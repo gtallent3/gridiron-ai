@@ -224,8 +224,8 @@ export default function LeagueDashboard() {
     );
   }
 
-  // In offseason, collapse grid to only visible tabs
-  const tabCols = isInSeason ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-2 sm:grid-cols-4";
+  // In offseason, collapse grid to only visible tabs (add recap tab)
+  const tabCols = isInSeason ? "grid-cols-3 sm:grid-cols-6" : "grid-cols-3 sm:grid-cols-5";
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-secondary/20 mt-16">
@@ -317,6 +317,12 @@ export default function LeagueDashboard() {
                 <span className="sm:hidden">Waiver</span>
               </TabsTrigger>
             )}
+            {!isInSeason && (
+              <TabsTrigger value="recap" className="text-xs sm:text-sm py-2">
+                <span className="hidden sm:inline">Season Recap</span>
+                <span className="sm:hidden">Recap</span>
+              </TabsTrigger>
+            )}
             <TabsTrigger value="ai" className="text-xs sm:text-sm py-2">
               <span className="hidden sm:inline">AI Assistant</span>
               <span className="sm:hidden">AI</span>
@@ -397,6 +403,21 @@ export default function LeagueDashboard() {
                 userTeam={userTeam}
                 allTeams={allTeams}
               />
+            </TabsContent>
+          )}
+
+          {!isInSeason && (
+            <TabsContent value="recap" className="mt-4 sm:mt-6">
+              <div className="text-center py-12 space-y-4">
+                <Trophy className="h-12 w-12 text-primary mx-auto" />
+                <h3 className="text-lg font-semibold">2025 Season Recap</h3>
+                <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                  View your complete season performance with charts, top performers, and positional breakdowns.
+                </p>
+                <Button onClick={() => navigate(`/league/${leagueId}/recap`)}>
+                  View Full Recap
+                </Button>
+              </div>
             </TabsContent>
           )}
 

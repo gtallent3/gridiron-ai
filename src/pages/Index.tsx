@@ -12,7 +12,9 @@ import { StartSitAnalyzer } from "@/components/StartSitAnalyzer";
 import { PositionalRankingsSnapshot } from "@/components/PositionalRankingsSnapshot";
 import { AIAssistant } from "@/components/AIAssistant";
 import { OffseasonBanner } from "@/components/OffseasonBanner";
+import { PreseasonDashboard } from "@/components/PreseasonDashboard";
 import { useSeasonState } from "@/hooks/useSeasonState";
+import { SeasonState } from "@/lib/nflWeekUtils";
 
 const Index = () => {
   const [user, setUser] = useState<any>(null);
@@ -52,6 +54,15 @@ const Index = () => {
               <StartSitAnalyzer />
               <PositionalRankingsSnapshot />
             </>
+          )}
+          {seasonState === SeasonState.PRE_SEASON && (
+            <section className="py-6">
+              <div className="container mx-auto px-4">
+                <div className="max-w-4xl mx-auto">
+                  <PreseasonDashboard />
+                </div>
+              </div>
+            </section>
           )}
           <AIAssistant />
         </>

@@ -26,75 +26,102 @@ export interface NFLWeekInfo {
 }
 
 /**
- * 2025 NFL Season Schedule (approximate)
- * Week 1: Sept 4-10, 2025 (adjusted to match current week 9 on Oct 30)
- * Week 18: Jan 5-9, 2026
+ * NFL Season Schedule data
+ * Each entry: [seasonYear, startDate, endDate]
+ * Week 1 starts on startDate, Week 18 ends on endDate
  */
-const NFL_2025_START = new Date('2025-09-04T00:00:00-04:00'); // Week 1 starts Sept 4
-const NFL_2025_END = new Date('2026-01-09T23:59:59-05:00'); // Week 18 end
+const NFL_SEASONS: { season: number; start: Date; end: Date }[] = [
+  { season: 2024, start: new Date('2024-09-05T00:00:00-04:00'), end: new Date('2025-01-07T23:59:59-05:00') },
+  { season: 2025, start: new Date('2025-09-04T00:00:00-04:00'), end: new Date('2026-01-09T23:59:59-05:00') },
+  { season: 2026, start: new Date('2026-09-10T00:00:00-04:00'), end: new Date('2027-01-08T23:59:59-05:00') },
+];
 
 /**
  * Get current NFL week and season
  */
 export function getCurrentNFLWeek(): NFLWeekInfo {
   const now = new Date();
-  const currentYear = now.getFullYear();
-  
-  // Determine if we're in the 2024 or 2025 season
-  // NFL season starts in September and ends in January of next year
-  let seasonStart: Date;
-  let season: number;
-  
-  if (now >= NFL_2025_START && now <= NFL_2025_END) {
-    // 2025 season
-    seasonStart = NFL_2025_START;
-    season = 2025;
-  } else if (now < NFL_2025_START) {
-    // Before 2025 season - use 2024 season dates
-    seasonStart = new Date('2024-09-05T00:00:00-04:00');
-    season = 2024;
-  } else {
-    // After 2025 season - offseason
-    return {
-      week: 1,
-      season: 2026,
-      label: 'Offseason',
-      isOffseason: true,
-      seasonState: SeasonState.OFFSEASON,
-    };
+
+  // Find which season window we fall into
+  for (const { season, start, end } of NFL_SEASONS) {
+    if (now >= start && now <= end) {
+      // We're inside this season — calculate the week
+      return computeWeek(now, season, start);
+    }
   }
-  
-  // Check if we're before season start
-  if (now < seasonStart) {
+
+  // We're between seasons — figure out if it's postseason or preseason
+  // Sort seasons so we can find the gap we're in
+  for (let i = 0; i < NFL_SEASONS.length; i++) {
+    const curr = NFL_SEASONS[i];
+    const next = NFL_SEASONS[i + 1];
+
+    // After this season's end but before next season's start → gap
+    if (next && now > curr.end && now < next.start) {
+      // Jan-Feb after season end → POSTSEASON (playoffs happening)
+      // Mar-Aug → OFFSEASON / PRE_SEASON
+      const monthOfYear = now.getMonth(); // 0-indexed
+      if (monthOfYear <= 1) {
+        // Jan-Feb: postseason / just ended
+        return {
+          week: 18,
+          season: curr.season,
+          label: 'Season Complete',
+          isOffseason: true,
+          seasonState: SeasonState.POSTSEASON,
+        };
+      }
+      // Mar-Aug: offseason → preseason for the next year
+      return {
+        week: 1,
+        season: next.season,
+        label: 'Preseason',
+        isOffseason: true,
+        seasonState: SeasonState.PRE_SEASON,
+      };
+    }
+  }
+
+  // Before all known seasons
+  const first = NFL_SEASONS[0];
+  if (now < first.start) {
     return {
       week: 1,
-      season,
+      season: first.season,
       label: 'Preseason',
       isOffseason: true,
       seasonState: SeasonState.PRE_SEASON,
     };
   }
-  
-  // Calculate weeks since season start
+
+  // After all known seasons
+  const last = NFL_SEASONS[NFL_SEASONS.length - 1];
+  return {
+    week: 1,
+    season: last.season + 1,
+    label: 'Offseason',
+    isOffseason: true,
+    seasonState: SeasonState.OFFSEASON,
+  };
+}
+
+function computeWeek(now: Date, season: number, seasonStart: Date): NFLWeekInfo {
   const msPerWeek = 7 * 24 * 60 * 60 * 1000;
   const msSinceStart = now.getTime() - seasonStart.getTime();
   let weeksSinceStart = Math.floor(msSinceStart / msPerWeek);
-  
+
   // Week rollover logic: Tuesday/Wednesday after MNF rolls to next week
-  const dayOfWeek = now.getDay(); // 0=Sunday, 1=Monday, 2=Tuesday, 3=Wednesday
+  const dayOfWeek = now.getDay(); // 0=Sunday, 2=Tuesday, 3=Wednesday
   const hourOfDay = now.getHours();
-  
-  // If it's Tuesday morning (after 3 AM) or Wednesday, advance to next week
+
   if (dayOfWeek === 2 && hourOfDay >= 3) {
     weeksSinceStart += 1;
   } else if (dayOfWeek === 3) {
     weeksSinceStart += 1;
   }
-  
-  // Current week is weeksSinceStart + 1 (Week 1 is first week)
+
   const week = Math.min(weeksSinceStart + 1, 18);
-  
-  // If we've gone past Week 18, we're in offseason
+
   if (week > 18) {
     return {
       week: 18,
@@ -104,7 +131,7 @@ export function getCurrentNFLWeek(): NFLWeekInfo {
       seasonState: SeasonState.POSTSEASON,
     };
   }
-  
+
   return {
     week,
     season,

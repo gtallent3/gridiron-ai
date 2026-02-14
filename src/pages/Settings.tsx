@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/Header";
 import { LeagueSettings } from "@/components/LeagueSettings";
+import { NotificationSettings } from "@/components/NotificationSettings";
 import { Loader2 } from "lucide-react";
 
 const Settings = () => {
@@ -51,6 +52,9 @@ const Settings = () => {
             </p>
           </div>
           <LeagueSettings />
+          <div className="mt-8">
+            <NotificationSettings />
+          </div>
         </div>
       </main>
     </div>

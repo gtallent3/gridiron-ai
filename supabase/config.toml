@@ -155,3 +155,6 @@ verify_jwt = true
 
 [functions.validate-espn-credentials]
 verify_jwt = false
+
+[functions.send-notification]
+verify_jwt = true

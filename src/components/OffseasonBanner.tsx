@@ -34,6 +34,27 @@ export function OffseasonBanner({ seasonState, showBackfill = false }: { seasonS
 
   const Icon = config.icon;
 
+  const invokeFunction = async (fnName: string, body: Record<string, unknown>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("Not authenticated");
+
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const resp = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${session.access_token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => resp.statusText);
+      throw new Error(`${fnName} failed (${resp.status}): ${text}`);
+    }
+    return resp.json();
+  };
+
   const handleBackfill = async () => {
     setStatus("ingesting");
     setProgress("Downloading 2025 season stats from nflverse...");
@@ -41,12 +62,8 @@ export function OffseasonBanner({ seasonState, showBackfill = false }: { seasonS
 
     try {
       // Step 1: Ingest actual stats from nflverse CSV
-      const { data: ingestResult, error: ingestError } = await supabase.functions.invoke(
-        "ingest-nfl-fantasy-points",
-        { body: { season: 2025 } }
-      );
+      const ingestResult = await invokeFunction("ingest-nfl-fantasy-points", { season: 2025 });
 
-      if (ingestError) throw new Error(ingestError.message || "Failed to ingest stats");
       if (!ingestResult?.success) throw new Error(ingestResult?.error || "Ingest returned failure");
 
       const recordCount = ingestResult.records_processed || 0;
@@ -62,12 +79,9 @@ export function OffseasonBanner({ seasonState, showBackfill = false }: { seasonS
 
       while (iteration < MAX_ITERATIONS) {
         iteration++;
-        const { data: poolResult, error: poolError } = await supabase.functions.invoke(
-          "populate-player-pool",
-          { body: { maxBatches: 4, startSleeperIndex: sleeperIdx, startNflIndex: nflIdx, chunkSize: 500 } }
-        );
-
-        if (poolError) throw new Error(poolError.message || "Failed to populate player pool");
+        const poolResult = await invokeFunction("populate-player-pool", {
+          maxBatches: 4, startSleeperIndex: sleeperIdx, startNflIndex: nflIdx, chunkSize: 500,
+        });
 
         totalInserted += (poolResult.sleeperInserted || 0) + (poolResult.nflInserted || 0);
         setProgress(`Populating player pool... ${totalInserted.toLocaleString()} records written (batch ${iteration})`);
