@@ -44,14 +44,15 @@ export function KeeperAnalysis() {
       const rosterNames = new Set<string>();
       const roster = Array.isArray(teams[0].roster) ? teams[0].roster : [];
       for (const p of roster) {
-        const name = p.player_name || p.name;
+        const pAny = p as any;
+        const name = pAny.player_name || pAny.name;
         if (name) rosterNames.add(name);
       }
 
       // Query historical performance from player_pool_v2
       const { data: poolData } = await supabase
         .from("player_pool_v2")
-        .select("player_name, position, week, fantasy_points")
+        .select("player_name, position, week, actual_fp")
         .eq("source", "nfl_actual")
         .gte("week", 1)
         .lte("week", 18);
@@ -61,11 +62,11 @@ export function KeeperAnalysis() {
       // Aggregate by player (only roster players)
       const playerMap = new Map<string, { position: string; total: number; games: number }>();
       for (const row of poolData) {
-        if (!rosterNames.has(row.player_name)) continue;
-        const existing = playerMap.get(row.player_name) || { position: row.position || "??", total: 0, games: 0 };
-        existing.total += row.fantasy_points || 0;
+        if (!rosterNames.has(row.player_name!)) continue;
+        const existing = playerMap.get(row.player_name!) || { position: row.position || "??", total: 0, games: 0 };
+        existing.total += row.actual_fp || 0;
         existing.games += 1;
-        playerMap.set(row.player_name, existing);
+        playerMap.set(row.player_name!, existing);
       }
 
       const candidates: KeeperCandidate[] = Array.from(playerMap.entries())

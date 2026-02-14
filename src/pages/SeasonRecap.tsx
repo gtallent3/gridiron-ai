@@ -80,7 +80,8 @@ export default function SeasonRecap() {
         for (const team of teams) {
           const roster = Array.isArray(team.roster) ? team.roster : [];
           for (const player of roster) {
-            const name = player.player_name || player.name;
+            const pAny = player as any;
+            const name = pAny.player_name || pAny.name;
             if (name) allPlayerNames.add(name);
           }
         }
@@ -88,7 +89,8 @@ export default function SeasonRecap() {
         if (teams.length > 0) {
           const myRoster = Array.isArray(teams[0].roster) ? teams[0].roster : [];
           for (const p of myRoster) {
-            const name = p.player_name || p.name;
+            const pAny = p as any;
+            const name = pAny.player_name || pAny.name;
             if (name) myRosterNames.add(name);
           }
         }
@@ -97,7 +99,7 @@ export default function SeasonRecap() {
       // Query player_pool_v2 for actual stats (all weeks, nfl_actual source)
       const { data: poolData } = await supabase
         .from("player_pool_v2")
-        .select("player_name, position, week, fantasy_points, source")
+        .select("player_name, position, week, actual_fp, source")
         .eq("source", "nfl_actual")
         .gte("week", 1)
         .lte("week", 18);
@@ -108,12 +110,12 @@ export default function SeasonRecap() {
       }
 
       // Filter to roster players
-      const rosterStats = poolData.filter((r) => myRosterNames.has(r.player_name));
+      const rosterStats = poolData.filter((r) => myRosterNames.has(r.player_name!));
 
       // Aggregate by week for chart
       const weekMap = new Map<number, number>();
       for (const row of rosterStats) {
-        const pts = row.fantasy_points || 0;
+        const pts = row.actual_fp || 0;
         weekMap.set(row.week, (weekMap.get(row.week) || 0) + pts);
       }
       const weekly: WeeklyData[] = Array.from(weekMap.entries())
@@ -139,9 +141,9 @@ export default function SeasonRecap() {
       // Top performers by total points
       const playerMap = new Map<string, { position: string; total: number; games: number }>();
       for (const row of rosterStats) {
-        const key = row.player_name;
+        const key = row.player_name!;
         const existing = playerMap.get(key) || { position: row.position || "??", total: 0, games: 0 };
-        existing.total += row.fantasy_points || 0;
+        existing.total += row.actual_fp || 0;
         existing.games += 1;
         playerMap.set(key, existing);
       }
@@ -160,7 +162,7 @@ export default function SeasonRecap() {
       const posMap = new Map<string, number>();
       for (const row of rosterStats) {
         const pos = row.position || "??";
-        posMap.set(pos, (posMap.get(pos) || 0) + (row.fantasy_points || 0));
+        posMap.set(pos, (posMap.get(pos) || 0) + (row.actual_fp || 0));
       }
       const posData: PositionData[] = Array.from(posMap.entries())
         .map(([position, points]) => ({ position, points: Math.round(points * 10) / 10 }))

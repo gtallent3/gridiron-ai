@@ -74,7 +74,7 @@ export function usePushNotifications() {
       if (!session) return;
 
       const platform = Capacitor.getPlatform(); // 'ios' | 'android'
-      await supabase.from("device_tokens").upsert(
+      await (supabase as any).from("device_tokens").upsert(
         {
           user_id: session.user.id,
           platform,
