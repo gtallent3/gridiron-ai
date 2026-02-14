@@ -148,10 +148,10 @@ verify_jwt = true
 verify_jwt = true
 
 [functions.ingest-nfl-fantasy-points]
-verify_jwt = true
+verify_jwt = false
 
 [functions.populate-player-pool]
-verify_jwt = true
+verify_jwt = false
 
 [functions.validate-espn-credentials]
 verify_jwt = false
