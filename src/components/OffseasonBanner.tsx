@@ -35,24 +35,39 @@ export function OffseasonBanner({ seasonState, showBackfill = false }: { seasonS
   const Icon = config.icon;
 
   const invokeFunction = async (fnName: string, body: Record<string, unknown>) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error("Not authenticated");
+    // Try the standard supabase.functions.invoke first
+    const { data, error } = await supabase.functions.invoke(fnName, { body });
 
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const resp = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${session.access_token}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    if (error) {
+      // If the SDK call fails (e.g. function not deployed), try direct fetch as fallback
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated — please sign in again");
 
-    if (!resp.ok) {
-      const text = await resp.text().catch(() => resp.statusText);
-      throw new Error(`${fnName} failed (${resp.status}): ${text}`);
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+      const resp = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${session.access_token}`,
+          "apikey": anonKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => resp.statusText);
+        throw new Error(
+          resp.status === 404
+            ? `Edge function "${fnName}" not found — it may not be deployed yet`
+            : `${fnName} failed (${resp.status}): ${text}`
+        );
+      }
+      return resp.json();
     }
-    return resp.json();
+
+    return data;
   };
 
   const handleBackfill = async () => {
@@ -96,7 +111,10 @@ export function OffseasonBanner({ seasonState, showBackfill = false }: { seasonS
       setProgress(`Backfill complete! ${recordCount.toLocaleString()} stats ingested, ${totalInserted.toLocaleString()} pool records written.`);
       setStatus("done");
     } catch (err: any) {
-      const msg = err?.message || "Unknown error";
+      let msg = err?.message || "Unknown error";
+      if (msg === "Failed to fetch" || msg.includes("Failed to send")) {
+        msg = "Could not reach the backfill service. The edge functions may not be deployed yet — try again after a Lovable deployment.";
+      }
       setError(msg);
       setStatus("error");
     }
