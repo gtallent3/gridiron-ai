@@ -35,7 +35,7 @@ export function NotificationSettings() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      const { data } = await supabase
+      const { data } = await (supabase as any)
         .from("notification_preferences")
         .select("*")
         .eq("user_id", session.user.id)
@@ -62,7 +62,7 @@ export function NotificationSettings() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      await supabase.from("notification_preferences").upsert({
+      await (supabase as any).from("notification_preferences").upsert({
         user_id: session.user.id,
         ...newPrefs,
         updated_at: new Date().toISOString(),
