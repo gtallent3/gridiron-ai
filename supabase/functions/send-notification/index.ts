@@ -12,11 +12,42 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const fcmServerKey = Deno.env.get("FCM_SERVER_KEY");
 
+    // Verify the caller is authenticated
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Missing authorization" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Verify the JWT and get the calling user
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const callerClient = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user: caller }, error: authError } = await callerClient.auth.getUser();
+    if (authError || !caller) {
+      return new Response(
+        JSON.stringify({ error: "Invalid or expired token" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { userId, title, body, data } = await req.json();
     if (!userId || !title || !body) {
       throw new Error("userId, title, and body are required");
+    }
+
+    // Users can only send notifications to themselves (server-side triggers
+    // use the service_role key which bypasses this function entirely)
+    if (caller.id !== userId) {
+      return new Response(
+        JSON.stringify({ error: "Cannot send notifications to other users" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     // Check user's notification preferences
