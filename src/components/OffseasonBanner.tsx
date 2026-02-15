@@ -17,12 +17,44 @@ const STATE_CONFIG: Record<string, { icon: typeof Calendar; message: string; acc
   },
   [SeasonState.POSTSEASON]: {
     icon: Trophy,
-    message: "The regular season is complete! Playoffs are underway. Check your final standings.",
+    message: "The 2025 season is complete! Check your final standings and season recap.",
     accent: "border-primary/30 bg-primary/5",
   },
 };
 
-type BackfillStatus = "idle" | "ingesting" | "populating" | "done" | "error";
+type BackfillStatus = "idle" | "ingesting" | "done" | "error";
+
+// Simple CSV parser that handles quoted fields
+function parseCSV(text: string): Record<string, string>[] {
+  const lines = text.split("\n");
+  if (lines.length < 2) return [];
+
+  const headers = lines[0].split(",").map((h) => h.trim().replace(/^"|"$/g, ""));
+  const rows: Record<string, string>[] = [];
+
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+
+    // Simple CSV split (handles most cases; nflverse CSVs are clean)
+    const values: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (const ch of line) {
+      if (ch === '"') { inQuotes = !inQuotes; continue; }
+      if (ch === "," && !inQuotes) { values.push(current.trim()); current = ""; continue; }
+      current += ch;
+    }
+    values.push(current.trim());
+
+    const row: Record<string, string> = {};
+    for (let j = 0; j < headers.length; j++) {
+      row[headers[j]] = values[j] ?? "";
+    }
+    rows.push(row);
+  }
+  return rows;
+}
 
 export function OffseasonBanner({ seasonState, showBackfill = false }: { seasonState: SeasonState; showBackfill?: boolean }) {
   const config = STATE_CONFIG[seasonState];
@@ -34,88 +66,111 @@ export function OffseasonBanner({ seasonState, showBackfill = false }: { seasonS
 
   const Icon = config.icon;
 
-  const invokeFunction = async (fnName: string, body: Record<string, unknown>) => {
-    // Try the standard supabase.functions.invoke first
-    const { data, error } = await supabase.functions.invoke(fnName, { body });
-
-    if (error) {
-      // If the SDK call fails (e.g. function not deployed), try direct fetch as fallback
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not authenticated — please sign in again");
-
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const anonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-      const resp = await fetch(`${supabaseUrl}/functions/v1/${fnName}`, {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${session.access_token}`,
-          "apikey": anonKey,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      });
-
-      if (!resp.ok) {
-        const text = await resp.text().catch(() => resp.statusText);
-        throw new Error(
-          resp.status === 404
-            ? `Edge function "${fnName}" not found — it may not be deployed yet`
-            : `${fnName} failed (${resp.status}): ${text}`
-        );
-      }
-      return resp.json();
-    }
-
-    return data;
-  };
-
   const handleBackfill = async () => {
     setStatus("ingesting");
     setProgress("Downloading 2025 season stats from nflverse...");
     setError("");
 
+    const season = 2025;
+
     try {
-      // Step 1: Ingest actual stats from nflverse CSV
-      const ingestResult = await invokeFunction("ingest-nfl-fantasy-points", { season: 2025 });
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated — please sign in again");
 
-      if (!ingestResult?.success) throw new Error(ingestResult?.error || "Ingest returned failure");
+      // Step 1: Fetch CSV directly from nflverse (public GitHub, CORS-friendly)
+      const csvUrl = `https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_${season}.csv`;
+      const resp = await fetch(csvUrl);
+      if (!resp.ok) throw new Error(`Failed to download stats CSV (HTTP ${resp.status})`);
 
-      const recordCount = ingestResult.records_processed || 0;
-      setProgress(`Ingested ${recordCount.toLocaleString()} stat records. Populating player pool...`);
-      setStatus("populating");
+      const csvText = await resp.text();
+      setProgress("Parsing stats data...");
 
-      // Step 2: Populate player_pool_v2 (resumable loop)
-      let sleeperIdx = 0;
-      let nflIdx = 0;
-      let totalInserted = 0;
-      let iteration = 0;
-      const MAX_ITERATIONS = 50; // safety bound
+      // Step 2: Parse CSV
+      const rows = parseCSV(csvText);
+      if (rows.length === 0) throw new Error("CSV was empty or could not be parsed");
 
-      while (iteration < MAX_ITERATIONS) {
-        iteration++;
-        const poolResult = await invokeFunction("populate-player-pool", {
-          maxBatches: 4, startSleeperIndex: sleeperIdx, startNflIndex: nflIdx, chunkSize: 500,
+      setProgress(`Parsed ${rows.length.toLocaleString()} rows. Computing fantasy points...`);
+
+      // Step 3: Build records with fantasy point calculations
+      const toFloat = (v: string | undefined) => {
+        const n = parseFloat(v || "0");
+        return Number.isFinite(n) ? n : 0;
+      };
+      const toInt = (v: string | undefined) => {
+        const n = parseInt(v || "0", 10);
+        return Number.isFinite(n) ? n : 0;
+      };
+      const getFirst = (row: Record<string, string>, keys: string[]) => {
+        for (const k of keys) {
+          const v = row[k];
+          if (v !== undefined && v !== "") return v;
+        }
+        return "";
+      };
+
+      const records: any[] = [];
+      for (const row of rows) {
+        const seasonVal = toInt(getFirst(row, ["season"]));
+        if (seasonVal !== season) continue;
+
+        const week = toInt(getFirst(row, ["week"]));
+        const player_id = getFirst(row, ["player_id"]);
+        const player_name = getFirst(row, ["player_display_name", "player_name"]);
+        const position = getFirst(row, ["position"]);
+        const team = getFirst(row, ["recent_team", "team"]);
+        if (!player_id || !week) continue;
+
+        const passing_yards = toFloat(getFirst(row, ["passing_yards"]));
+        const passing_tds = toInt(getFirst(row, ["passing_tds"]));
+        const passing_ints = toInt(getFirst(row, ["passing_interceptions", "interceptions"]));
+        const rushing_yards = toFloat(getFirst(row, ["rushing_yards"]));
+        const rushing_tds = toInt(getFirst(row, ["rushing_tds"]));
+        const receiving_yards = toFloat(getFirst(row, ["receiving_yards"]));
+        const receiving_tds = toInt(getFirst(row, ["receiving_tds"]));
+        const receptions = toInt(getFirst(row, ["receptions"]));
+
+        const fantasy_points_std =
+          passing_yards * 0.04 + passing_tds * 4 + passing_ints * -2 +
+          rushing_yards * 0.1 + rushing_tds * 6 +
+          receiving_yards * 0.1 + receiving_tds * 6;
+
+        const fantasy_points_ppr = fantasy_points_std + receptions * 1;
+        const fantasy_points_half_ppr = fantasy_points_std + receptions * 0.5;
+
+        records.push({
+          player_id, player_name, position, team, week,
+          season: seasonVal,
+          passing_yards, passing_tds, passing_ints,
+          rushing_yards, rushing_tds,
+          receiving_yards, receiving_tds, receptions,
+          fantasy_points_std: parseFloat(fantasy_points_std.toFixed(2)),
+          fantasy_points_ppr: parseFloat(fantasy_points_ppr.toFixed(2)),
+          fantasy_points_half_ppr: parseFloat(fantasy_points_half_ppr.toFixed(2)),
         });
-
-        totalInserted += (poolResult.sleeperInserted || 0) + (poolResult.nflInserted || 0);
-        setProgress(`Populating player pool... ${totalInserted.toLocaleString()} records written (batch ${iteration})`);
-
-        const hasMore = poolResult.hasMoreSleeper || poolResult.hasMoreNfl;
-        if (!hasMore) break;
-
-        sleeperIdx = poolResult.nextSleeperIndex || sleeperIdx;
-        nflIdx = poolResult.nextNflIndex || nflIdx;
       }
 
-      setProgress(`Backfill complete! ${recordCount.toLocaleString()} stats ingested, ${totalInserted.toLocaleString()} pool records written.`);
+      if (records.length === 0) throw new Error(`No stat records found for season ${season}`);
+
+      // Step 4: Upsert into actual_weekly_points in batches
+      setProgress(`Inserting ${records.length.toLocaleString()} records into database...`);
+      const batchSize = 500;
+      let totalInserted = 0;
+
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize);
+        const { error: upsertError } = await supabase
+          .from("actual_weekly_points")
+          .upsert(batch, { onConflict: "player_id,week,season", ignoreDuplicates: false });
+
+        if (upsertError) throw new Error(`Database insert failed: ${upsertError.message}`);
+        totalInserted += batch.length;
+        setProgress(`Inserted ${totalInserted.toLocaleString()} / ${records.length.toLocaleString()} records...`);
+      }
+
+      setProgress(`Backfill complete! ${totalInserted.toLocaleString()} player stat records imported.`);
       setStatus("done");
     } catch (err: any) {
-      let msg = err?.message || "Unknown error";
-      if (msg === "Failed to fetch" || msg.includes("Failed to send")) {
-        msg = "Could not reach the backfill service. The edge functions may not be deployed yet — try again after a Lovable deployment.";
-      }
-      setError(msg);
+      setError(err?.message || "Unknown error");
       setStatus("error");
     }
   };
@@ -134,7 +189,7 @@ export function OffseasonBanner({ seasonState, showBackfill = false }: { seasonS
             </Button>
           )}
 
-          {(status === "ingesting" || status === "populating") && (
+          {status === "ingesting" && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               <span>{progress}</span>

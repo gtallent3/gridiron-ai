@@ -18,32 +18,42 @@ describe("getCurrentNFLWeek", () => {
     expect(result.week).toBeLessThanOrEqual(18);
   });
 
-  it("returns PRE_SEASON before Sept 4, 2025", () => {
+  it("returns OFFSEASON before Sept 4, 2025", () => {
     vi.useFakeTimers();
     // Aug 15, 2025 — between 2024 season end and 2025 season start
     vi.setSystemTime(new Date("2025-08-15T12:00:00-04:00"));
     const result = getCurrentNFLWeek();
-    expect(result.seasonState).toBe(SeasonState.PRE_SEASON);
+    expect(result.seasonState).toBe(SeasonState.OFFSEASON);
     expect(result.isOffseason).toBe(true);
     expect(result.season).toBe(2025);
   });
 
-  it("returns POSTSEASON in Jan-Feb after season ends", () => {
+  it("returns POSTSEASON in January after season ends", () => {
     vi.useFakeTimers();
-    // Feb 1, 2026 — after 2025 season ended, playoffs window
-    vi.setSystemTime(new Date("2026-02-01T12:00:00-05:00"));
+    // Jan 15, 2026 — playoffs underway
+    vi.setSystemTime(new Date("2026-01-15T12:00:00-05:00"));
     const result = getCurrentNFLWeek();
     expect(result.seasonState).toBe(SeasonState.POSTSEASON);
     expect(result.isOffseason).toBe(true);
     expect(result.season).toBe(2025);
   });
 
-  it("returns PRE_SEASON in Mar-Aug between seasons", () => {
+  it("returns OFFSEASON in February after Super Bowl", () => {
     vi.useFakeTimers();
-    // May 1, 2026 — offseason gap, pre-season for 2026
+    // Feb 14, 2026 — Super Bowl is over
+    vi.setSystemTime(new Date("2026-02-14T12:00:00-05:00"));
+    const result = getCurrentNFLWeek();
+    expect(result.seasonState).toBe(SeasonState.OFFSEASON);
+    expect(result.isOffseason).toBe(true);
+    expect(result.season).toBe(2026);
+  });
+
+  it("returns OFFSEASON in Mar-Aug between seasons", () => {
+    vi.useFakeTimers();
+    // May 1, 2026 — offseason
     vi.setSystemTime(new Date("2026-05-01T12:00:00-04:00"));
     const result = getCurrentNFLWeek();
-    expect(result.seasonState).toBe(SeasonState.PRE_SEASON);
+    expect(result.seasonState).toBe(SeasonState.OFFSEASON);
     expect(result.isOffseason).toBe(true);
     expect(result.season).toBe(2026);
   });

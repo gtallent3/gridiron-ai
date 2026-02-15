@@ -96,11 +96,11 @@ export default function SeasonRecap() {
         }
       }
 
-      // Query player_pool_v2 for actual stats (all weeks, nfl_actual source)
+      // Query actual_weekly_points for backfilled season stats
       const { data: poolData } = await supabase
-        .from("player_pool_v2")
-        .select("player_name, position, week, actual_fp, source")
-        .eq("source", "nfl_actual")
+        .from("actual_weekly_points")
+        .select("player_name, position, week, fantasy_points_ppr")
+        .eq("season", 2025)
         .gte("week", 1)
         .lte("week", 18);
 
@@ -115,7 +115,7 @@ export default function SeasonRecap() {
       // Aggregate by week for chart
       const weekMap = new Map<number, number>();
       for (const row of rosterStats) {
-        const pts = row.actual_fp || 0;
+        const pts = row.fantasy_points_ppr || 0;
         weekMap.set(row.week, (weekMap.get(row.week) || 0) + pts);
       }
       const weekly: WeeklyData[] = Array.from(weekMap.entries())
@@ -143,7 +143,7 @@ export default function SeasonRecap() {
       for (const row of rosterStats) {
         const key = row.player_name!;
         const existing = playerMap.get(key) || { position: row.position || "??", total: 0, games: 0 };
-        existing.total += row.actual_fp || 0;
+        existing.total += row.fantasy_points_ppr || 0;
         existing.games += 1;
         playerMap.set(key, existing);
       }
@@ -162,7 +162,7 @@ export default function SeasonRecap() {
       const posMap = new Map<string, number>();
       for (const row of rosterStats) {
         const pos = row.position || "??";
-        posMap.set(pos, (posMap.get(pos) || 0) + (row.actual_fp || 0));
+        posMap.set(pos, (posMap.get(pos) || 0) + (row.fantasy_points_ppr || 0));
       }
       const posData: PositionData[] = Array.from(posMap.entries())
         .map(([position, points]) => ({ position, points: Math.round(points * 10) / 10 }))

@@ -58,11 +58,11 @@ export function getCurrentNFLWeek(): NFLWeekInfo {
 
     // After this season's end but before next season's start → gap
     if (next && now > curr.end && now < next.start) {
-      // Jan-Feb after season end → POSTSEASON (playoffs happening)
-      // Mar-Aug → OFFSEASON / PRE_SEASON
+      // January after season end → POSTSEASON (playoffs + Super Bowl)
+      // February onwards → OFFSEASON
       const monthOfYear = now.getMonth(); // 0-indexed
-      if (monthOfYear <= 1) {
-        // Jan-Feb: postseason / just ended
+      if (monthOfYear === 0) {
+        // January: playoffs underway
         return {
           week: 18,
           season: curr.season,
@@ -71,13 +71,13 @@ export function getCurrentNFLWeek(): NFLWeekInfo {
           seasonState: SeasonState.POSTSEASON,
         };
       }
-      // Mar-Aug: offseason → preseason for the next year
+      // Feb-Aug: offseason
       return {
         week: 1,
         season: next.season,
-        label: 'Preseason',
+        label: 'Offseason',
         isOffseason: true,
-        seasonState: SeasonState.PRE_SEASON,
+        seasonState: SeasonState.OFFSEASON,
       };
     }
   }
