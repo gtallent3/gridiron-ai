@@ -47,7 +47,10 @@ export function RosterView({ league, userTeam }: RosterViewProps) {
   const [starters, setStarters] = useState<any[]>([]);
   const [bench, setBench] = useState<any[]>([]);
   const { isInSeason } = useSeasonState();
-  const [selectedWeek, setSelectedWeek] = useState<number>(league.current_week || getCurrentNFLWeek().week);
+  const weekInfo = getCurrentNFLWeek();
+  const [selectedWeek, setSelectedWeek] = useState<number>(
+    weekInfo.isOffseason ? 18 : (league.current_week || weekInfo.week)
+  );
   const [providerCurrentWeek, setProviderCurrentWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState<any>(null);
