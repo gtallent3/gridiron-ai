@@ -121,7 +121,7 @@ export function useMockDraft(settings: DraftSettings | null) {
         setAllPlayers(top);
 
         // Check for existing picks (resume)
-        const { data: existingPicks } = await supabase
+        const { data: existingPicks } = await (supabase as any)
           .from("mock_draft_picks")
           .select("*")
           .eq("draft_id", settings.draftId)
@@ -189,7 +189,7 @@ export function useMockDraft(settings: DraftSettings | null) {
     async (pick: DraftPick) => {
       if (!settings) return;
       try {
-        await supabase.from("mock_draft_picks").insert({
+        await (supabase as any).from("mock_draft_picks").insert({
           draft_id: settings.draftId,
           pick_number: pick.pickNumber,
           round: pick.round,
@@ -205,12 +205,12 @@ export function useMockDraft(settings: DraftSettings | null) {
         // Update current_pick on the draft
         const nextPick = pick.pickNumber + 1;
         if (nextPick > totalPicks) {
-          await supabase
+          await (supabase as any)
             .from("mock_drafts")
             .update({ current_pick: pick.pickNumber, status: "completed", completed_at: new Date().toISOString() })
             .eq("id", settings.draftId);
         } else {
-          await supabase
+          await (supabase as any)
             .from("mock_drafts")
             .update({ current_pick: nextPick })
             .eq("id", settings.draftId);
