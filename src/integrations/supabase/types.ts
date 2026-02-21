@@ -618,6 +618,104 @@ export type Database = {
         }
         Relationships: []
       }
+      mock_draft_picks: {
+        Row: {
+          adp_rank: number
+          draft_id: string
+          id: string
+          is_user: boolean
+          pick_in_round: number
+          pick_number: number
+          picked_at: string
+          player_name: string
+          position: string
+          round: number
+          seat_number: number
+          team: string
+        }
+        Insert: {
+          adp_rank: number
+          draft_id: string
+          id?: string
+          is_user?: boolean
+          pick_in_round: number
+          pick_number: number
+          picked_at?: string
+          player_name: string
+          position: string
+          round: number
+          seat_number: number
+          team: string
+        }
+        Update: {
+          adp_rank?: number
+          draft_id?: string
+          id?: string
+          is_user?: boolean
+          pick_in_round?: number
+          pick_number?: number
+          picked_at?: string
+          player_name?: string
+          position?: string
+          round?: number
+          seat_number?: number
+          team?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mock_draft_picks_draft_id_fkey"
+            columns: ["draft_id"]
+            isOneToOne: false
+            referencedRelation: "mock_drafts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mock_drafts: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          current_pick: number
+          draft_type: string
+          id: string
+          num_rounds: number
+          num_teams: number
+          pick_timer_seconds: number
+          scoring_type: string
+          status: string
+          user_id: string
+          user_seat: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          current_pick?: number
+          draft_type?: string
+          id?: string
+          num_rounds?: number
+          num_teams?: number
+          pick_timer_seconds?: number
+          scoring_type?: string
+          status?: string
+          user_id: string
+          user_seat?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          current_pick?: number
+          draft_type?: string
+          id?: string
+          num_rounds?: number
+          num_teams?: number
+          pick_timer_seconds?: number
+          scoring_type?: string
+          status?: string
+          user_id?: string
+          user_seat?: number
+        }
+        Relationships: []
+      }
       normalized_players: {
         Row: {
           created_at: string | null
