@@ -28,6 +28,9 @@ const Props = lazy(() => import("./pages/Props"));
 const MyBets = lazy(() => import("./pages/MyBets"));
 const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const SeasonRecap = lazy(() => import("./pages/SeasonRecap"));
+const MockDraftSetup = lazy(() => import("./pages/MockDraftSetup"));
+const MockDraftRoom = lazy(() => import("./pages/MockDraftRoom"));
+const MockDraftResults = lazy(() => import("./pages/MockDraftResults"));
 
 const queryClient = new QueryClient();
 
@@ -70,6 +73,9 @@ const App = () => (
               <Route path="/risk-admin" element={<RiskAdmin />} />
               <Route path="/settings/billing" element={<Billing />} />
               <Route path="/player-rankings" element={<PlayerRankings />} />
+              <Route path="/mock-draft" element={<MockDraftSetup />} />
+              <Route path="/mock-draft/:draftId" element={<MockDraftRoom />} />
+              <Route path="/mock-draft/:draftId/results" element={<MockDraftResults />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

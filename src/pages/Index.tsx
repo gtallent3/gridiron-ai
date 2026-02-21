@@ -8,6 +8,9 @@ import { FeatureComparison } from "@/components/landing/FeatureComparison";
 import { FinalCTA } from "@/components/landing/FinalCTA";
 import { Footer } from "@/components/landing/Footer";
 import { ConnectedLeagues } from "@/components/ConnectedLeagues";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 import { StartSitAnalyzer } from "@/components/StartSitAnalyzer";
 import { PositionalRankingsSnapshot } from "@/components/PositionalRankingsSnapshot";
 import { AIAssistant } from "@/components/AIAssistant";
@@ -19,6 +22,7 @@ import { SeasonState } from "@/lib/nflWeekUtils";
 const Index = () => {
   const [user, setUser] = useState<any>(null);
   const { seasonState, isInSeason } = useSeasonState();
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Check current session
@@ -64,6 +68,25 @@ const Index = () => {
               </div>
             </section>
           )}
+          <section className="py-6">
+            <div className="container mx-auto px-4">
+              <div className="max-w-4xl mx-auto">
+                <Card className="bg-gradient-to-r from-primary/10 to-accent/10 border-primary/20">
+                  <CardContent className="flex items-center justify-between py-4">
+                    <div>
+                      <h3 className="font-semibold text-base">Mock Draft</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Practice your draft strategy against AI opponents
+                      </p>
+                    </div>
+                    <Button variant="hero" size="sm" onClick={() => navigate("/mock-draft")}>
+                      Start Draft
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </section>
           <AIAssistant />
         </>
       ) : (

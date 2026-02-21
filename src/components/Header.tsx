@@ -70,6 +70,9 @@ export const Header = ({ user }: HeaderProps) => {
               </DropdownMenuContent>
             </DropdownMenu>
 
+            <a href="/mock-draft" className="flex items-center h-9 text-sm text-muted-foreground hover:text-primary transition-colors">
+              Mock Draft
+            </a>
             <a href="/shop" className="flex items-center h-9 text-sm text-muted-foreground hover:text-primary transition-colors">
               Token Shop
             </a>

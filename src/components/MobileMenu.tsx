@@ -65,8 +65,16 @@ export const MobileMenu = ({ user }: MobileMenuProps) => {
             </CollapsibleContent>
           </Collapsible>
 
-          <a 
-            href="/shop" 
+          <a
+            href="/mock-draft"
+            onClick={handleNavClick}
+            className="text-base font-medium hover:text-primary transition-colors py-2"
+          >
+            Mock Draft
+          </a>
+
+          <a
+            href="/shop"
             onClick={handleNavClick}
             className="text-base font-medium hover:text-primary transition-colors py-2"
           >
