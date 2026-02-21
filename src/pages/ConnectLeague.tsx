@@ -8,7 +8,9 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import { z } from "zod";
+import { Capacitor } from "@capacitor/core";
 import { EspnCookieExtractor } from "@/components/EspnCookieExtractor";
+import { useYahooWebView } from "@/hooks/useYahooWebView";
 
 const sleeperSchema = z.object({
   username: z.string().trim().min(3, "Username must be at least 3 characters").max(25, "Username is too long").regex(/^[a-zA-Z0-9_-]+$/, "Username can only contain letters, numbers, hyphens, and underscores"),
@@ -23,6 +25,190 @@ export default function ConnectLeague() {
   const navigate = useNavigate();
   const location = useLocation();
   const deepLinkHandled = useRef(false);
+  const isNative = Capacitor.isNativePlatform();
+  const DEPLOYED_REDIRECT = "https://gridiron-gm.com/connect-league";
+
+  // Shared Yahoo token exchange + league sync logic (used by both web callback and native WebView)
+  const processYahooCode = async (code: string, redirectUri?: string) => {
+    setIsLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      console.log('Processing Yahoo OAuth callback with code...');
+
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
+        'validate-yahoo-oauth',
+        {
+          body: { code, ...(redirectUri ? { redirectUri } : {}) },
+        }
+      );
+
+      if (tokenError) throw tokenError;
+
+      console.log('Token exchange successful, processing league data...');
+
+      const games = tokenData.gamesData?.fantasy_content?.users?.[0]?.user?.[1]?.games;
+
+      if (!games) {
+        throw new Error('No NFL leagues found in Yahoo account');
+      }
+
+      const currentYear = new Date().getFullYear();
+      const possibleSeasons = [currentYear.toString(), (currentYear - 1).toString()];
+
+      console.log('Looking for NFL seasons:', possibleSeasons);
+
+      let nflGame: any = null;
+      let selectedGameObj: any = null;
+      let leaguesObj: any = null;
+
+      const gameItems = Object.values(games) as any[];
+      for (const season of possibleSeasons) {
+        for (const item of gameItems) {
+          const gameArr = item?.game;
+          if (!Array.isArray(gameArr)) continue;
+          const gameObj = Object.assign({}, ...gameArr);
+          const gameCode = gameObj?.code;
+          const gameSeason = gameObj?.season;
+          const leagues = gameObj?.leagues;
+          const leaguesCount = typeof leagues?.count !== 'undefined' ? leagues.count : (leagues ? Object.keys(leagues).length - (leagues.count ? 1 : 0) : 0);
+          console.log('Checking game:', gameCode, 'season:', gameSeason, 'leaguesCount:', leaguesCount);
+          if (gameCode === 'nfl' && gameSeason === season) {
+            nflGame = item;
+            selectedGameObj = gameObj;
+            leaguesObj = leagues;
+            console.log('Found NFL game for season:', season);
+            break;
+          }
+        }
+        if (nflGame) break;
+      }
+
+      if (!nflGame || !selectedGameObj) {
+        const available = gameItems.map((g: any) => {
+          const obj = Object.assign({}, ...(Array.isArray(g?.game) ? g.game : []));
+          return { code: obj?.code, season: obj?.season };
+        });
+        console.error('No NFL game found. Available games:', available);
+        throw new Error('No current or recent season NFL leagues found in your Yahoo account');
+      }
+
+      console.log('NFL Game object:', selectedGameObj);
+
+      const leagueKeys: string[] = [];
+      const leagueNames: { key: string; name: string }[] = [];
+      if (leaguesObj && typeof leaguesObj === 'object') {
+        for (const [k, v] of Object.entries(leaguesObj)) {
+          if (k === 'count') continue;
+          const leagueData = (v as any)?.league?.[0];
+          const key = leagueData?.league_key;
+          const name = leagueData?.name;
+          if (key && name) {
+            leagueKeys.push(key);
+            leagueNames.push({ key, name });
+          }
+        }
+      }
+
+      console.log('Extracted league keys:', leagueKeys);
+      console.log('Available leagues:', leagueNames);
+
+      if (leagueKeys.length === 0) {
+        throw new Error('No leagues found on this Yahoo account. Please make sure you:\n1. Are logged into the correct Yahoo account\n2. Have joined a league with this account\n3. Have an active NFL fantasy league for this season');
+      }
+
+      if (leagueKeys.length > 1) {
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const { key, name } of leagueNames) {
+          try {
+            console.log('Syncing league:', name, key);
+            const { error: syncError } = await supabase.functions.invoke(
+              'sync-yahoo-league',
+              {
+                body: {
+                  leagueKey: key,
+                  tokenData: tokenData.tokenData,
+                },
+              }
+            );
+
+            if (syncError) {
+              console.error(`Failed to sync ${name}:`, syncError);
+              failCount++;
+            } else {
+              console.log(`Successfully synced ${name}`);
+              successCount++;
+            }
+          } catch (err) {
+            console.error(`Error syncing ${name}:`, err);
+            failCount++;
+          }
+        }
+
+        if (successCount > 0) {
+          toast({
+            title: "Yahoo Leagues Connected!",
+            description: `${successCount} league(s) synced successfully${failCount > 0 ? `, ${failCount} failed` : ''}!`,
+          });
+        } else {
+          throw new Error('Failed to sync any leagues');
+        }
+      } else {
+        const leagueKey = leagueKeys[0];
+        console.log('Syncing single league with key:', leagueKey);
+
+        const { data: syncData, error: syncError } = await supabase.functions.invoke(
+          'sync-yahoo-league',
+          {
+            body: {
+              leagueKey,
+              tokenData: tokenData.tokenData,
+            },
+          }
+        );
+
+        if (syncError) throw syncError;
+
+        toast({
+          title: "Yahoo League Connected!",
+          description: `${syncData.league.name} has been synced successfully!`,
+        });
+      }
+
+      setTimeout(() => navigate('/'), 2000);
+    } catch (error: any) {
+      console.error('Yahoo OAuth error:', error);
+      toast({
+        title: "Connection Failed",
+        description: error.message || "Unable to connect Yahoo league. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Wire up Yahoo WebView for native
+  const { openYahooOAuth } = useYahooWebView({
+    onCode: (code, _state) => {
+      processYahooCode(code, DEPLOYED_REDIRECT);
+    },
+    onError: (msg) => {
+      toast({
+        title: "Connection Failed",
+        description: msg,
+        variant: "destructive",
+      });
+    },
+    onClose: () => {
+      // User closed WebView without completing auth — nothing to do
+    },
+  });
 
   useEffect(() => {
     // Check if user is logged in
@@ -40,12 +226,12 @@ export default function ConnectLeague() {
       }
     });
 
-    // Handle Yahoo OAuth callback
+    // Handle Yahoo OAuth callback (web flow — URL params from redirect)
     const handleYahooCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const state = urlParams.get('state');
-      
+
       if (code && window.location.pathname === '/connect-league') {
         // Validate state if present
         const savedState = sessionStorage.getItem('yahoo_oauth_state');
@@ -59,189 +245,10 @@ export default function ConnectLeague() {
           return;
         }
         sessionStorage.removeItem('yahoo_oauth_state');
+        window.history.replaceState({}, '', '/connect-league');
 
-        setIsLoading(true);
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) {
-            throw new Error('Not authenticated');
-          }
-
-          console.log('Processing Yahoo OAuth callback with code...');
-
-          // Exchange code for tokens
-          const { data: tokenData, error: tokenError } = await supabase.functions.invoke(
-            'validate-yahoo-oauth',
-            {
-              body: { code },
-            }
-          );
-
-          if (tokenError) throw tokenError;
-
-          console.log('Token exchange successful, processing league data...');
-
-          // Get list of leagues from the games data
-          const games = tokenData.gamesData?.fantasy_content?.users?.[0]?.user?.[1]?.games;
-          
-          if (!games) {
-            throw new Error('No NFL leagues found in Yahoo account');
-          }
-
-          // Find current season NFL game (try current year and previous year for ongoing season)
-          const currentYear = new Date().getFullYear();
-          const possibleSeasons = [currentYear.toString(), (currentYear - 1).toString()];
-          
-          console.log('Looking for NFL seasons:', possibleSeasons);
-          
-          let nflGame: any = null;
-          let selectedGameObj: any = null;
-          let leaguesObj: any = null;
-
-          const gameItems = Object.values(games) as any[];
-          for (const season of possibleSeasons) {
-            for (const item of gameItems) {
-              const gameArr = item?.game;
-              if (!Array.isArray(gameArr)) continue;
-              const gameObj = Object.assign({}, ...gameArr);
-              const gameCode = gameObj?.code;
-              const gameSeason = gameObj?.season;
-              const leagues = gameObj?.leagues;
-              const leaguesCount = typeof leagues?.count !== 'undefined' ? leagues.count : (leagues ? Object.keys(leagues).length - (leagues.count ? 1 : 0) : 0);
-              console.log('Checking game:', gameCode, 'season:', gameSeason, 'leaguesCount:', leaguesCount);
-              if (gameCode === 'nfl' && gameSeason === season) {
-                nflGame = item;
-                selectedGameObj = gameObj;
-                leaguesObj = leagues;
-                console.log('Found NFL game for season:', season);
-                break;
-              }
-            }
-            if (nflGame) break;
-          }
-
-          if (!nflGame || !selectedGameObj) {
-            const available = gameItems.map((g: any) => {
-              const obj = Object.assign({}, ...(Array.isArray(g?.game) ? g.game : []));
-              return { code: obj?.code, season: obj?.season };
-            });
-            console.error('No NFL game found. Available games:', available);
-            throw new Error('No current or recent season NFL leagues found in your Yahoo account');
-          }
-
-          console.log('NFL Game object:', selectedGameObj);
-
-          // Extract league keys robustly
-          const leagueKeys: string[] = [];
-          const leagueNames: { key: string; name: string }[] = [];
-          if (leaguesObj && typeof leaguesObj === 'object') {
-            for (const [k, v] of Object.entries(leaguesObj)) {
-              if (k === 'count') continue;
-              const leagueData = (v as any)?.league?.[0];
-              const key = leagueData?.league_key;
-              const name = leagueData?.name;
-              if (key && name) {
-                leagueKeys.push(key);
-                leagueNames.push({ key, name });
-              }
-            }
-          }
-
-          console.log('Extracted league keys:', leagueKeys);
-          console.log('Available leagues:', leagueNames);
-
-          if (leagueKeys.length === 0) {
-            throw new Error('No leagues found on this Yahoo account. Please make sure you:\n1. Are logged into the correct Yahoo account\n2. Have joined a league with this account\n3. Have an active NFL fantasy league for this season');
-          }
-
-          // If multiple leagues, sync all of them
-          if (leagueKeys.length > 1) {
-            let successCount = 0;
-            let failCount = 0;
-            
-            for (const { key, name } of leagueNames) {
-              try {
-                console.log('Syncing league:', name, key);
-                const { error: syncError } = await supabase.functions.invoke(
-                  'sync-yahoo-league',
-                  {
-                    body: {
-                      leagueKey: key,
-                      tokenData: tokenData.tokenData,
-                    },
-                  }
-                );
-
-                if (syncError) {
-                  console.error(`Failed to sync ${name}:`, syncError);
-                  failCount++;
-                } else {
-                  console.log(`Successfully synced ${name}`);
-                  successCount++;
-                }
-              } catch (err) {
-                console.error(`Error syncing ${name}:`, err);
-                failCount++;
-              }
-            }
-
-            if (successCount > 0) {
-              toast({
-                title: "✅ Yahoo Leagues Connected!",
-                description: `${successCount} league(s) synced successfully${failCount > 0 ? `, ${failCount} failed` : ''}!`,
-              });
-            } else {
-              throw new Error('Failed to sync any leagues');
-            }
-          } else {
-            // Single league - sync it
-            const leagueKey = leagueKeys[0];
-            console.log('Syncing single league with key:', leagueKey);
-
-            const { data: syncData, error: syncError } = await supabase.functions.invoke(
-              'sync-yahoo-league',
-              {
-                body: {
-                  leagueKey,
-                  tokenData: tokenData.tokenData,
-                },
-              }
-            );
-
-            if (syncError) throw syncError;
-
-            toast({
-              title: "✅ Yahoo League Connected!",
-              description: `${syncData.league.name} has been synced successfully!`,
-            });
-          }
-
-          // If we're in a popup, close it and notify parent
-          if (window.opener) {
-            window.opener.postMessage({ type: 'yahoo-oauth-success' }, window.location.origin);
-            window.close();
-          } else {
-            // Clear URL params and redirect
-            window.history.replaceState({}, '', '/connect-league');
-            setTimeout(() => navigate('/'), 2000);
-          }
-        } catch (error: any) {
-          console.error('Yahoo OAuth error:', error);
-          toast({
-            title: "Connection Failed",
-            description: error.message || "Unable to connect Yahoo league. Please try again.",
-            variant: "destructive",
-          });
-          
-          if (window.opener) {
-            window.opener.postMessage({ type: 'yahoo-oauth-error', error: error.message }, window.location.origin);
-            window.close();
-          } else {
-            window.history.replaceState({}, '', '/connect-league');
-          }
-        } finally {
-          setIsLoading(false);
-        }
+        // Web flow — no explicit redirectUri needed (edge function uses origin header)
+        await processYahooCode(code);
       }
     };
 
@@ -335,36 +342,41 @@ export default function ConnectLeague() {
   const handleYahooConnect = () => {
     // Build Yahoo OAuth URL (Client ID is public by design)
     const clientId = 'dj0yJmk9VDYxV3huOTdXN25UJmQ9WVdrOWN6Qk1ORWN5TmxVbWNHbzlNQT09JnM9Y29uc3VtZXJzZWNyZXQmc3Y9MCZ4PWQ0';
-    const redirect = `${window.location.origin}/connect-league`;
+    // On native, use the deployed web URL so Yahoo redirects somewhere we can intercept
+    const redirect = isNative ? DEPLOYED_REDIRECT : `${window.location.origin}/connect-league`;
     const redirectUri = encodeURIComponent(redirect);
     const scope = encodeURIComponent('fspt-r');
     const state = crypto.getRandomValues(new Uint32Array(1))[0].toString(16);
     sessionStorage.setItem('yahoo_oauth_state', state);
-    // Add prompt=login to force Yahoo to show login screen every time
     const authUrl = `https://api.login.yahoo.com/oauth2/request_auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&state=${state}&prompt=login`;
-
-    setYahooAuthUrl(authUrl);
 
     console.log('Opening Yahoo OAuth URL:', authUrl);
     console.log('Redirect URI:', redirect);
-    console.log('Is in iframe:', window.self !== window.top);
+    console.log('Is native:', isNative);
 
-    // Always open in a new tab to avoid iframe/X-Frame-Options issues in preview
-    const newTab = window.open(authUrl, '_blank', 'noopener,noreferrer');
-    if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
-      toast({
-        title: "Opening Yahoo in a new tab",
-        description: "If nothing opens, please allow popups or click the manual link below.",
-      });
-      const a = document.createElement('a');
-      a.href = authUrl;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+    if (isNative) {
+      // Native: open in in-app WebView, intercept redirect
+      openYahooOAuth(authUrl);
     } else {
-      console.log('New tab opened successfully');
+      // Web: open in new tab as before
+      setYahooAuthUrl(authUrl);
+
+      const newTab = window.open(authUrl, '_blank', 'noopener,noreferrer');
+      if (!newTab || newTab.closed || typeof newTab.closed === 'undefined') {
+        toast({
+          title: "Opening Yahoo in a new tab",
+          description: "If nothing opens, please allow popups or click the manual link below.",
+        });
+        const a = document.createElement('a');
+        a.href = authUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } else {
+        console.log('New tab opened successfully');
+      }
     }
   };
 

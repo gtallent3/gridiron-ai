@@ -30,7 +30,7 @@ serve(async (req) => {
       return createErrorResponse('Unauthorized', 401, corsHeaders);
     }
 
-    const { code } = await req.json();
+    const { code, redirectUri: bodyRedirectUri } = await req.json();
 
     if (!code) {
       return createErrorResponse('Missing OAuth code', 400, corsHeaders);
@@ -41,7 +41,7 @@ serve(async (req) => {
     // Exchange code for access token
     const clientId = Deno.env.get('YAHOO_CLIENT_ID')!;
     const clientSecret = Deno.env.get('YAHOO_CLIENT_SECRET')!;
-    const redirectUri = `${req.headers.get('origin')}/connect-league`;
+    const redirectUri = bodyRedirectUri || `${req.headers.get('origin')}/connect-league`;
 
     const tokenParams = new URLSearchParams({
       grant_type: 'authorization_code',
