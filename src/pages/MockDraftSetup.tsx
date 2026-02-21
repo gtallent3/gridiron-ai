@@ -40,7 +40,7 @@ const MockDraftSetup = () => {
     if (!user || creating) return;
     setCreating(true);
 
-    const { data, error } = await supabase
+    const { data, error } = await (supabase as any)
       .from("mock_drafts")
       .insert({
         user_id: user.id,

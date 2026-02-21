@@ -37,7 +37,7 @@ const MockDraftRoom = () => {
         return;
       }
 
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("mock_drafts")
         .select("*")
         .eq("id", draftId)

@@ -70,8 +70,8 @@ export function useYahooWebView({ onCode, onError, onClose }: UseYahooWebViewOpt
       await InAppBrowser.openWebView({
         url: authUrl,
         title: "Yahoo Login",
-        toolbarType: "navigation",
-        backgroundColor: "black",
+        toolbarType: "navigation" as any,
+        backgroundColor: "black" as any,
         isPresentAfterPageLoad: false,
       });
     } catch (err: any) {

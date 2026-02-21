@@ -99,8 +99,8 @@ const MockDraftResults = () => {
       }
 
       const [draftRes, picksRes] = await Promise.all([
-        supabase.from("mock_drafts").select("*").eq("id", draftId).single(),
-        supabase
+        (supabase as any).from("mock_drafts").select("*").eq("id", draftId).single(),
+        (supabase as any)
           .from("mock_draft_picks")
           .select("*")
           .eq("draft_id", draftId)
