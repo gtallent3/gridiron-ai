@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { DraftPick } from "@/hooks/useMockDraft";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +30,37 @@ export function DraftBoard({
   getSeatForPick,
   isActive,
 }: DraftBoardProps) {
+  const currentCellRef = useRef<HTMLTableCellElement | null>(null);
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll to the current pick cell
+  useEffect(() => {
+    if (!isActive || !currentCellRef.current || !scrollContainerRef.current) return;
+
+    const cell = currentCellRef.current;
+    const container = scrollContainerRef.current;
+
+    // Scroll vertically: keep current row roughly centered
+    const cellTop = cell.offsetTop;
+    const cellHeight = cell.offsetHeight;
+    const containerHeight = container.clientHeight;
+    const targetScrollTop = cellTop - containerHeight / 2 + cellHeight / 2;
+    container.scrollTo({
+      top: Math.max(0, targetScrollTop),
+      behavior: "smooth",
+    });
+
+    // Scroll horizontally: keep current column visible
+    const cellLeft = cell.offsetLeft;
+    const cellWidth = cell.offsetWidth;
+    const containerWidth = container.clientWidth;
+    const targetScrollLeft = cellLeft - containerWidth / 2 + cellWidth / 2;
+    container.scrollTo({
+      left: Math.max(0, targetScrollLeft),
+      behavior: "smooth",
+    });
+  }, [currentOverallPick, isActive]);
+
   // Build a lookup: [round][seat] → pick
   const pickMap = new Map<string, DraftPick>();
   picks.forEach((p) => {
@@ -36,7 +68,7 @@ export function DraftBoard({
   });
 
   return (
-    <div className="overflow-auto">
+    <div className="overflow-auto max-h-full" ref={scrollContainerRef}>
       <table className="w-full border-collapse text-xs min-w-[600px]">
         <thead className="sticky top-0 z-10">
           <tr className="bg-card">
@@ -61,11 +93,6 @@ export function DraftBoard({
         <tbody>
           {Array.from({ length: numRounds }, (_, roundIdx) => {
             const round = roundIdx + 1;
-            // Figure out the seat order for this round
-            const seats =
-              round % 2 === 1
-                ? Array.from({ length: numTeams }, (_, i) => i + 1)
-                : Array.from({ length: numTeams }, (_, i) => numTeams - i);
 
             return (
               <tr key={round}>
@@ -84,6 +111,7 @@ export function DraftBoard({
                   return (
                     <td
                       key={colIdx}
+                      ref={isCurrent ? currentCellRef : undefined}
                       className={cn(
                         "p-1 border border-border/30 min-w-[80px] h-9 relative",
                         isCurrent && "ring-2 ring-primary bg-primary/10",

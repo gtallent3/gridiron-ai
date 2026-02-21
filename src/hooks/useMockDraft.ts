@@ -271,16 +271,64 @@ export function useMockDraft(settings: DraftSettings | null) {
     [isUserTurn, executePick]
   );
 
-  // AI auto-pick
+  // Position-aware AI pick logic
   const doAiPick = useCallback(() => {
-    setAvailablePlayers((current) => {
-      if (current.length === 0) return current;
-      const topN = Math.min(3, current.length);
-      const idx = Math.floor(Math.random() * topN);
-      const player = current[idx];
-      // Schedule the execution outside of the setState
-      setTimeout(() => executePick(player, false), 0);
-      return current;
+    // Read current picks to build roster counts per AI team
+    setPicks((currentPicks) => {
+      setDraftState((currentState) => {
+        setAvailablePlayers((currentAvailable) => {
+          if (currentAvailable.length === 0 || currentState.status !== "active") return currentAvailable;
+
+          const seat = currentState.currentSeat;
+
+          // Count positions already drafted by this AI team
+          const teamPicks = currentPicks.filter((p) => p.seatNumber === seat);
+          const posCounts: Record<string, number> = {};
+          teamPicks.forEach((p) => {
+            posCounts[p.player.position] = (posCounts[p.player.position] || 0) + 1;
+          });
+
+          // Roster targets (typical fantasy roster needs)
+          const posTargets: Record<string, number> = {
+            QB: 2, RB: 5, WR: 5, TE: 2, K: 1, DEF: 1,
+          };
+
+          // Score each available player: lower = better pick for this team
+          // Base score is ADP rank. Apply penalty if position is already filled.
+          const scored = currentAvailable.slice(0, 30).map((player) => {
+            const count = posCounts[player.position] || 0;
+            const target = posTargets[player.position] || 2;
+            let score = player.adp;
+
+            if (count >= target) {
+              // Already have enough at this position — heavy penalty
+              score += 150;
+            } else if (count >= target - 1) {
+              // Approaching full — mild penalty
+              score += 30;
+            }
+
+            // K and DEF should wait until late rounds
+            const round = currentState.currentRound;
+            if ((player.position === "K" || player.position === "DEF") && round < 10) {
+              score += 200;
+            }
+
+            // Add small randomness so AI teams differ
+            score += (Math.random() - 0.5) * 15;
+
+            return { player, score };
+          });
+
+          scored.sort((a, b) => a.score - b.score);
+          const chosen = scored[0].player;
+
+          setTimeout(() => executePick(chosen, false), 0);
+          return currentAvailable;
+        });
+        return currentState;
+      });
+      return currentPicks;
     });
   }, [executePick]);
 

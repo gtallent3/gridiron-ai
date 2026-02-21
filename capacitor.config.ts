@@ -5,7 +5,15 @@ const config: CapacitorConfig = {
   appName: 'Gridiron GM',
   webDir: 'dist',
 
+  server: {
+    // Route fetch() through native HTTP to bypass CORS on external APIs
+    androidScheme: 'https',
+  },
+
   plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
     SplashScreen: {
       launchAutoHide: true,
       launchShowDuration: 2000,
