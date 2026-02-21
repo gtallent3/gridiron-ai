@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { Loader2 } from "lucide-react";
+import { useDeepLinks } from "./hooks/useDeepLinks";
 
 // Eagerly loaded (core user flow)
 import Index from "./pages/Index";
@@ -30,6 +31,11 @@ const SeasonRecap = lazy(() => import("./pages/SeasonRecap"));
 
 const queryClient = new QueryClient();
 
+function DeepLinkHandler() {
+  useDeepLinks();
+  return null;
+}
+
 function PageLoader() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
@@ -44,6 +50,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <DeepLinkHandler />
         <Layout>
           <Suspense fallback={<PageLoader />}>
             <Routes>

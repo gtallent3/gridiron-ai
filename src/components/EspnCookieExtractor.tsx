@@ -4,9 +4,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { ExternalLink, Copy, Check, AlertCircle, Cookie, Smartphone, Monitor, Eye, EyeOff } from "lucide-react";
+import { ExternalLink, Copy, Check, AlertCircle, Cookie, Smartphone, Monitor, Eye, EyeOff, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { Capacitor } from "@capacitor/core";
+import { onEspnDeepLink } from "@/hooks/useDeepLinks";
+import { useEspnWebView } from "@/hooks/useEspnWebView";
 import { BookmarkletDragDemo } from "@/components/BookmarkletDragDemo";
 import { BookmarkletClickDemo } from "@/components/BookmarkletClickDemo";
 import { BookmarkletCopyDemo, BookmarkletSaveDemo, BookmarkletMobileClickDemo } from "@/components/BookmarkletMobileDemos";
@@ -24,8 +27,35 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
   const [isValidating, setIsValidating] = useState(false);
   const [copiedStep, setCopiedStep] = useState<number | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isNativeApp] = useState(() => Capacitor.isNativePlatform());
   const [showCredentials, setShowCredentials] = useState(false);
+  const [webViewOpen, setWebViewOpen] = useState(false);
   const { toast } = useToast();
+
+  const { openEspnWebView } = useEspnWebView({
+    onCredentials: (creds) => {
+      setSwid(creds.swid);
+      setEspn_s2(creds.espn_s2);
+      setLeagueId(creds.leagueId || '');
+      setWebViewOpen(false);
+      setStep('validate');
+      toast({
+        title: "Cookies captured!",
+        description: creds.leagueId ? "League ID auto-detected!" : "Add your League ID to continue.",
+      });
+    },
+    onError: (msg) => {
+      setWebViewOpen(false);
+      toast({
+        title: "WebView error",
+        description: msg,
+        variant: "destructive",
+      });
+    },
+    onClose: () => {
+      setWebViewOpen(false);
+    },
+  });
 
   useEffect(() => {
     const checkMobile = () => {
@@ -34,6 +64,21 @@ export function EspnCookieExtractor({ onSuccess }: EspnCookieExtractorProps) {
     };
     checkMobile();
   }, []);
+
+  // Subscribe to deep link events when dialog is open (native app only)
+  useEffect(() => {
+    if (!isNativeApp || !isOpen) return;
+    return onEspnDeepLink((data) => {
+      setSwid(data.swid);
+      setEspn_s2(data.espn_s2);
+      setLeagueId(data.leagueId || '');
+      setStep('validate');
+      toast({
+        title: "Cookies captured!",
+        description: data.leagueId ? "League ID auto-detected!" : "Add your League ID to continue.",
+      });
+    });
+  }, [isNativeApp, isOpen, toast]);
 
   // Listen for postMessage from bookmarklet
   useEffect(() => {
@@ -99,6 +144,18 @@ console.log('Copy these values:', espnCreds);
 espnCreds;`.trim();
 
   const bookmarkletCode = `javascript:(async()=>{try{const need=['SWID','espn_s2'];const jar={};document.cookie.split('; ').forEach(c=>{const idx=c.indexOf('=');if(idx>0){const k=c.substring(0,idx);const v=c.substring(idx+1);jar[k]=v;}});const out={};need.forEach(k=>{if(jar[k])out[k]=jar[k];});if(Object.keys(out).length<2){alert('Could not find both SWID and espn_s2. Make sure you are logged into ESPN.');return;}const urlMatch=window.location.href.match(/leagueId[=/](\\d+)/);if(urlMatch){out.leagueId=urlMatch[1];}if(window.opener){window.opener.postMessage({__GRIDIRONGM:'ESPN_COOKIES',data:out},'*');window.opener.focus();const leagueMsg=out.leagueId?' League ID detected!':'';alert('Cookies sent!'+leagueMsg+' You can close this window and return to GridironGM.');window.close();}else{navigator.clipboard.writeText(JSON.stringify(out));const leagueMsg=out.leagueId?' League ID detected!':'';alert('Cookies copied to clipboard!'+leagueMsg+' Close this window and paste in GridironGM.');}}catch(e){alert('Failed to capture cookies: '+e);}})();`;
+
+  // Native app bookmarklet — redirects to gridirongm:// deep link instead of postMessage
+  const nativeBookmarkletCode = `javascript:(async()=>{try{const need=['SWID','espn_s2'];const jar={};document.cookie.split('; ').forEach(c=>{const idx=c.indexOf('=');if(idx>0){const k=c.substring(0,idx);const v=c.substring(idx+1);jar[k]=v;}});const out={};need.forEach(k=>{if(jar[k])out[k]=jar[k];});if(Object.keys(out).length<2){alert('Could not find both SWID and espn_s2. Make sure you are logged into ESPN.');return;}const urlMatch=window.location.href.match(/leagueId[=/](\\d+)/);if(urlMatch){out.leagueId=urlMatch[1];}const params=new URLSearchParams();if(out.SWID)params.set('swid',out.SWID);if(out.espn_s2)params.set('espn_s2',out.espn_s2);if(out.leagueId)params.set('leagueId',out.leagueId);const deepLink='gridirongm://espn-login?'+params.toString();window.location.href=deepLink;setTimeout(()=>{try{navigator.clipboard.writeText(JSON.stringify(out));alert('Credentials copied to clipboard! Return to Gridiron GM and paste them.');}catch(e2){alert('SWID: '+out.SWID+'\\nespn_s2: '+(out.espn_s2||'').substring(0,20)+'...\\nLeague: '+(out.leagueId||'N/A')+'\\n\\nCopy these values manually.');}},2500);}catch(e){alert('Failed: '+e);}})();`;
+
+  const openEspnInBrowser = async () => {
+    try {
+      const { Browser } = await import("@capacitor/browser");
+      await Browser.open({ url: "https://fantasy.espn.com" });
+    } catch {
+      window.open("https://fantasy.espn.com", "_blank");
+    }
+  };
 
   const goToExtractStep = () => {
     setStep('extract');
@@ -173,7 +230,7 @@ espnCreds;`.trim();
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Cookie className="h-6 w-6" />
@@ -188,20 +245,23 @@ espnCreds;`.trim();
             <div className="space-y-4">
               <Alert>
                 <div className="flex items-center gap-2">
-                  {isMobile ? <Smartphone className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
+                  {isNativeApp ? <Smartphone className="h-4 w-4" /> : isMobile ? <Smartphone className="h-4 w-4" /> : <Monitor className="h-4 w-4" />}
                   <AlertCircle className="h-4 w-4" />
                 </div>
                 <AlertDescription>
-                  {isMobile ? "Mobile device detected! " : "Desktop device detected! "}
-                  Due to browser security, we can't automatically capture ESPN cookies. 
-                  This quick 3-step process takes less than 1 minute.
-                  <Button 
-                    variant="link" 
-                    className="p-0 h-auto ml-1"
-                    onClick={() => window.open('/BROWSER_EXTENSION_GUIDE.md', '_blank')}
-                  >
-                    Why not fully automated?
-                  </Button>
+                  {isNativeApp
+                    ? "We'll open ESPN inside the app so you can log in and capture your session securely. Takes less than 1 minute."
+                    : (isMobile ? "Mobile device detected! " : "Desktop device detected! ") +
+                      "Due to browser security, we can't automatically capture ESPN cookies. This quick 3-step process takes less than 1 minute."}
+                  {!isNativeApp && (
+                    <Button
+                      variant="link"
+                      className="p-0 h-auto ml-1"
+                      onClick={() => window.open('/BROWSER_EXTENSION_GUIDE.md', '_blank')}
+                    >
+                      Why not fully automated?
+                    </Button>
+                  )}
                 </AlertDescription>
               </Alert>
 
@@ -240,7 +300,69 @@ espnCreds;`.trim();
             </div>
           )}
 
-          {step === 'extract' && !isMobile && (
+          {step === 'extract' && isNativeApp && (
+            <div className="space-y-4">
+              <Alert>
+                <Smartphone className="h-4 w-4" />
+                <AlertDescription>
+                  ESPN will open inside the app. Log in, navigate to your league, then tap the green button to capture your session.
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-3">
+                <div className="flex items-start gap-3 p-3 border rounded-lg">
+                  <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold flex-shrink-0">1</div>
+                  <div>
+                    <h4 className="font-medium">Log into ESPN</h4>
+                    <p className="text-sm text-muted-foreground">Sign in with your ESPN account when the page opens</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 border rounded-lg">
+                  <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold flex-shrink-0">2</div>
+                  <div>
+                    <h4 className="font-medium">Navigate to your league</h4>
+                    <p className="text-sm text-muted-foreground">Go to your fantasy football league page so we can auto-detect your League ID</p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-3 p-3 border rounded-lg">
+                  <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center font-semibold flex-shrink-0">3</div>
+                  <div>
+                    <h4 className="font-medium">Tap the green button</h4>
+                    <p className="text-sm text-muted-foreground">A green "Extract Cookies for Gridiron GM" button will appear at the bottom of the page</p>
+                  </div>
+                </div>
+              </div>
+
+              <Button
+                onClick={() => {
+                  setWebViewOpen(true);
+                  openEspnWebView();
+                }}
+                disabled={webViewOpen}
+                className="w-full gap-2"
+              >
+                {webViewOpen ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    ESPN is open...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="h-4 w-4" />
+                    Open ESPN Login
+                  </>
+                )}
+              </Button>
+
+              <Button onClick={() => setStep('validate')} variant="ghost" className="w-full text-muted-foreground">
+                Having trouble? Enter credentials manually
+              </Button>
+            </div>
+          )}
+
+          {step === 'extract' && !isNativeApp && !isMobile && (
             <div className="space-y-4">
               <Alert>
                 <Monitor className="h-4 w-4" />
@@ -286,7 +408,7 @@ espnCreds;`.trim();
             </div>
           )}
 
-          {step === 'extract' && isMobile && (
+          {step === 'extract' && !isNativeApp && isMobile && (
             <div className="space-y-4">
               <Alert>
                 <Smartphone className="h-4 w-4" />

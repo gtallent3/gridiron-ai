@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,8 @@ export default function ConnectLeague() {
   const [yahooAuthUrl, setYahooAuthUrl] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const deepLinkHandled = useRef(false);
 
   useEffect(() => {
     // Check if user is logged in
@@ -271,6 +273,21 @@ export default function ConnectLeague() {
       window.removeEventListener('message', handleMessage);
     };
   }, [navigate, toast]);
+
+  // Handle deep link ESPN credentials from native app
+  useEffect(() => {
+    const creds = (location.state as any)?.espnCredentials;
+    if (!creds || deepLinkHandled.current) return;
+    deepLinkHandled.current = true;
+
+    // Clear navigation state to prevent re-trigger
+    window.history.replaceState({}, '', '/connect-league');
+
+    if (creds.swid && creds.espn_s2 && creds.leagueId) {
+      handleEspnCookieSuccess(creds);
+    }
+    // If no leagueId, user will need to use the EspnCookieExtractor dialog
+  }, [location.state]);
 
   if (checkingAuth) {
     return null;
