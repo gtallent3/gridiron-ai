@@ -121,6 +121,7 @@ Run in this order each season:
 - [ ] Verify AI league assistant works with new context
 
 ### Near Term
+- [ ] Fix AI archetype weights in `src/lib/draft-scoring.ts` — `rb_heavy`/`zero_rb`/`wr_early` weights are inverted (lower score = better pick, so "prioritize RB" needs `RB < 1.0`, not `> 1.0`). Audit all 6 archetypes after migration.
 - [ ] Stripe live mode activation
 - [ ] Mock draft multiplayer (friends)
 - [ ] Player over/unders swipe UI (PredictIQ)
