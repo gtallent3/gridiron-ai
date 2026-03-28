@@ -133,6 +133,13 @@ Run in this order each season:
 - [ ] Player over/unders swipe UI (PredictIQ)
 - [ ] Push notifications (pick reminders, waiver deadlines)
 
+### Admin Dashboard Improvements
+- [ ] **Automated scheduling via pg_cron** — weekly functions (injuries, stats, projections, snap counts) run automatically, no manual trigger needed
+- [ ] **Run history table** — add `function_run_log` (function name, ran_at, status, rows_affected, duration); display "Last run: Tue 9am — 312 rows" on each function card
+- [ ] **Status indicators** — green/yellow/red dot per function (green = ran in expected window, yellow = ran with errors/low rows, red = stale/overdue)
+- [ ] **One-click weekly pipeline** — single "Run Weekly Pipeline" button fires all 5 weekly functions in sequence with a progress indicator
+- [ ] **Group functions by frequency** — Daily / Weekly / Seasonal / One-time sections so it's clear what needs attention and when
+
 ### Later
 - [ ] Dynasty draft + trade tools
 - [ ] ML score predictions
