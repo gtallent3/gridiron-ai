@@ -6,7 +6,9 @@ const config: CapacitorConfig = {
   webDir: 'dist',
 
   server: {
-    // Route fetch() through native HTTP to bypass CORS on external APIs
+    // Load live site so web updates reflect instantly without a new app binary
+    url: 'https://gridiron-gm.com',
+    cleartext: false,
     androidScheme: 'https',
   },
 
