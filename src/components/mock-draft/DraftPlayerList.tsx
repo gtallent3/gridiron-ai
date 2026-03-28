@@ -2,8 +2,12 @@ import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search } from "lucide-react";
-import { DraftPlayer } from "@/hooks/useMockDraft";
+import { DraftPlayer, DraftPick } from "@/hooks/useMockDraft";
 import { cn } from "@/lib/utils";
+
+const POS_TARGETS: Record<string, number> = {
+  QB: 2, RB: 5, WR: 5, TE: 2, K: 1, DEF: 1,
+};
 
 const POS_COLORS: Record<string, string> = {
   QB: "bg-red-500/20 text-red-400",
@@ -20,11 +24,25 @@ interface DraftPlayerListProps {
   players: DraftPlayer[];
   isUserTurn: boolean;
   onDraft: (player: DraftPlayer) => void;
+  myPicks?: DraftPick[];
 }
 
-export function DraftPlayerList({ players, isUserTurn, onDraft }: DraftPlayerListProps) {
+export function DraftPlayerList({ players, isUserTurn, onDraft, myPicks = [] }: DraftPlayerListProps) {
   const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState("ALL");
+
+  const posCounts: Record<string, number> = {};
+  myPicks.forEach((p) => {
+    posCounts[p.player.position] = (posCounts[p.player.position] || 0) + 1;
+  });
+
+  const getNeedLabel = (position: string) => {
+    const count = posCounts[position] || 0;
+    const target = POS_TARGETS[position] || 2;
+    if (count === 0) return "need";
+    if (count < target) return null;
+    return "full";
+  };
 
   const filtered = players.filter((p) => {
     if (posFilter !== "ALL" && p.position !== posFilter) return false;
@@ -82,7 +100,15 @@ export function DraftPlayerList({ players, isUserTurn, onDraft }: DraftPlayerLis
                   <td className="py-1.5 pr-2 text-muted-foreground text-xs">{p.adp}</td>
                   <td className="py-1.5 pr-2 font-medium text-sm truncate max-w-[140px]">{p.name}</td>
                   <td className="py-1.5 pr-2">
-                    <span className={cn("text-xs px-1.5 py-0.5 rounded", posClass)}>{p.position}</span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className={cn("text-xs px-1.5 py-0.5 rounded", posClass)}>{p.position}</span>
+                      {(() => {
+                        const need = getNeedLabel(p.position);
+                        if (need === "need") return <span className="text-[10px] text-primary font-medium leading-none">need</span>;
+                        if (need === "full") return <span className="text-[10px] text-muted-foreground leading-none">full</span>;
+                        return null;
+                      })()}
+                    </div>
                   </td>
                   <td className="py-1.5 pr-2 text-muted-foreground text-xs">{p.team}</td>
                   <td className="py-1.5 pr-2 text-muted-foreground text-xs">

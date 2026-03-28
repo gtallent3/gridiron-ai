@@ -8,6 +8,7 @@ import { DraftPlayerList } from "@/components/mock-draft/DraftPlayerList";
 import { DraftMyTeam } from "@/components/mock-draft/DraftMyTeam";
 import { DraftTimer } from "@/components/mock-draft/DraftTimer";
 import { DraftPickBanner } from "@/components/mock-draft/DraftPickBanner";
+import { DraftRecommendations } from "@/components/mock-draft/DraftRecommendations";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -162,6 +163,7 @@ const MockDraftRoom = () => {
               isUserTurn={isUserTurn}
               makePick={makePick}
               myPicks={myPicks}
+              currentRound={draftState.currentRound}
             />
           </div>
         </div>
@@ -197,11 +199,22 @@ const MockDraftRoom = () => {
               />
             )}
             {mobileTab === "Players" && (
-              <DraftPlayerList
-                players={availablePlayers}
-                isUserTurn={isUserTurn}
-                onDraft={makePick}
-              />
+              <>
+                {isUserTurn && (
+                  <DraftRecommendations
+                    availablePlayers={availablePlayers}
+                    myPicks={myPicks}
+                    currentRound={draftState.currentRound}
+                    onDraft={makePick}
+                  />
+                )}
+                <DraftPlayerList
+                  players={availablePlayers}
+                  isUserTurn={isUserTurn}
+                  onDraft={makePick}
+                  myPicks={myPicks}
+                />
+              </>
             )}
             {mobileTab === "My Team" && <DraftMyTeam picks={myPicks} />}
           </div>
@@ -216,11 +229,13 @@ function DesktopRightPanel({
   isUserTurn,
   makePick,
   myPicks,
+  currentRound,
 }: {
   availablePlayers: any[];
   isUserTurn: boolean;
   makePick: (p: any) => void;
   myPicks: any[];
+  currentRound: number;
 }) {
   const [tab, setTab] = useState<"Players" | "My Team">("Players");
 
@@ -244,11 +259,22 @@ function DesktopRightPanel({
       </div>
       <div className="flex-1 overflow-auto p-3">
         {tab === "Players" ? (
-          <DraftPlayerList
-            players={availablePlayers}
-            isUserTurn={isUserTurn}
-            onDraft={makePick}
-          />
+          <>
+            {isUserTurn && (
+              <DraftRecommendations
+                availablePlayers={availablePlayers}
+                myPicks={myPicks}
+                currentRound={currentRound}
+                onDraft={makePick}
+              />
+            )}
+            <DraftPlayerList
+              players={availablePlayers}
+              isUserTurn={isUserTurn}
+              onDraft={makePick}
+              myPicks={myPicks}
+            />
+          </>
         ) : (
           <DraftMyTeam picks={myPicks} />
         )}
