@@ -49,6 +49,7 @@ export function useMockDraft(settings: DraftSettings | null) {
   });
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [latestPick, setLatestPick] = useState<DraftPick | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -120,16 +121,21 @@ export function useMockDraft(settings: DraftSettings | null) {
 
     const fetchPlayers = async () => {
       try {
+        setLoadError(null);
         const resp = await fetch("https://api.sleeper.app/v1/players/nfl");
-        if (!resp.ok) throw new Error("Failed to fetch");
+        if (!resp.ok) throw new Error(`Sleeper API returned ${resp.status}`);
         const data = await resp.json();
 
-        // First pass: collect players grouped by position with their positional rank
+        // First pass: collect players grouped by position with their positional rank.
+        // We intentionally do NOT filter on player.active — in the offseason many
+        // rostered players have active=false (free agents, unsigned rookies, etc.)
+        // and would be incorrectly excluded.
         const byPosition: Record<string, { name: string; team: string; posRank: number; byeWeek?: number }[]> = {};
         for (const [, player] of Object.entries(data) as [string, any][]) {
-          if (!player.active || !player.position || !player.search_rank) continue;
+          if (!player.position) continue;
           if (!["QB", "RB", "WR", "TE", "K", "DEF"].includes(player.position)) continue;
-          if (player.search_rank >= 9999) continue; // skip unranked
+          // Require a meaningful search_rank (ranked by Sleeper as a draftable player)
+          if (!player.search_rank || player.search_rank >= 9999) continue;
 
           const pos = player.position as string;
           if (!byPosition[pos]) byPosition[pos] = [];
@@ -216,8 +222,9 @@ export function useMockDraft(settings: DraftSettings | null) {
             status: "active",
           });
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error("Failed to load player data:", err);
+        setLoadError(err?.message || "Failed to load players");
       } finally {
         setIsLoading(false);
       }
@@ -451,6 +458,7 @@ export function useMockDraft(settings: DraftSettings | null) {
     timeRemaining,
     makePick,
     isLoading,
+    loadError,
     latestPick,
     numTeams,
     numRounds,

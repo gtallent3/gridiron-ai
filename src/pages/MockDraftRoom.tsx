@@ -9,7 +9,7 @@ import { DraftMyTeam } from "@/components/mock-draft/DraftMyTeam";
 import { DraftTimer } from "@/components/mock-draft/DraftTimer";
 import { DraftPickBanner } from "@/components/mock-draft/DraftPickBanner";
 import { DraftRecommendations } from "@/components/mock-draft/DraftRecommendations";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = ["Board", "Players", "My Team"] as const;
@@ -20,7 +20,7 @@ const MockDraftRoom = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState<any>(null);
   const [settings, setSettings] = useState<DraftSettings | null>(null);
-  const [loadError, setLoadError] = useState(false);
+  const [draftNotFound, setDraftNotFound] = useState(false);
   const [mobileTab, setMobileTab] = useState<Tab>("Players");
 
   // Load draft settings from DB
@@ -45,7 +45,7 @@ const MockDraftRoom = () => {
         .single();
 
       if (error || !data) {
-        setLoadError(true);
+        setDraftNotFound(true);
         return;
       }
 
@@ -72,6 +72,7 @@ const MockDraftRoom = () => {
     timeRemaining,
     makePick,
     isLoading,
+    loadError,
     latestPick,
     numTeams,
     numRounds,
@@ -89,7 +90,7 @@ const MockDraftRoom = () => {
     }
   }, [isDraftComplete, draftId, navigate]);
 
-  if (loadError) {
+  if (draftNotFound) {
     return (
       <div className="min-h-screen bg-background">
         <Header user={user} />
@@ -107,6 +108,25 @@ const MockDraftRoom = () => {
         <div className="pt-24 flex flex-col items-center justify-center gap-3">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
           <p className="text-sm text-muted-foreground">Loading players...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Header user={user} />
+        <div className="pt-24 flex flex-col items-center justify-center gap-3 text-center px-4">
+          <AlertCircle className="h-8 w-8 text-destructive" />
+          <p className="font-semibold">Failed to load players</p>
+          <p className="text-sm text-muted-foreground">{loadError}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-sm text-primary underline"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
