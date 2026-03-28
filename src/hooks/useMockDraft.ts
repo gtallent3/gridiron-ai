@@ -126,22 +126,57 @@ export function useMockDraft(settings: DraftSettings | null) {
         const DRAFT_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"];
         let top: DraftPlayer[] = [];
 
-        // --- Primary: edge function (server-side Sleeper, no CORS issues) ---
-        try {
-          const { data: players, error: fnError } = await supabase.functions.invoke("get-draft-players");
-          if (!fnError && Array.isArray(players) && players.length > 0) {
-            top = players as DraftPlayer[];
+        // --- Primary: trade_values table (FantasyCalc redraft rankings, no external API) ---
+        // Get the most recent snapshot date first
+        const { data: latestSnapshot } = await (supabase as any)
+          .from("trade_values")
+          .select("snapshot_date")
+          .eq("source", "fantasycalc_redraft")
+          .order("snapshot_date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (latestSnapshot?.snapshot_date) {
+          const { data: tvData } = await (supabase as any)
+            .from("trade_values")
+            .select("player_name, position, team, rank, bye_week")
+            .eq("source", "fantasycalc_redraft")
+            .eq("snapshot_date", latestSnapshot.snapshot_date)
+            .order("rank", { ascending: true })
+            .limit(400);
+
+          if (tvData && tvData.length > 0) {
+            // FantasyCalc uses "DST" for team defense; normalise to "DEF"
+            top = (tvData as any[])
+              .map((p: any) => ({
+                name: p.player_name,
+                position: p.position === "DST" ? "DEF" : p.position,
+                team: p.team || "FA",
+                adp: p.rank ?? 999,
+                byeWeek: p.bye_week ?? undefined,
+              }))
+              .filter((p: DraftPlayer) => DRAFT_POSITIONS.includes(p.position))
+              .slice(0, 300);
           }
-        } catch {
-          // edge function not yet deployed — fall through to direct fetch
         }
 
-        // --- Fallback: direct Sleeper fetch (works in production browser) ---
+        // --- Fallback: edge function (server-side Sleeper, deployed via Lovable) ---
+        if (top.length === 0) {
+          try {
+            const { data: players, error: fnError } = await supabase.functions.invoke("get-draft-players");
+            if (!fnError && Array.isArray(players) && players.length > 0) {
+              top = players as DraftPlayer[];
+            }
+          } catch {
+            // edge function not yet deployed — fall through
+          }
+        }
+
+        // --- Last resort: direct Sleeper fetch ---
         if (top.length === 0) {
           const resp = await fetch("https://api.sleeper.app/v1/players/nfl");
           if (!resp.ok) throw new Error(`Sleeper API returned ${resp.status}`);
           const data = await resp.json();
-
           const byPosition: Record<string, { name: string; team: string; posRank: number; byeWeek?: number }[]> = {};
           for (const [, player] of Object.entries(data) as [string, any][]) {
             if (!player.position || !DRAFT_POSITIONS.includes(player.position)) continue;
@@ -160,9 +195,7 @@ export function useMockDraft(settings: DraftSettings | null) {
             byPosition[pos].sort((a, b) => a.posRank - b.posRank);
             byPosition[pos].forEach((p, idx) => {
               ranked.push({
-                name: p.name,
-                position: pos,
-                team: p.team,
+                name: p.name, position: pos, team: p.team,
                 adp: Math.round(computeOverallAdp(pos, idx + 1)),
                 byeWeek: p.byeWeek,
               });
