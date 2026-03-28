@@ -4,8 +4,9 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, GripVertical, Loader2, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { CheckCircle2, GripVertical, Loader2, Plus, RefreshCw, Trash2, Trophy } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useSeasonState } from "@/hooks/useSeasonState";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,9 +50,11 @@ interface SortableLeagueItemProps {
   league: League;
   refreshingId: string | null;
   deletingId: string | null;
+  isOffseason: boolean;
   onResync: (e: React.MouseEvent, leagueId: string, platform: string) => void;
   onDelete: (league: League) => void;
   onNavigate: (id: string) => void;
+  onRecap: (id: string) => void;
   getDisplayScoringType: (lg: any) => string;
 }
 
@@ -59,9 +62,11 @@ const SortableLeagueItem = ({
   league,
   refreshingId,
   deletingId,
+  isOffseason,
   onResync,
   onDelete,
   onNavigate,
+  onRecap,
   getDisplayScoringType,
 }: SortableLeagueItemProps) => {
   const {
@@ -110,6 +115,17 @@ const SortableLeagueItem = ({
         </p>
       </div>
       <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+        {isOffseason && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={(e) => { e.stopPropagation(); onRecap(league.id); }}
+            className="touch-target text-xs"
+          >
+            <Trophy className="h-3.5 w-3.5 mr-1" />
+            Recap
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -158,6 +174,7 @@ export const ConnectedLeagues = () => {
   const [leagueToDelete, setLeagueToDelete] = useState<League | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { isInSeason } = useSeasonState();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -438,9 +455,11 @@ export const ConnectedLeagues = () => {
                 league={league}
                 refreshingId={refreshingId}
                 deletingId={deletingId}
+                isOffseason={!isInSeason}
                 onResync={handleQuickResync}
                 onDelete={setLeagueToDelete}
                 onNavigate={(id) => navigate(`/league/${id}`)}
+                onRecap={(id) => navigate(`/league/${id}/recap`)}
                 getDisplayScoringType={getDisplayScoringType}
               />
             ))}

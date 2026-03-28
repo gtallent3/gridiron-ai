@@ -55,6 +55,14 @@ export default function LeagueDashboard() {
   const [activeTab, setActiveTab] = useState("roster");
   const [tradeView, setTradeView] = useState("analyzer");
 
+  const handleTabChange = (value: string) => {
+    if (value === "recap") {
+      navigate(`/league/${leagueId}/recap`);
+      return;
+    }
+    setActiveTab(value);
+  };
+
   useEffect(() => {
     const checkAuthAndFetchData = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -242,7 +250,7 @@ export default function LeagueDashboard() {
 
         {!isInSeason && <OffseasonBanner seasonState={seasonState} />}
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4 sm:mt-8">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="mt-4 sm:mt-8">
           <TabsList className={`grid w-full ${tabCols} max-w-4xl mx-auto h-auto`}>
             {isInSeason ? (
               <DropdownMenu>
@@ -406,20 +414,7 @@ export default function LeagueDashboard() {
             </TabsContent>
           )}
 
-          {!isInSeason && (
-            <TabsContent value="recap" className="mt-4 sm:mt-6">
-              <div className="text-center py-12 space-y-4">
-                <Trophy className="h-12 w-12 text-primary mx-auto" />
-                <h3 className="text-lg font-semibold">2025 Season Recap</h3>
-                <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                  View your complete season performance with charts, top performers, and positional breakdowns.
-                </p>
-                <Button onClick={() => navigate(`/league/${leagueId}/recap`)}>
-                  View Full Recap
-                </Button>
-              </div>
-            </TabsContent>
-          )}
+          {/* recap tab navigates directly via handleTabChange — no content needed here */}
 
           <TabsContent value="ai" className="mt-4 sm:mt-6">
             <LeagueAIAssistant

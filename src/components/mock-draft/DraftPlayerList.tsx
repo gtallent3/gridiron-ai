@@ -70,6 +70,7 @@ export function DraftPlayerList({ players, isUserTurn, onDraft }: DraftPlayerLis
               <th className="text-left py-1.5 pr-2">Player</th>
               <th className="text-left py-1.5 pr-2 w-12">Pos</th>
               <th className="text-left py-1.5 pr-2 w-12">Team</th>
+              <th className="text-left py-1.5 pr-2 w-10">Bye</th>
               <th className="w-16"></th>
             </tr>
           </thead>
@@ -84,6 +85,9 @@ export function DraftPlayerList({ players, isUserTurn, onDraft }: DraftPlayerLis
                     <span className={cn("text-xs px-1.5 py-0.5 rounded", posClass)}>{p.position}</span>
                   </td>
                   <td className="py-1.5 pr-2 text-muted-foreground text-xs">{p.team}</td>
+                  <td className="py-1.5 pr-2 text-muted-foreground text-xs">
+                    {p.byeWeek ?? "—"}
+                  </td>
                   <td className="py-1.5">
                     <Button
                       size="sm"

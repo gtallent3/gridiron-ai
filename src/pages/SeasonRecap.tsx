@@ -1,12 +1,17 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ArrowLeft, Trophy } from "lucide-react";
+import { Loader2, ArrowLeft, Trophy, Database, CheckCircle2, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { WeeklyPointsChart } from "@/components/league/recap/WeeklyPointsChart";
 import { SeasonSummaryCard } from "@/components/league/recap/SeasonSummaryCard";
 import { TopPerformersTable } from "@/components/league/recap/TopPerformersTable";
 import { PositionalBreakdown } from "@/components/league/recap/PositionalBreakdown";
+
+// NFL season: Sep-Dec = current year, Jan-Aug = previous year
+const RECAP_SEASON = new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+
+type BackfillStatus = "idle" | "running" | "done" | "error";
 
 interface WeeklyData {
   week: number;
@@ -43,6 +48,9 @@ export default function SeasonRecap() {
   const [summary, setSummary] = useState<SeasonSummary | null>(null);
   const [topPerformers, setTopPerformers] = useState<TopPerformer[]>([]);
   const [positionalData, setPositionalData] = useState<PositionData[]>([]);
+  const [backfillStatus, setBackfillStatus] = useState<BackfillStatus>("idle");
+  const [backfillProgress, setBackfillProgress] = useState("");
+  const [backfillError, setBackfillError] = useState("");
 
   useEffect(() => {
     fetchRecapData();
@@ -100,7 +108,7 @@ export default function SeasonRecap() {
       const { data: poolData } = await supabase
         .from("actual_weekly_points")
         .select("player_name, position, week, fantasy_points_ppr")
-        .eq("season", 2025)
+        .eq("season", RECAP_SEASON)
         .gte("week", 1)
         .lte("week", 18);
 
@@ -175,6 +183,83 @@ export default function SeasonRecap() {
     }
   };
 
+  const handleBackfill = async () => {
+    setBackfillStatus("running");
+    setBackfillProgress("Downloading player database from Sleeper...");
+    setBackfillError("");
+
+    const RELEVANT_POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated — please sign in again");
+
+      const playersResp = await fetch("https://api.sleeper.app/v1/players/nfl");
+      if (!playersResp.ok) throw new Error(`Failed to fetch player data (HTTP ${playersResp.status})`);
+      const players: Record<string, any> = await playersResp.json();
+
+      const records: any[] = [];
+      for (let week = 1; week <= 18; week++) {
+        setBackfillProgress(`Fetching week ${week} of 18...`);
+        const statsResp = await fetch(`https://api.sleeper.app/v1/stats/nfl/regular/${RECAP_SEASON}/${week}`);
+        if (!statsResp.ok) continue;
+        const weekStats: Record<string, any> = await statsResp.json();
+        if (!weekStats || typeof weekStats !== "object") continue;
+
+        for (const [playerId, stats] of Object.entries(weekStats)) {
+          const player = players[playerId];
+          if (!player) continue;
+          const position = player.position;
+          if (!RELEVANT_POSITIONS.has(position)) continue;
+          const ptsPpr = stats.pts_ppr ?? 0;
+          const ptsStd = stats.pts_std ?? 0;
+          if (ptsPpr === 0 && ptsStd === 0) continue;
+          const ptsHalfPpr = ptsStd + (stats.rec ?? 0) * 0.5;
+          records.push({
+            player_id: playerId,
+            player_name: player.full_name || `${player.first_name || ""} ${player.last_name || ""}`.trim(),
+            position,
+            team: player.team || stats.team || "FA",
+            week,
+            season: RECAP_SEASON,
+            passing_yards: stats.pass_yd ?? 0,
+            passing_tds: stats.pass_td ?? 0,
+            passing_ints: stats.pass_int ?? 0,
+            rushing_yards: stats.rush_yd ?? 0,
+            rushing_tds: stats.rush_td ?? 0,
+            receiving_yards: stats.rec_yd ?? 0,
+            receiving_tds: stats.rec_td ?? 0,
+            receptions: stats.rec ?? 0,
+            fantasy_points_std: parseFloat(ptsStd.toFixed(2)),
+            fantasy_points_ppr: parseFloat(ptsPpr.toFixed(2)),
+            fantasy_points_half_ppr: parseFloat(ptsHalfPpr.toFixed(2)),
+          });
+        }
+      }
+
+      if (records.length === 0) throw new Error(`No stats found for the ${RECAP_SEASON} season`);
+
+      const batchSize = 500;
+      let totalInserted = 0;
+      for (let i = 0; i < records.length; i += batchSize) {
+        const batch = records.slice(i, i + batchSize);
+        const { error: upsertError } = await supabase
+          .from("actual_weekly_points")
+          .upsert(batch, { onConflict: "player_id,week,season", ignoreDuplicates: false });
+        if (upsertError) throw new Error(`Insert failed: ${upsertError.message}`);
+        totalInserted += batch.length;
+        setBackfillProgress(`Saving ${totalInserted.toLocaleString()} / ${records.length.toLocaleString()} records...`);
+      }
+
+      setBackfillStatus("done");
+      setBackfillProgress(`Done! Imported ${totalInserted.toLocaleString()} records.`);
+      await fetchRecapData();
+    } catch (err: any) {
+      setBackfillError(err?.message || "Unknown error");
+      setBackfillStatus("error");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -200,18 +285,52 @@ export default function SeasonRecap() {
           <Trophy className="h-6 w-6 text-primary" />
           <div>
             <h1 className="text-2xl font-bold">Season Recap</h1>
-            <p className="text-sm text-muted-foreground">{leagueName} — 2025 Season</p>
+            <p className="text-sm text-muted-foreground">{leagueName} — {RECAP_SEASON} Season</p>
           </div>
         </div>
 
         {!hasData ? (
-          <div className="text-center py-12 space-y-4">
-            <p className="text-muted-foreground">
-              No season data available yet. Use the backfill button on the home page to import 2025 stats.
-            </p>
-            <Button variant="outline" onClick={() => navigate("/")}>
-              Go to Home
-            </Button>
+          <div className="max-w-md mx-auto text-center py-12 space-y-4">
+            <Trophy className="h-12 w-12 text-primary/40 mx-auto" />
+            <div className="space-y-1">
+              <h3 className="font-semibold">No season stats yet</h3>
+              <p className="text-sm text-muted-foreground">
+                Import {RECAP_SEASON} season stats from Sleeper to see your full season breakdown.
+              </p>
+            </div>
+
+            {backfillStatus === "idle" && (
+              <Button onClick={handleBackfill}>
+                <Database className="h-4 w-4 mr-2" />
+                Import {RECAP_SEASON} Season Stats
+              </Button>
+            )}
+
+            {backfillStatus === "running" && (
+              <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{backfillProgress}</span>
+              </div>
+            )}
+
+            {backfillStatus === "done" && (
+              <div className="flex items-center justify-center gap-2 text-sm text-green-500">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>{backfillProgress}</span>
+              </div>
+            )}
+
+            {backfillStatus === "error" && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-center gap-2 text-sm text-destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>{backfillError}</span>
+                </div>
+                <Button variant="outline" onClick={handleBackfill}>
+                  Retry
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="space-y-6">

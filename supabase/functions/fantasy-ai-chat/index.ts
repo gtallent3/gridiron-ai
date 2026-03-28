@@ -123,12 +123,12 @@ serve(async (req) => {
     const league = leagueResult.data;
     const userTeamId = league.user_team_id;
 
-    // Now fetch all data in parallel using the correct team_id
+    // First batch: core league data
     const [userTeamResult, allTeamsResult, posStrengthsResult, topPlayersResult] = await Promise.all([
       supabase.from('user_teams').select('*').eq('team_id', userTeamId).eq('league_id', leagueId).single(),
-      supabase.from('user_teams').select('*').eq('league_id', leagueId),
+      supabase.from('user_teams').select('team_id, team_name, wins, losses, ties, roster').eq('league_id', leagueId),
       supabase.from('team_positional_strengths').select('*').eq('league_id', leagueId),
-      supabase.from('trade_value_weekly').select('*').order('trade_value', { ascending: false }).limit(150)
+      supabase.from('trade_value_weekly').select('player_name, position, team, trade_value, meta_proj_ros_ppg').order('trade_value', { ascending: false }).limit(150)
     ]);
 
     const userTeam = userTeamResult.data;
@@ -137,9 +137,74 @@ serve(async (req) => {
     const topPlayers = topPlayersResult.data || [];
 
     const currentDate = new Date();
-    const currentSeason = 2025;
-    const currentWeek = league.current_week || 12;
-    
+    // NFL season: Sep-Dec = current year, Jan-Aug = previous year
+    const currentSeason = currentDate.getMonth() >= 8 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+    const currentWeek = league.current_week || 1;
+
+    // Build roster name list for enrichment queries
+    const roster = Array.isArray(userTeam?.roster) ? userTeam.roster : [];
+    const rosterNames = [...new Set(roster.map((p: any) => p.player_name).filter(Boolean))] as string[];
+
+    // Second batch: enrich roster players + opponent team
+    const [poolDataResult, opponentTeamResult, rankingsResult] = await Promise.all([
+      rosterNames.length > 0
+        ? supabase
+            .from('player_pool_v2')
+            .select('player_name, projected_fp, actual_fp, injury_status, injury_status_explanation, bye_week, opponent, opponent_def_rank')
+            .eq('week', currentWeek)
+            .eq('season', currentSeason)
+            .in('player_name', rosterNames)
+        : Promise.resolve({ data: [] as any[] }),
+      league.opponent_team_id
+        ? supabase.from('user_teams').select('team_name, wins, losses, roster').eq('team_id', league.opponent_team_id).eq('league_id', leagueId).maybeSingle()
+        : Promise.resolve({ data: null }),
+      rosterNames.length > 0
+        ? supabase
+            .from('player_rankings')
+            .select('player_name, actual_last3_ppg, avg_actual_ppg, trade_value')
+            .eq('season', currentSeason)
+            .in('player_name', rosterNames)
+        : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    // Build lookup maps for enrichment
+    const poolByName: Record<string, any> = {};
+    for (const p of (poolDataResult.data || [])) poolByName[p.player_name] = p;
+
+    const rankingsByName: Record<string, any> = {};
+    for (const p of (rankingsResult.data || [])) rankingsByName[p.player_name] = p;
+
+    const opponentTeam = opponentTeamResult.data;
+
+    // Helper to format a roster player with full context
+    const formatPlayer = (p: any) => {
+      const pool = poolByName[p.player_name];
+      const rank = rankingsByName[p.player_name];
+      const proj = pool?.projected_fp ?? p.projected ?? p.proj;
+      const last3 = rank?.actual_last3_ppg;
+      const status = pool?.injury_status;
+      const opp = pool?.opponent;
+      const oppRank = pool?.opponent_def_rank;
+      const isBye = pool?.bye_week;
+
+      let line = `  - ${p.player_name} (${p.position}, ${p.team || 'FA'})`;
+      if (isBye) {
+        line += ' — ON BYE';
+      } else {
+        if (opp) line += ` vs ${opp}${oppRank ? ` (def rank #${oppRank})` : ''}`;
+        if (proj != null) line += ` | Proj: ${Number(proj).toFixed(1)} pts`;
+        if (last3 != null) line += ` | Last 3 wks avg: ${Number(last3).toFixed(1)} pts`;
+      }
+      if (status && status !== 'Active' && status !== 'ACTIVE' && status !== 'active') {
+        line += ` | Status: ${status}`;
+        if (pool?.injury_status_explanation) line += ` (${pool.injury_status_explanation})`;
+      }
+      return line;
+    };
+
+    const starters = roster.filter((p: any) => p.slot < 20 || p.starter === true);
+    const bench = roster.filter((p: any) => !(p.slot < 20 || p.starter === true));
+
     let contextParts = [
       `Current Date: ${currentDate.toISOString().split('T')[0]}`,
       `NFL Season: ${currentSeason}, Week: ${currentWeek}`,
@@ -149,122 +214,89 @@ serve(async (req) => {
     if (userTeam) {
       contextParts.push(`User's Team: ${userTeam.team_name}`);
       contextParts.push(`Record: ${userTeam.wins || 0}-${userTeam.losses || 0}${userTeam.ties ? `-${userTeam.ties}` : ''}`);
-      
-      const roster = Array.isArray(userTeam.roster) ? userTeam.roster : [];
-      
-      // Separate starters from bench based on slot positions
-      // Slots 0-15 are typically starters, 20+ are bench
-      const starters = roster.filter((p: any) => p.slot < 20);
-      const bench = roster.filter((p: any) => p.slot >= 20);
-      
+
       if (starters.length > 0) {
-        contextParts.push(`\nStarting Lineup (${starters.length}):`);
-        starters.forEach((p: any) => {
-          contextParts.push(`- ${p.player_name} (${p.position}, ${p.team || 'FA'}) - Proj: ${p.projected || 'N/A'} pts`);
-        });
+        contextParts.push(`\nStarting Lineup:`);
+        starters.forEach((p: any) => contextParts.push(formatPlayer(p)));
       }
-      
       if (bench.length > 0) {
-        contextParts.push(`\nBench (${bench.length}):`);
-        bench.forEach((p: any) => {
-          contextParts.push(`- ${p.player_name} (${p.position}, ${p.team || 'FA'}) - Proj: ${p.projected || 'N/A'} pts`);
+        contextParts.push(`\nBench:`);
+        bench.forEach((p: any) => contextParts.push(formatPlayer(p)));
+      }
+    }
+
+    // This week's matchup with opponent's projected starters
+    if (opponentTeam) {
+      contextParts.push(`\nThis Week's Matchup vs ${opponentTeam.team_name} (${opponentTeam.wins || 0}-${opponentTeam.losses || 0}):`);
+      const oppRoster = Array.isArray(opponentTeam.roster) ? opponentTeam.roster : [];
+      const oppStarters = oppRoster.filter((p: any) => p.slot < 20 || p.starter === true);
+      if (oppStarters.length > 0) {
+        oppStarters.forEach((p: any) => {
+          const proj = p.projected ?? p.proj;
+          contextParts.push(`  - ${p.player_name} (${p.position}, ${p.team || 'FA'})${proj != null ? ` | Proj: ${Number(proj).toFixed(1)} pts` : ''}`);
         });
+        const oppTotal = oppStarters.reduce((sum: number, p: any) => sum + (Number(p.projected ?? p.proj) || 0), 0);
+        if (oppTotal > 0) contextParts.push(`  Opponent projected total: ${oppTotal.toFixed(1)} pts`);
       }
     }
 
     if (posStrengths.length > 0 && userTeam) {
-      contextParts.push(`\nUser's Positional Strengths:`);
-      const userStrengths = posStrengths.filter((ps: any) => ps.team_id === userTeam.team_id);
-      userStrengths.forEach((ps: any) => {
-        contextParts.push(`- ${ps.position}: Rank #${ps.rank}/${league.league_size} (PSS: ${ps.pss.toFixed(1)})`);
-      });
+      contextParts.push(`\nUser's Positional Strengths (rank in league):`);
+      posStrengths
+        .filter((ps: any) => ps.team_id === userTeam.team_id)
+        .sort((a: any, b: any) => a.rank - b.rank)
+        .forEach((ps: any) => {
+          const label = ps.rank <= Math.ceil(league.league_size / 3) ? 'strong' : ps.rank >= Math.floor(league.league_size * 2 / 3) ? 'weak — upgrade target' : 'average';
+          contextParts.push(`  - ${ps.position}: Rank #${ps.rank}/${league.league_size} (${label})`);
+        });
     }
 
     if (allTeams.length > 0 && userTeam) {
       contextParts.push(`\nOther Teams in League:`);
-      const opponents = allTeams.filter((t: any) => t.team_id !== userTeam.team_id);
-      opponents.forEach((t: any) => {
-        contextParts.push(`- ${t.team_name}: ${t.wins || 0}-${t.losses || 0}${t.ties ? `-${t.ties}` : ''}`);
-      });
+      allTeams
+        .filter((t: any) => t.team_id !== userTeam.team_id)
+        .forEach((t: any) => {
+          contextParts.push(`  - ${t.team_name}: ${t.wins || 0}-${t.losses || 0}${t.ties ? `-${t.ties}` : ''}`);
+        });
     }
 
     contextParts.push(`\nTop ${Math.min(topPlayers.length, 150)} Players by Trade Value:`);
     topPlayers.slice(0, 150).forEach((p: any, idx: number) => {
       contextParts.push(
-        `${idx + 1}. ${p.player_name} (${p.position}, ${p.team || 'FA'}) - Trade Value: ${p.trade_value.toFixed(1)}, Proj ROS PPG: ${p.meta_proj_ros_ppg?.toFixed(1) || 'N/A'}`
+        `${idx + 1}. ${p.player_name} (${p.position}, ${p.team || 'FA'}) - TV: ${p.trade_value?.toFixed(1)}, ROS PPG: ${p.meta_proj_ros_ppg?.toFixed(1) || 'N/A'}`
       );
     });
 
-    const systemPrompt = `You are an expert fantasy football AI assistant. You MUST follow these strict rules:
+    const systemPrompt = `You are an expert fantasy football AI assistant for ${league.league_name}. You have full context about the user's team, roster, matchup, injury statuses, and league standings below.
 
 CONTEXT:
 ${contextParts.join('\n')}
 
-DATASET RULES (CRITICAL):
-1. For START/SIT questions → Use ONLY get_start_sit_data tool to query player_pool_v2 table
-2. For TRADE questions → Use ONLY get_trade_data tool to query player_rankings table
-3. For TRADE TARGET questions → Use ONLY suggest_trade_targets tool (it does all the heavy analysis)
-4. NEVER mix datasets or reference unavailable data
-5. ALWAYS call the appropriate tool immediately - fuzzy matching will find players by partial names
-6. NEVER ask users for full player names or teams - just use what they provide
+HOW TO ANSWER QUESTIONS:
 
-QUESTION DETECTION:
-- START/SIT keywords: "start", "sit", "bench", "flex", "play", "lineup", "who should I", "better play"
-- TRADE keywords: "trade", "deal", "value", "offer", "worth", "accept", "swap"
-- TRADE TARGET keywords: "who should I target", "trade suggestions", "players to target", "trade for", "strengthen my team", "upgrade position"
+Start/Sit questions → Call get_start_sit_data with the player names. Then give a clear recommendation:
+- "Start [Player] — projected X.X pts vs [Opponent] (def rank #N). [Player] is averaging X.X over last 3 weeks."
+- Flag any bye weeks or injury concerns from the context above before the user even asks.
+- For close calls (<1 pt difference): say so and explain the tiebreaker.
 
-PLAYER NAME HANDLING:
-- Accept ANY player name format: "Waddle", "Jaylen Waddle", "waddle", etc.
-- Fuzzy matching system will find the correct player automatically
-- If user says "Start?Sit Waddle and Hill" → Call tool with ["Waddle", "Hill"]
-- NEVER respond with "I need full names" - the system handles partial names
+Trade questions → Call get_trade_data with all players involved. Then:
+- "Trade Verdict: Accept / Decline"
+- Show each player's Trade Value (0-100 scale) and Proj ROS PPG (these are always different numbers)
+- Side A Total vs Side B Total (sum of trade values)
+- One sentence on who wins the trade and why (ROS value, positional need, depth)
 
-RESPONSE FORMAT:
-1. START/SIT answers:
-   - Format: "Start [Player Name]"
-   - Show: "Week X Projections — Player A: X.X pts | Player B: X.X pts"
-   - Reason: One short sentence explaining the difference
-   - If difference <1.0 pts: "Close call — start [player] slightly ahead"
-   - If difference >2.0 pts: "Start [player] confidently this week"
+Trade target questions → Call suggest_trade_targets. Format each suggestion as:
+- "Trade [Your Player] for [Target] — upgrades your weak [Position] (#X/${league.league_size}), they need [Your Position] (#Y/${league.league_size})."
 
-2. TRADE answers:
-   - Format: "Trade Verdict: [Accept/Decline]"
-   - CRITICAL: Tool returns object with "trade_value_score" and "projected_ppg" - THESE ARE DIFFERENT NUMBERS!
-   - Display format: "[Player Name] (Trade Value: [use trade_value_score], Proj ROS PPG: [use projected_ppg])"
-   - VALIDATION: Trade Value is typically 0-100, PPG is typically 5-25. If they're the same, YOU MADE AN ERROR!
-   - Example: {player_name: "Brock Bowers", trade_value_score: 50.0, projected_ppg: 16.4}
-     CORRECT: "Brock Bowers (Trade Value: 50.0, Proj ROS PPG: 16.4)"
-     WRONG: "Brock Bowers (Trade Value: 16.4, Proj ROS PPG: 16.4)" ← DO NOT DO THIS!
-   - Show totals: "Side A Total: XX.X | Side B Total: XX.X" (sum trade_value_score for each side)
-   - Reason: One sentence about ROS value and position depth
+General roster advice → Use the context already provided. Reference specific players by name, their actual stats, injury status, and matchups. Never give generic advice when you have real data.
 
-3. TRADE TARGET suggestions:
-   - When asked "who should I target" or similar, call suggest_trade_targets tool
-   - The tool returns pre-analyzed strategic trade suggestions with:
-     * Specific target players to acquire
-     * Specific players to offer
-     * Team IDs for both sides
-     * Trade values, projections, and positional rankings
-     * Strategic rationale for each trade
-   - Format the response conversationally, highlighting:
-        "Target [Player Name] (Trade Value: XX) from [Team Name] — They're ranked #X at [Position] (strong) while you're ranked #Y (weak). You could offer [Your Player] (Trade Value: XX) where you're strong and they need help."
-   - Use trade values to ensure fairness (aim for deals within 10-15 points total value)
-   - Focus on mutually beneficial deals where both teams improve their weaknesses
-
-FORMATTING RULES:
-- NEVER use asterisks (*) for emphasis or formatting
-- Use clear, plain text without markdown bold syntax
-- Keep responses professional and easy to read
-
-RULES:
-- Default to current week (${currentWeek}) unless user specifies otherwise
-- Exclude players marked OUT or on bye week
-- Be direct and concise - no generic responses
-- MISSING DATA HANDLING:
-  * If ONE player has projections and the other doesn't: State "[Player without data] is not projected any points this week. Start [Player with data] who is projected X.X points."
-  * If BOTH players have no projections: State "Neither player is projected any points this week, making a data-based recommendation impossible."
-  * If ALL players have projections: Provide normal comparison
-- Always call the appropriate tool based on question type`;
+IMPORTANT RULES:
+- Accept any player name format — fuzzy matching handles partial names
+- Never say "I need more info" when the context above already has it
+- Never use asterisks for formatting
+- Week defaults to ${currentWeek} unless user specifies otherwise
+- If a player is ON BYE or has a concerning injury status, proactively mention it
+- Trade Value is 0-100 scale. PPG is 5-25. Never confuse them.`;
 
     const tools = [
       {

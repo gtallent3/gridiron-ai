@@ -22,24 +22,53 @@ export function DraftRankings() {
     fetchADPData();
   }, []);
 
+  // Convert positional search_rank to overall ADP estimate
+  const computeOverallAdp = (position: string, posRank: number): number => {
+    switch (position) {
+      case "RB": return posRank * 2.4 - 0.5;
+      case "WR": return posRank * 2.4 + 0.8;
+      case "QB": return posRank * 6.5 + 5;
+      case "TE": return posRank * 11 + 2;
+      case "K":  return 150 + posRank;
+      case "DEF": return 140 + posRank;
+      default: return 200 + posRank;
+    }
+  };
+
   const fetchADPData = async () => {
     try {
       const resp = await fetch("https://api.sleeper.app/v1/players/nfl");
       if (!resp.ok) throw new Error("Failed to fetch players");
       const data = await resp.json();
 
-      // Extract players with ADP/rank data, sort by search_rank
-      const ranked: PlayerADP[] = [];
+      // Group by position, sort within each group, then compute overall ADP
+      const byPosition: Record<string, { name: string; team: string; posRank: number }[]> = {};
       for (const [, player] of Object.entries(data) as [string, any][]) {
         if (!player.active || !player.position || !player.search_rank) continue;
         if (!["QB", "RB", "WR", "TE", "K", "DEF"].includes(player.position)) continue;
+        if (player.search_rank >= 9999) continue;
 
-        ranked.push({
+        const pos = player.position as string;
+        if (!byPosition[pos]) byPosition[pos] = [];
+        byPosition[pos].push({
           name: player.full_name || `${player.first_name} ${player.last_name}`,
-          position: player.position,
           team: player.team || "FA",
-          adp: player.search_rank,
-          rank: player.search_rank,
+          posRank: player.search_rank,
+        });
+      }
+
+      const ranked: PlayerADP[] = [];
+      for (const pos of Object.keys(byPosition)) {
+        byPosition[pos].sort((a, b) => a.posRank - b.posRank);
+        byPosition[pos].forEach((p, idx) => {
+          const overallAdp = Math.round(computeOverallAdp(pos, idx + 1));
+          ranked.push({
+            name: p.name,
+            position: pos,
+            team: p.team,
+            adp: overallAdp,
+            rank: overallAdp,
+          });
         });
       }
 

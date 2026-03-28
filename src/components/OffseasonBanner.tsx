@@ -7,17 +7,17 @@ import { supabase } from "@/integrations/supabase/client";
 const STATE_CONFIG: Record<string, { icon: typeof Calendar; message: string; accent: string }> = {
   [SeasonState.OFFSEASON]: {
     icon: Snowflake,
-    message: "It's the offseason! Check back in September. Your leagues and historical data are still available.",
+    message: "The 2025 season is in the books. Mock draft season is open — build your board, test strategies, and get ready for September.",
     accent: "border-blue-500/30 bg-blue-500/5",
   },
   [SeasonState.PRE_SEASON]: {
     icon: Flag,
-    message: "Preseason is underway! Regular season starts soon. Review your roster and prep your lineup.",
+    message: "Preseason is underway! Your draft is coming up fast — check rankings and run a mock draft to sharpen your strategy.",
     accent: "border-yellow-500/30 bg-yellow-500/5",
   },
   [SeasonState.POSTSEASON]: {
     icon: Trophy,
-    message: "The 2025 season is complete! Check your final standings and season recap.",
+    message: "The 2025 season is complete! Review your season recap and start prepping for the 2026 draft.",
     accent: "border-primary/30 bg-primary/5",
   },
 };

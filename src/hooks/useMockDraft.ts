@@ -6,6 +6,7 @@ export interface DraftPlayer {
   position: string;
   team: string;
   adp: number;
+  byeWeek?: number;
 }
 
 export interface DraftPick {
@@ -93,6 +94,26 @@ export function useMockDraft(settings: DraftSettings | null) {
   const isDraftComplete = draftState.status === "completed";
   const myPicks = picks.filter((p) => p.isUser);
 
+  // Convert Sleeper's positional search_rank into an overall ADP estimate.
+  // search_rank is per-position (QB1=1, WR1=1, RB1=1), so we apply
+  // position-value curves to interleave them like a real fantasy draft.
+  const computeOverallAdp = useCallback(
+    (position: string, posRank: number): number => {
+      // These curves approximate where each positional rank goes in overall ADP:
+      // RBs/WRs go early and interleave, QBs start mid-rounds, TE sparse, K/DEF last
+      switch (position) {
+        case "RB": return posRank * 2.4 - 0.5;   // RB1≈2, RB2≈4, RB3≈7, etc.
+        case "WR": return posRank * 2.4 + 0.8;    // WR1≈3, WR2≈6, WR3≈8, etc.
+        case "QB": return posRank * 6.5 + 5;       // QB1≈12, QB2≈18, QB3≈25
+        case "TE": return posRank * 11 + 2;         // TE1≈13, TE2≈24, TE3≈35
+        case "K":  return 150 + posRank;
+        case "DEF": return 140 + posRank;
+        default: return 200 + posRank;
+      }
+    },
+    []
+  );
+
   // Fetch players from Sleeper API
   useEffect(() => {
     if (!settings) return;
@@ -103,16 +124,37 @@ export function useMockDraft(settings: DraftSettings | null) {
         if (!resp.ok) throw new Error("Failed to fetch");
         const data = await resp.json();
 
-        const ranked: DraftPlayer[] = [];
+        // First pass: collect players grouped by position with their positional rank
+        const byPosition: Record<string, { name: string; team: string; posRank: number; byeWeek?: number }[]> = {};
         for (const [, player] of Object.entries(data) as [string, any][]) {
           if (!player.active || !player.position || !player.search_rank) continue;
           if (!["QB", "RB", "WR", "TE", "K", "DEF"].includes(player.position)) continue;
+          if (player.search_rank >= 9999) continue; // skip unranked
 
-          ranked.push({
+          const pos = player.position as string;
+          if (!byPosition[pos]) byPosition[pos] = [];
+          byPosition[pos].push({
             name: player.full_name || `${player.first_name} ${player.last_name}`,
-            position: player.position,
             team: player.team || "FA",
-            adp: player.search_rank,
+            posRank: player.search_rank,
+            byeWeek: player.bye_week ?? undefined,
+          });
+        }
+
+        // Sort each position group by positional rank, then assign sequential positional rank
+        // to break ties (players with same search_rank get consecutive ranks)
+        const ranked: DraftPlayer[] = [];
+        for (const pos of Object.keys(byPosition)) {
+          byPosition[pos].sort((a, b) => a.posRank - b.posRank);
+          byPosition[pos].forEach((p, idx) => {
+            const sequentialRank = idx + 1;
+            ranked.push({
+              name: p.name,
+              position: pos,
+              team: p.team,
+              adp: Math.round(computeOverallAdp(pos, sequentialRank)),
+              byeWeek: p.byeWeek,
+            });
           });
         }
 

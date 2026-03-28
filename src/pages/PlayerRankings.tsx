@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Loader2, RefreshCw, ArrowUpDown, ArrowUp, ArrowDown, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
   Table,
@@ -13,6 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+const RANKINGS_SEASON = new Date().getMonth() >= 8 ? new Date().getFullYear() : new Date().getFullYear() - 1;
 
 interface PlayerRanking {
   id: string;
@@ -36,8 +39,10 @@ export default function PlayerRankings() {
   const [computingTradeValues, setComputingTradeValues] = useState(false);
   const [rankings, setRankings] = useState<PlayerRanking[]>([]);
   const [selectedPosition, setSelectedPosition] = useState<string>("ALL");
+  const [search, setSearch] = useState("");
   const [sortColumn, setSortColumn] = useState<keyof PlayerRanking | null>("avg_projected_ppg_ros");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [isAdmin, setIsAdmin] = useState(false);
   const { toast } = useToast();
 
   const fetchRankings = async () => {
@@ -46,7 +51,7 @@ export default function PlayerRankings() {
       const { data, error } = await supabase
         .from("player_rankings")
         .select("*")
-        .eq("season", 2025)
+        .eq("season", RANKINGS_SEASON)
         .order("avg_projected_ppg_ros", { ascending: false });
 
       if (error) throw error;
@@ -61,6 +66,18 @@ export default function PlayerRankings() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkAdmin = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { data } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    setIsAdmin(!!data);
   };
 
   const computeRankings = async () => {
@@ -113,6 +130,7 @@ export default function PlayerRankings() {
 
   useEffect(() => {
     fetchRankings();
+    checkAdmin();
   }, []);
 
   const handleSort = (column: keyof PlayerRanking) => {
@@ -135,9 +153,9 @@ export default function PlayerRankings() {
     );
   };
 
-  let filteredRankings = selectedPosition === "ALL" 
-    ? rankings 
-    : rankings.filter(r => r.position === selectedPosition);
+  let filteredRankings = rankings
+    .filter(r => selectedPosition === "ALL" || r.position === selectedPosition)
+    .filter(r => !search || r.player_name.toLowerCase().includes(search.toLowerCase()));
 
   // Apply sorting
   if (sortColumn) {
@@ -175,59 +193,54 @@ export default function PlayerRankings() {
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Player Rankings</h1>
+        <div>
+          <h1 className="text-3xl font-bold">Player Rankings</h1>
+          <p className="text-sm text-muted-foreground mt-1">{RANKINGS_SEASON} Season</p>
+        </div>
+        {isAdmin && (
+          <div className="flex gap-2">
+            <Button onClick={computeRankings} disabled={computing} variant="outline" size="sm">
+              {computing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Compute Rankings
+            </Button>
+            <Button onClick={computeTradeValues} disabled={computingTradeValues} variant="outline" size="sm">
+              {computingTradeValues ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+              Compute Trade Values
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search player..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
         <div className="flex gap-2">
-          <Button onClick={computeRankings} disabled={computing} variant="outline">
-            {computing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Computing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Compute Rankings
-              </>
-            )}
-          </Button>
-          <Button onClick={computeTradeValues} disabled={computingTradeValues}>
-            {computingTradeValues ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Computing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Compute Trade Values
-              </>
-            )}
-          </Button>
+          {["ALL", "QB", "RB", "WR", "TE"].map((pos) => (
+            <Button
+              key={pos}
+              variant={selectedPosition === pos ? "default" : "outline"}
+              size="sm"
+              onClick={() => setSelectedPosition(pos)}
+            >
+              {pos}
+            </Button>
+          ))}
         </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Filter by Position</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-2">
-            {["ALL", "QB", "RB", "WR", "TE"].map((pos) => (
-              <Button
-                key={pos}
-                variant={selectedPosition === pos ? "default" : "outline"}
-                onClick={() => setSelectedPosition(pos)}
-              >
-                {pos}
-              </Button>
-            ))}
+          <div className="flex items-center justify-between">
+            <CardTitle>Rankings ({filteredRankings.length} players)</CardTitle>
+            <p className="text-xs text-muted-foreground">SOS: <span className="text-destructive">low = tough</span> · <span className="text-green-500">high = easy</span></p>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Rankings ({filteredRankings.length} players)</CardTitle>
         </CardHeader>
         <CardContent>
           {loading ? (
