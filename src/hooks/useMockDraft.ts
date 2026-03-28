@@ -122,50 +122,57 @@ export function useMockDraft(settings: DraftSettings | null) {
     const fetchPlayers = async () => {
       try {
         setLoadError(null);
-        const resp = await fetch("https://api.sleeper.app/v1/players/nfl");
-        if (!resp.ok) throw new Error(`Sleeper API returned ${resp.status}`);
-        const data = await resp.json();
 
-        // First pass: collect players grouped by position with their positional rank.
-        // We intentionally do NOT filter on player.active — in the offseason many
-        // rostered players have active=false (free agents, unsigned rookies, etc.)
-        // and would be incorrectly excluded.
-        const byPosition: Record<string, { name: string; team: string; posRank: number; byeWeek?: number }[]> = {};
-        for (const [, player] of Object.entries(data) as [string, any][]) {
-          if (!player.position) continue;
-          if (!["QB", "RB", "WR", "TE", "K", "DEF"].includes(player.position)) continue;
-          // Require a meaningful search_rank (ranked by Sleeper as a draftable player)
-          if (!player.search_rank || player.search_rank >= 9999) continue;
+        const DRAFT_POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"];
+        let top: DraftPlayer[] = [];
 
-          const pos = player.position as string;
-          if (!byPosition[pos]) byPosition[pos] = [];
-          byPosition[pos].push({
-            name: player.full_name || `${player.first_name} ${player.last_name}`,
-            team: player.team || "FA",
-            posRank: player.search_rank,
-            byeWeek: player.bye_week ?? undefined,
-          });
+        // --- Primary: edge function (server-side Sleeper, no CORS issues) ---
+        try {
+          const { data: players, error: fnError } = await supabase.functions.invoke("get-draft-players");
+          if (!fnError && Array.isArray(players) && players.length > 0) {
+            top = players as DraftPlayer[];
+          }
+        } catch {
+          // edge function not yet deployed — fall through to direct fetch
         }
 
-        // Sort each position group by positional rank, then assign sequential positional rank
-        // to break ties (players with same search_rank get consecutive ranks)
-        const ranked: DraftPlayer[] = [];
-        for (const pos of Object.keys(byPosition)) {
-          byPosition[pos].sort((a, b) => a.posRank - b.posRank);
-          byPosition[pos].forEach((p, idx) => {
-            const sequentialRank = idx + 1;
-            ranked.push({
-              name: p.name,
-              position: pos,
-              team: p.team,
-              adp: Math.round(computeOverallAdp(pos, sequentialRank)),
-              byeWeek: p.byeWeek,
+        // --- Fallback: direct Sleeper fetch (works in production browser) ---
+        if (top.length === 0) {
+          const resp = await fetch("https://api.sleeper.app/v1/players/nfl");
+          if (!resp.ok) throw new Error(`Sleeper API returned ${resp.status}`);
+          const data = await resp.json();
+
+          const byPosition: Record<string, { name: string; team: string; posRank: number; byeWeek?: number }[]> = {};
+          for (const [, player] of Object.entries(data) as [string, any][]) {
+            if (!player.position || !DRAFT_POSITIONS.includes(player.position)) continue;
+            if (!player.search_rank || player.search_rank >= 9999) continue;
+            const pos = player.position as string;
+            if (!byPosition[pos]) byPosition[pos] = [];
+            byPosition[pos].push({
+              name: player.full_name || `${player.first_name} ${player.last_name}`,
+              team: player.team || "FA",
+              posRank: player.search_rank,
+              byeWeek: player.bye_week ?? undefined,
             });
-          });
+          }
+          const ranked: DraftPlayer[] = [];
+          for (const pos of Object.keys(byPosition)) {
+            byPosition[pos].sort((a, b) => a.posRank - b.posRank);
+            byPosition[pos].forEach((p, idx) => {
+              ranked.push({
+                name: p.name,
+                position: pos,
+                team: p.team,
+                adp: Math.round(computeOverallAdp(pos, idx + 1)),
+                byeWeek: p.byeWeek,
+              });
+            });
+          }
+          ranked.sort((a, b) => a.adp - b.adp);
+          top = ranked.slice(0, 300);
         }
 
-        ranked.sort((a, b) => a.adp - b.adp);
-        const top = ranked.slice(0, 300);
+        if (top.length === 0) throw new Error("No player data available. Check your connection and try again.");
         setAllPlayers(top);
 
         // Check for existing picks (resume)
