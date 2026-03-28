@@ -121,6 +121,12 @@ Run in this order each season:
 - [ ] Verify AI league assistant works with new context
 
 ### Near Term
+- [ ] **Live Draft Assistant** (high priority for draft season Aug/Sep)
+  - Poll ESPN draft API using existing `espn_s2`/`swid` credentials to sync picks in real time
+  - Implement Sleeper live draft via their websocket API (cleaner, real-time)
+  - Feed live pick state into existing `draft-scoring.ts` scoring logic for AI suggestions
+  - UI: companion tab that auto-updates as picks come in — no manual input needed
+  - Future upgrade: browser extension overlay directly on ESPN/Sleeper draft room
 - [ ] Fix AI archetype weights in `src/lib/draft-scoring.ts` — `rb_heavy`/`zero_rb`/`wr_early` weights are inverted (lower score = better pick, so "prioritize RB" needs `RB < 1.0`, not `> 1.0`). Audit all 6 archetypes after migration.
 - [ ] Stripe live mode activation
 - [ ] Mock draft multiplayer (friends)
