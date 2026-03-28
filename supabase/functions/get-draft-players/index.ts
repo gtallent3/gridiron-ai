@@ -1,19 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
-const POSITIONS = ["QB", "RB", "WR", "TE", "K", "DEF"];
+// FantasyCalc public values API — returns ~50KB JSON, no auth needed
+const FC_URL =
+  "https://api.fantasycalc.com/values/current?isDynasty=false&numQbs=1&ppr=1&superflex=false";
 
-function computeOverallAdp(position: string, posRank: number): number {
-  switch (position) {
-    case "RB":  return posRank * 2.4 - 0.5;
-    case "WR":  return posRank * 2.4 + 0.8;
-    case "QB":  return posRank * 6.5 + 5;
-    case "TE":  return posRank * 11 + 2;
-    case "K":   return 150 + posRank;
-    case "DEF": return 140 + posRank;
-    default:    return 200 + posRank;
-  }
-}
+const POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
 
 serve(async (req) => {
   const corsHeaders = getCorsHeaders(req);
@@ -22,47 +14,36 @@ serve(async (req) => {
   }
 
   try {
-    const resp = await fetch("https://api.sleeper.app/v1/players/nfl");
+    const resp = await fetch(FC_URL, {
+      headers: { "Accept": "application/json" },
+    });
+
     if (!resp.ok) {
-      throw new Error(`Sleeper API returned ${resp.status}`);
-    }
-    const data: Record<string, any> = await resp.json();
-
-    // Group by position, filter to draftable players by search_rank
-    const byPosition: Record<string, { name: string; team: string; posRank: number; byeWeek?: number }[]> = {};
-    for (const player of Object.values(data)) {
-      if (!player.position || !POSITIONS.includes(player.position)) continue;
-      if (!player.search_rank || player.search_rank >= 9999) continue;
-
-      const pos: string = player.position;
-      if (!byPosition[pos]) byPosition[pos] = [];
-      byPosition[pos].push({
-        name: player.full_name || `${player.first_name ?? ""} ${player.last_name ?? ""}`.trim(),
-        team: player.team || "FA",
-        posRank: player.search_rank,
-        byeWeek: player.bye_week ?? undefined,
-      });
+      throw new Error(`FantasyCalc API returned ${resp.status}`);
     }
 
-    // Sort within each position group and assign sequential rank, then compute overall ADP
-    const ranked: { name: string; position: string; team: string; adp: number; byeWeek?: number }[] = [];
-    for (const pos of Object.keys(byPosition)) {
-      byPosition[pos].sort((a, b) => a.posRank - b.posRank);
-      byPosition[pos].forEach((p, idx) => {
-        ranked.push({
-          name: p.name,
-          position: pos,
-          team: p.team,
-          adp: Math.round(computeOverallAdp(pos, idx + 1)),
-          byeWeek: p.byeWeek,
-        });
-      });
+    const raw: any[] = await resp.json();
+
+    const players = raw
+      .filter((entry) => {
+        const pos = entry?.player?.position;
+        return pos && POSITIONS.has(pos === "DST" ? "DEF" : pos);
+      })
+      .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999))
+      .slice(0, 300)
+      .map((entry, idx) => ({
+        name: entry.player.name,
+        position: entry.player.position === "DST" ? "DEF" : entry.player.position,
+        team: entry.player.maybeTeam || "FA",
+        adp: idx + 1,
+        byeWeek: entry.player.maybeBye ?? undefined,
+      }));
+
+    if (players.length === 0) {
+      throw new Error("No players returned from FantasyCalc");
     }
 
-    ranked.sort((a, b) => a.adp - b.adp);
-    const top300 = ranked.slice(0, 300);
-
-    return new Response(JSON.stringify(top300), {
+    return new Response(JSON.stringify(players), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err: any) {

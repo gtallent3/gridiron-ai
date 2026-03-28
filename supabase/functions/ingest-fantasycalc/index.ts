@@ -4,9 +4,10 @@ import { createErrorResponse, sanitizeError } from "../_shared/errorHandler.ts";
 import { getCorsHeaders } from "../_shared/cors.ts";
 
 
-const FANTASYCALC_URL = "https://fantasycalc.com/redraft-rankings";
-const USER_AGENT = "GridironGM/1.0 (+contact: owner@gtdataandinsights.com)";
+// Public FantasyCalc JSON API — much more reliable than HTML scraping
+const FANTASYCALC_API_URL = "https://api.fantasycalc.com/values/current?isDynasty=false&numQbs=1&ppr=1&superflex=false";
 const SOURCE = "fantasycalc_redraft";
+const POSITIONS = new Set(["QB", "RB", "WR", "TE", "K", "DEF", "DST"]);
 
 interface PlayerRow {
   snapshot_date: string;
@@ -308,33 +309,37 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Check if scraping is allowed
-    const allowScraping = Deno.env.get('ALLOW_SCRAPING') !== 'false';
-    if (!allowScraping) {
-      console.log("ALLOW_SCRAPING is disabled");
-      return new Response(
-        JSON.stringify({ error: 'Scraping is disabled', rows_inserted: 0 }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Fetch player rankings from FantasyCalc public JSON API
+    console.log("Fetching FantasyCalc rankings via JSON API...");
+    const fcResp = await fetch(FANTASYCALC_API_URL, {
+      headers: { "Accept": "application/json" },
+    });
+    if (!fcResp.ok) {
+      throw new Error(`FantasyCalc API returned ${fcResp.status}`);
     }
+    const raw: any[] = await fcResp.json();
 
-    // Check robots.txt
-    const robotsAllowed = await checkRobotsTxt();
-    if (!robotsAllowed) {
-      console.error("Scraping disallowed by robots.txt");
-      return new Response(
-        JSON.stringify({ error: 'Scraping disallowed by robots.txt', rows_inserted: 0 }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    const snapshotDate = new Date().toISOString().split('T')[0];
+    const players: PlayerRow[] = raw
+      .filter((e) => e?.player?.position && POSITIONS.has(e.player.position))
+      .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999))
+      .slice(0, 350)
+      .map((e, idx): PlayerRow => ({
+        snapshot_date: snapshotDate,
+        source: SOURCE,
+        player_name: e.player.name,
+        position: e.player.position === "DST" ? "DEF" : e.player.position,
+        team: e.player.maybeTeam || null,
+        rank: idx + 1,
+        tier: e.tier ?? null,
+        value_score: e.value ?? 0,
+        bye_week: e.player.maybeBye ?? null,
+        player_id_hint: null,
+        raw_hash: btoa(e.player.name + e.player.position).slice(0, 32),
+        fetched_at: new Date().toISOString(),
+      }));
 
-    // Scrape the data
-    console.log("Starting FantasyCalc ingestion...");
-    const players = await scrapeFantasyCalc();
-    
-    if (players.length < 100) {
-      console.warn(`Warning: Only ${players.length} players found (expected 100+)`);
-    }
+    console.log(`Fetched ${players.length} players from FantasyCalc API`);
 
     // Upsert into database
     let inserted = 0;
