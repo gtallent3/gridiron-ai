@@ -160,49 +160,31 @@ export function useMockDraft(settings: DraftSettings | null) {
           }
         }
 
-        // --- Fallback: edge function (server-side Sleeper, deployed via Lovable) ---
+        // --- Fallback: FantasyCalc public JSON API (~50KB, CORS-enabled) ---
         if (top.length === 0) {
           try {
-            const { data: players, error: fnError } = await supabase.functions.invoke("get-draft-players");
-            if (!fnError && Array.isArray(players) && players.length > 0) {
-              top = players as DraftPlayer[];
+            const fcResp = await fetch(
+              "https://api.fantasycalc.com/values/current?isDynasty=false&numQbs=1&ppr=1&superflex=false"
+            );
+            if (fcResp.ok) {
+              const raw: any[] = await fcResp.json();
+              top = raw
+                .filter((e) => e?.player?.position && DRAFT_POSITIONS.includes(
+                  e.player.position === "DST" ? "DEF" : e.player.position
+                ))
+                .sort((a, b) => (a.rank ?? 999) - (b.rank ?? 999))
+                .slice(0, 300)
+                .map((e, idx) => ({
+                  name: e.player.name,
+                  position: e.player.position === "DST" ? "DEF" : e.player.position,
+                  team: e.player.maybeTeam || "FA",
+                  adp: idx + 1,
+                  byeWeek: e.player.maybeBye ?? undefined,
+                }));
             }
           } catch {
-            // edge function not yet deployed — fall through
+            // fall through
           }
-        }
-
-        // --- Last resort: direct Sleeper fetch ---
-        if (top.length === 0) {
-          const resp = await fetch("https://api.sleeper.app/v1/players/nfl");
-          if (!resp.ok) throw new Error(`Sleeper API returned ${resp.status}`);
-          const data = await resp.json();
-          const byPosition: Record<string, { name: string; team: string; posRank: number; byeWeek?: number }[]> = {};
-          for (const [, player] of Object.entries(data) as [string, any][]) {
-            if (!player.position || !DRAFT_POSITIONS.includes(player.position)) continue;
-            if (!player.search_rank || player.search_rank >= 9999) continue;
-            const pos = player.position as string;
-            if (!byPosition[pos]) byPosition[pos] = [];
-            byPosition[pos].push({
-              name: player.full_name || `${player.first_name} ${player.last_name}`,
-              team: player.team || "FA",
-              posRank: player.search_rank,
-              byeWeek: player.bye_week ?? undefined,
-            });
-          }
-          const ranked: DraftPlayer[] = [];
-          for (const pos of Object.keys(byPosition)) {
-            byPosition[pos].sort((a, b) => a.posRank - b.posRank);
-            byPosition[pos].forEach((p, idx) => {
-              ranked.push({
-                name: p.name, position: pos, team: p.team,
-                adp: Math.round(computeOverallAdp(pos, idx + 1)),
-                byeWeek: p.byeWeek,
-              });
-            });
-          }
-          ranked.sort((a, b) => a.adp - b.adp);
-          top = ranked.slice(0, 300);
         }
 
         if (top.length === 0) throw new Error("No player data available. Check your connection and try again.");
