@@ -1625,6 +1625,38 @@ export default function Admin() {
             {/* Data Pipeline Tab */}
             <TabsContent value="pipeline" className="spacing-mobile">
               <div className="space-y-4">
+                {/* Mock Draft Players */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      Mock Draft Player Rankings
+                    </CardTitle>
+                    <CardDescription>Populate the player list used by the Mock Draft feature. Run this first before users can start mock drafts.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <p className="text-xs text-muted-foreground">Fetches current redraft rankings from FantasyCalc and stores them in the <code className="text-xs bg-muted px-1 py-0.5 rounded">trade_values</code> table. Should be re-run at the start of each season or after major roster moves.</p>
+                      <Button
+                        onClick={handleRunScraper}
+                        disabled={scraperRunning}
+                        className="w-full sm:w-auto"
+                      >
+                        {scraperRunning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {scraperRunning ? "Fetching Rankings..." : "Fetch Draft Rankings"}
+                      </Button>
+                      {scraperResult && (
+                        <div className="p-3 border rounded-lg text-sm">
+                          {scraperResult.error ? (
+                            <span className="text-destructive">Error: {scraperResult.error}</span>
+                          ) : (
+                            <span className="text-green-500">✅ {scraperResult.rows_inserted} players imported (snapshot: {scraperResult.snapshot_date})</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
                 {/* Stage 1: Data Ingestion */}
                 <Card>
                   <CardHeader>
