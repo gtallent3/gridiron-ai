@@ -183,7 +183,9 @@ const MockDraftRoom = () => {
               isUserTurn={isUserTurn}
               makePick={makePick}
               myPicks={myPicks}
+              allPicks={picks}
               currentRound={draftState.currentRound}
+              numTeams={numTeams}
             />
           </div>
         </div>
@@ -224,7 +226,9 @@ const MockDraftRoom = () => {
                   <DraftRecommendations
                     availablePlayers={availablePlayers}
                     myPicks={myPicks}
+                    allPicks={picks}
                     currentRound={draftState.currentRound}
+                    numTeams={numTeams}
                     onDraft={makePick}
                   />
                 )}
@@ -249,13 +253,17 @@ function DesktopRightPanel({
   isUserTurn,
   makePick,
   myPicks,
+  allPicks,
   currentRound,
+  numTeams,
 }: {
   availablePlayers: any[];
   isUserTurn: boolean;
   makePick: (p: any) => void;
   myPicks: any[];
+  allPicks: any[];
   currentRound: number;
+  numTeams: number;
 }) {
   const [tab, setTab] = useState<"Players" | "My Team">("Players");
 
@@ -284,7 +292,9 @@ function DesktopRightPanel({
               <DraftRecommendations
                 availablePlayers={availablePlayers}
                 myPicks={myPicks}
+                allPicks={allPicks}
                 currentRound={currentRound}
+                numTeams={numTeams}
                 onDraft={makePick}
               />
             )}

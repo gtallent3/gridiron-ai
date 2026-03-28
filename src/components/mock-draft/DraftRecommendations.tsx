@@ -1,7 +1,14 @@
 import { useMemo } from "react";
 import { DraftPlayer, DraftPick } from "@/hooks/useMockDraft";
+import {
+  scorePlayer,
+  getSuggestionReason,
+  computeVOR,
+  computeTiers,
+  detectPositionalRuns,
+} from "@/lib/draft-scoring";
 import { cn } from "@/lib/utils";
-import { Sparkles } from "lucide-react";
+import { Sparkles, AlertTriangle } from "lucide-react";
 
 const POS_COLORS: Record<string, string> = {
   QB: "bg-red-500/20 text-red-400",
@@ -12,73 +19,79 @@ const POS_COLORS: Record<string, string> = {
   DEF: "bg-yellow-500/20 text-yellow-400",
 };
 
-const POS_TARGETS: Record<string, number> = {
-  QB: 2, RB: 5, WR: 5, TE: 2, K: 1, DEF: 1,
-};
-
 interface DraftRecommendationsProps {
   availablePlayers: DraftPlayer[];
   myPicks: DraftPick[];
+  allPicks: DraftPick[];
   currentRound: number;
+  numTeams: number;
   onDraft: (player: DraftPlayer) => void;
-}
-
-function getReason(player: DraftPlayer, posCounts: Record<string, number>, currentRound: number): string {
-  const count = posCounts[player.position] || 0;
-  const target = POS_TARGETS[player.position] || 2;
-
-  if (count === 0) return `First ${player.position} — fill a key need`;
-  if (count < target - 1) return `Depth at ${player.position} (have ${count}/${target})`;
-  if (currentRound <= 4) return `Elite value — don't wait`;
-  if (currentRound >= 10 && (player.position === "K" || player.position === "DEF")) return `Good time to grab ${player.position}`;
-  return `Strong ADP value at pick ${player.adp}`;
 }
 
 export function DraftRecommendations({
   availablePlayers,
   myPicks,
+  allPicks,
   currentRound,
+  numTeams,
   onDraft,
 }: DraftRecommendationsProps) {
+  const runs = useMemo(() => detectPositionalRuns(allPicks), [allPicks]);
+
   const recommendations = useMemo(() => {
-    const posCounts: Record<string, number> = {};
-    myPicks.forEach((p) => {
-      posCounts[p.player.position] = (posCounts[p.player.position] || 0) + 1;
-    });
+    const vorMap = computeVOR(availablePlayers, numTeams);
+    const tierMap = computeTiers(availablePlayers);
 
-    const scored = availablePlayers.slice(0, 40).map((player) => {
-      const count = posCounts[player.position] || 0;
-      const target = POS_TARGETS[player.position] || 2;
-      let score = player.adp;
+    const ctx = {
+      availablePlayers,
+      teamPicks: myPicks,
+      allPicks,
+      currentRound,
+      numTeams,
+      archetype: "balanced" as const,
+      vorMap,
+      tierMap,
+    };
 
-      if (count >= target) score += 150;
-      else if (count >= target - 1) score += 30;
-
-      if ((player.position === "K" || player.position === "DEF") && currentRound < 10) {
-        score += 200;
-      }
-
-      return { player, score };
-    });
+    const scored = availablePlayers.slice(0, 40).map((player) => ({
+      player,
+      score: scorePlayer(player, ctx),
+    }));
 
     scored.sort((a, b) => a.score - b.score);
+
     return scored.slice(0, 3).map(({ player }) => ({
       player,
-      reason: getReason(player, posCounts, currentRound),
+      reason: getSuggestionReason(player, ctx),
     }));
-  }, [availablePlayers, myPicks, currentRound]);
+  }, [availablePlayers, myPicks, allPicks, currentRound, numTeams]);
 
   if (recommendations.length === 0) return null;
 
   return (
     <div className="mb-3 rounded-lg border border-primary/30 bg-primary/5 p-2.5">
-      <div className="flex items-center gap-1.5 mb-2">
-        <Sparkles className="h-3.5 w-3.5 text-primary" />
-        <span className="text-xs font-semibold text-primary">AI Suggestions</span>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span className="text-xs font-semibold text-primary">AI Suggestions</span>
+        </div>
+        {runs.length > 0 && (
+          <div className="flex items-center gap-1 text-xs text-amber-400">
+            <AlertTriangle className="h-3 w-3" />
+            <span>{runs.map((r) => r.position).join(", ")} run</span>
+          </div>
+        )}
       </div>
       <div className="space-y-1.5">
         {recommendations.map(({ player, reason }, i) => {
           const posClass = POS_COLORS[player.position] || "bg-secondary text-muted-foreground";
+          const reasonColor =
+            reason.tone === "urgent"
+              ? "text-amber-400"
+              : reason.tone === "value"
+              ? "text-green-400"
+              : "text-muted-foreground";
+
           return (
             <button
               key={player.name}
@@ -95,7 +108,7 @@ export function DraftRecommendations({
                 </span>
                 <div className="min-w-0">
                   <p className="text-sm font-medium truncate">{player.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{reason}</p>
+                  <p className={cn("text-xs truncate", reasonColor)}>{reason.text}</p>
                 </div>
               </div>
               <span className="text-xs text-muted-foreground shrink-0 ml-2">ADP {player.adp}</span>

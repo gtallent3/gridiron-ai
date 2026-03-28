@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { getArchetype, scorePlayer, computeVOR, computeTiers } from "@/lib/draft-scoring";
 import { supabase } from "@/integrations/supabase/client";
 
 export interface DraftPlayer {
@@ -342,53 +343,39 @@ export function useMockDraft(settings: DraftSettings | null) {
     [isUserTurn, executePick]
   );
 
-  // Position-aware AI pick logic
+  // Archetype-aware AI pick logic using shared scoring utility
   const doAiPick = useCallback(() => {
-    // Read current picks to build roster counts per AI team
     setPicks((currentPicks) => {
       setDraftState((currentState) => {
         setAvailablePlayers((currentAvailable) => {
           if (currentAvailable.length === 0 || currentState.status !== "active") return currentAvailable;
 
           const seat = currentState.currentSeat;
+          const s = settingsRef.current;
+          if (!s) return currentAvailable;
 
-          // Count positions already drafted by this AI team
           const teamPicks = currentPicks.filter((p) => p.seatNumber === seat);
-          const posCounts: Record<string, number> = {};
-          teamPicks.forEach((p) => {
-            posCounts[p.player.position] = (posCounts[p.player.position] || 0) + 1;
-          });
+          const archetype = getArchetype(seat, s.draftId);
 
-          // Roster targets (typical fantasy roster needs)
-          const posTargets: Record<string, number> = {
-            QB: 2, RB: 5, WR: 5, TE: 2, K: 1, DEF: 1,
-          };
+          // Pre-compute VOR and tiers once for this pick decision
+          const vorMap = computeVOR(currentAvailable, s.numTeams);
+          const tierMap = computeTiers(currentAvailable);
 
-          // Score each available player: lower = better pick for this team
-          // Base score is ADP rank. Apply penalty if position is already filled.
-          const scored = currentAvailable.slice(0, 30).map((player) => {
-            const count = posCounts[player.position] || 0;
-            const target = posTargets[player.position] || 2;
-            let score = player.adp;
-
-            if (count >= target) {
-              // Already have enough at this position — heavy penalty
-              score += 150;
-            } else if (count >= target - 1) {
-              // Approaching full — mild penalty
-              score += 30;
-            }
-
-            // K and DEF should wait until late rounds
-            const round = currentState.currentRound;
-            if ((player.position === "K" || player.position === "DEF") && round < 10) {
-              score += 200;
-            }
-
-            // Add small randomness so AI teams differ
-            score += (Math.random() - 0.5) * 15;
-
-            return { player, score };
+          // Score top candidates (consider top 40 for variety)
+          const candidates = currentAvailable.slice(0, 40);
+          const scored = candidates.map((player) => {
+            const base = scorePlayer(player, {
+              availablePlayers: currentAvailable,
+              teamPicks,
+              allPicks: currentPicks,
+              currentRound: currentState.currentRound,
+              numTeams: s.numTeams,
+              archetype,
+              vorMap,
+              tierMap,
+            });
+            // Small randomness so AI teams diverge on close decisions
+            return { player, score: base + (Math.random() - 0.5) * 8 };
           });
 
           scored.sort((a, b) => a.score - b.score);
