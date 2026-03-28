@@ -1295,7 +1295,7 @@ export default function Admin() {
               <TabsTrigger value="props" className="text-sm py-2 sm:py-3">Props Management</TabsTrigger>
               <TabsTrigger value="transactions" className="text-sm py-2 sm:py-3">Transactions</TabsTrigger>
               <TabsTrigger value="pipeline" className="text-sm py-2 sm:py-3">Data Pipeline</TabsTrigger>
-              <TabsTrigger value="scraper" className="text-sm py-2 sm:py-3">Legacy Tools</TabsTrigger>
+              <TabsTrigger value="scraper" className="text-sm py-2 sm:py-3">Rankings Ingest</TabsTrigger>
             </TabsList>
 
             {/* User Management Tab */}
