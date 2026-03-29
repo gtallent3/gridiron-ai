@@ -1,36 +1,129 @@
 project_id = "uzmhgxxqstyqzcfclwqr"
 
+# --- Admin / pipeline functions (handle own auth internally) ---
+[functions.ingest-fantasycalc]
+verify_jwt = false
+
+[functions.ingest-sleeper-players]
+verify_jwt = false
+
+[functions.ingest-nfl-fantasy-points]
+verify_jwt = false
+
+[functions.ingest-nfl-injuries]
+verify_jwt = false
+
+[functions.ingest-player-stats]
+verify_jwt = false
+
+[functions.ingest-snap-counts]
+verify_jwt = false
+
+[functions.ingest-team-schedules]
+verify_jwt = false
+
+[functions.ingest-week-stats]
+verify_jwt = false
+
+[functions.ingest-roster-snapshots]
+verify_jwt = false
+
+[functions.ingest-espn-all-players]
+verify_jwt = false
+
+[functions.fetch-sleeper-projections]
+verify_jwt = false
+
+[functions.fetch-espn-projections]
+verify_jwt = false
+
+[functions.compute-player-pool]
+verify_jwt = false
+
+[functions.compute-player-rankings]
+verify_jwt = false
+
+[functions.compute-player-values]
+verify_jwt = false
+
+[functions.compute-defensive-rankings]
+verify_jwt = false
+
+[functions.compute-team-sos]
+verify_jwt = false
+
+[functions.compute-trade-value-index]
+verify_jwt = false
+
+[functions.compute-positional-strengths]
+verify_jwt = false
+
+[functions.map-canonical-players]
+verify_jwt = false
+
+[functions.populate-player-pool]
+verify_jwt = false
+
+[functions.post-sync-compute]
+verify_jwt = false
+
+[functions.reconcile-stats]
+verify_jwt = false
+
+[functions.auto-ingest-all-leagues]
+verify_jwt = false
+
+[functions.admin-adjust-tokens]
+verify_jwt = false
+
+[functions.admin-grant-subscription]
+verify_jwt = false
+
+[functions.admin-remove-subscription]
+verify_jwt = false
+
+[functions.admin-manage-role]
+verify_jwt = false
+
+[functions.admin-create-prop]
+verify_jwt = false
+
+[functions.admin-grant-rankings-access]
+verify_jwt = false
+
+[functions.admin-remove-rankings-access]
+verify_jwt = false
+
+# --- Public / no-auth functions ---
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.check-signup-risk]
+verify_jwt = false
+
+[functions.validate-espn-credentials]
+verify_jwt = false
+
+[functions.handle-signup]
+verify_jwt = false
+
+[functions.get-draft-players]
+verify_jwt = false
+
+# --- Authenticated user functions ---
 [functions.validate-yahoo-oauth]
 verify_jwt = true
 
 [functions.sync-yahoo-league]
 verify_jwt = true
 
-[functions.ingest-espn-all-players]
-verify_jwt = true
-
-[functions.fantasy-ai-chat]
-verify_jwt = true
-
-[functions.admin-create-prop]
-verify_jwt = true
-
-[functions.analyze-start-sit]
-verify_jwt = true
-
-[functions.analyze-lineup]
-verify_jwt = true
-
-[functions.ingest-espn-waiver-projections]
-verify_jwt = true
-
-[functions.ingest-espn-waiver-actuals]
-verify_jwt = true
-
-[functions.get-player-market]
+[functions.resync-yahoo-league]
 verify_jwt = true
 
 [functions.sync-sleeper-league]
+verify_jwt = true
+
+[functions.resync-sleeper-league]
 verify_jwt = true
 
 [functions.sync-espn-league]
@@ -39,16 +132,34 @@ verify_jwt = true
 [functions.resync-espn-league]
 verify_jwt = true
 
+[functions.fantasy-ai-chat]
+verify_jwt = true
+
+[functions.analyze-start-sit]
+verify_jwt = true
+
+[functions.analyze-lineup]
+verify_jwt = true
+
+[functions.analyze-waivers]
+verify_jwt = true
+
 [functions.evaluate-trade]
 verify_jwt = true
 
 [functions.evaluate-trade-v2]
 verify_jwt = true
 
-[functions.sync-player-valuations]
+[functions.evaluate-trade-v3]
+verify_jwt = true
+
+[functions.evaluate-trade-ros]
 verify_jwt = true
 
 [functions.find-trades]
+verify_jwt = true
+
+[functions.suggest-trade-targets]
 verify_jwt = true
 
 [functions.improve-position]
@@ -63,42 +174,6 @@ verify_jwt = true
 [functions.create-checkout]
 verify_jwt = true
 
-[functions.stripe-webhook]
-verify_jwt = false
-
-[functions.admin-adjust-tokens]
-verify_jwt = true
-
-[functions.get-player-data]
-verify_jwt = true
-
-[functions.ingest-week-stats]
-verify_jwt = true
-
-[functions.reconcile-stats]
-verify_jwt = true
-
-[functions.compute-player-values]
-verify_jwt = true
-
-[functions.compute-positional-strengths]
-verify_jwt = true
-
-[functions.evaluate-trade-v3]
-verify_jwt = true
-
-[functions.post-sync-compute]
-verify_jwt = true
-
-[functions.check-signup-risk]
-verify_jwt = false
-
-[functions.link-user-identity]
-verify_jwt = true
-
-[functions.check-trial-eligibility]
-verify_jwt = true
-
 [functions.customer-portal]
 verify_jwt = true
 
@@ -111,50 +186,29 @@ verify_jwt = true
 [functions.check-subscription]
 verify_jwt = true
 
-[functions.ingest-league-transactions]
+[functions.check-trial-eligibility]
 verify_jwt = true
 
-[functions.ingest-roster-snapshots]
+[functions.unlock-rankings]
 verify_jwt = true
 
-[functions.get-league-transactions]
+[functions.link-user-identity]
 verify_jwt = true
 
-[functions.auto-ingest-all-leagues]
-verify_jwt = false
-
-[functions.ingest-sleeper-players]
+[functions.get-player-data]
 verify_jwt = true
 
-[functions.fetch-sleeper-projections]
-verify_jwt = false
-
-[functions.compute-team-sos]
-verify_jwt = false
-
-[functions.compute-player-pool]
-verify_jwt = false
-
-[functions.suggest-trade-targets]
+[functions.get-player-market]
 verify_jwt = true
 
-[functions.analyze-waivers]
+[functions.get-trade-values]
 verify_jwt = true
 
-[functions.ingest-player-stats]
+[functions.get-espn-week-scores]
 verify_jwt = true
-
-[functions.ingest-snap-counts]
-verify_jwt = true
-
-[functions.ingest-nfl-fantasy-points]
-verify_jwt = false
-
-[functions.populate-player-pool]
-verify_jwt = false
-
-[functions.validate-espn-credentials]
-verify_jwt = false
 
 [functions.send-notification]
+verify_jwt = true
+
+[functions.backfill-espn-stats]
 verify_jwt = true
