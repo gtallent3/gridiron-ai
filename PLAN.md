@@ -16,7 +16,7 @@ Live at **gridiron-gm.com** (hosted via Lovable, deploying from GitHub `main`).
 | Capacitor iOS | ⚠️ Partial | Web assets sync fine, pod install needs Xcode |
 | Capacitor Android | ✅ Works | Syncs cleanly |
 | Stripe | ⚠️ Test mode only | Live keys exist but not activated |
-| Hosting (auto-deploy) | ❌ Missing | Need Netlify/Vercel — currently must manually publish from Lovable |
+| Hosting (auto-deploy) | ✅ Live | Vercel auto-deploys on every push to main, gridiron-gm.com connected |
 
 ### Immediate Infrastructure TODO
 - [ ] **Migrate Supabase** to `gtallent3's Org` (new project, full CLI access)
@@ -117,7 +117,7 @@ Run in this order each season:
 - [x] Migrate Supabase to own account
 - [x] Deploy all edge functions via CLI
 - [x] Verify mock draft works end-to-end
-- [ ] Set up Netlify/Vercel auto-deploy
+- [x] Set up Netlify/Vercel auto-deploy
 - [ ] Verify AI league assistant works with new context
 
 ### Near Term
