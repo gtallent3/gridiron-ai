@@ -1,0 +1,9 @@
+{
+  "imports": {
+    "https://esm.sh/@supabase/supabase-js@2.39.3?target=deno": "npm:@supabase/supabase-js@2",
+    "https://esm.sh/@supabase/supabase-js@2.39.3": "npm:@supabase/supabase-js@2",
+    "https://esm.sh/@supabase/supabase-js@2.49.4": "npm:@supabase/supabase-js@2",
+    "https://esm.sh/@supabase/supabase-js@2": "npm:@supabase/supabase-js@2",
+    "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/+esm": "npm:@supabase/supabase-js@2"
+  }
+}

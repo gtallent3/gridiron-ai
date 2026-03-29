@@ -1,4 +1,4 @@
-project_id = "zeklwogchobqttevcckl"
+project_id = "uzmhgxxqstyqzcfclwqr"
 
 [functions.validate-yahoo-oauth]
 verify_jwt = true
