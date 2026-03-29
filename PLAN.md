@@ -11,8 +11,8 @@ Live at **gridiron-gm.com** (hosted via Lovable, deploying from GitHub `main`).
 | Thing | Status | Notes |
 |---|---|---|
 | Frontend | ✅ Deployed | gridiron-gm.com via Lovable hosting |
-| Database | ⚠️ Needs migration | Currently on Lovable's Supabase org — no CLI access |
-| Edge Functions | ❌ Broken | Lovable doesn't redeploy functions from GitHub |
+| Database | ✅ Migrated | Own Supabase org (uzmhgxxqstyqzcfclwqr), full CLI access |
+| Edge Functions | ✅ Deployed | All 65 functions live on new Supabase project |
 | Capacitor iOS | ⚠️ Partial | Web assets sync fine, pod install needs Xcode |
 | Capacitor Android | ✅ Works | Syncs cleanly |
 | Stripe | ⚠️ Test mode only | Live keys exist but not activated |
@@ -48,7 +48,7 @@ Live at **gridiron-gm.com** (hosted via Lovable, deploying from GitHub `main`).
 ### ⚠️ Partially Working
 | Feature | Issue | Fix |
 |---|---|---|
-| Mock Draft | Players fail to load (edge fn not deployed, client-side FC fetch in progress) | Migrate Supabase → deploy functions |
+| Mock Draft | ⚠️ Functional but needs polish | Players load from trade_values, AI suggestions working, UX improvements needed |
 | League AI Assistant | Context is thin — no injury status, opponent roster, recent form | Context was improved this session (needs edge fn deployed to reflect) |
 | General AI Chat | Stale, not league-aware | Acceptable for now |
 | Season Recap backfill | Works but slow (client-side Sleeper fetch) | Move to edge function post-migration |
@@ -114,10 +114,10 @@ Run in this order each season:
 ## Backlog (Prioritized)
 
 ### This Week
-- [ ] Migrate Supabase to own account
-- [ ] Deploy all edge functions via CLI
+- [x] Migrate Supabase to own account
+- [x] Deploy all edge functions via CLI
+- [x] Verify mock draft works end-to-end
 - [ ] Set up Netlify/Vercel auto-deploy
-- [ ] Verify mock draft works end-to-end
 - [ ] Verify AI league assistant works with new context
 
 ### Near Term
