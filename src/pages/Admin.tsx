@@ -44,6 +44,14 @@ type Transaction = {
   created_at: string;
 };
 
+async function invokeWithAuth(fn: string, body: object = {}) {
+  const { data: { session } } = await supabase.auth.getSession();
+  return supabase.functions.invoke(fn, {
+    body,
+    headers: { Authorization: `Bearer ${session?.access_token}` },
+  });
+}
+
 export default function Admin() {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -265,7 +273,7 @@ export default function Admin() {
 
     setAdjusting(true);
     try {
-      const { error } = await supabase.functions.invoke("admin-adjust-tokens", {
+      const { error } = await invokeWithAuth(\1, {
         body: { 
           userId: selectedUserId,
           action, 
@@ -306,7 +314,7 @@ export default function Admin() {
 
     setAdjusting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("admin-grant-subscription", {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { 
           userId: selectedUserId,
           durationMonths: months 
@@ -346,7 +354,7 @@ export default function Admin() {
 
     setAdjusting(true);
     try {
-      const { error } = await supabase.functions.invoke("admin-remove-subscription", {
+      const { error } = await invokeWithAuth(\1, {
         body: { userId: selectedUserId },
       });
 
@@ -374,7 +382,7 @@ export default function Admin() {
   const handleManageRole = async (targetUserId: string, action: "grant" | "revoke") => {
     setAdjusting(true);
     try {
-      const { error } = await supabase.functions.invoke("admin-manage-role", {
+      const { error } = await invokeWithAuth(\1, {
         body: { targetUserId, action },
       });
 
@@ -448,7 +456,7 @@ export default function Admin() {
       // Convert datetime-local to ISO format for the API
       const gameTimeISO = newProp.game_time ? new Date(newProp.game_time).toISOString() : new Date().toISOString();
       
-      const { data, error } = await supabase.functions.invoke('admin-create-prop', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { ...newProp, game_time: gameTimeISO }
       });
 
@@ -595,9 +603,7 @@ export default function Admin() {
     setScraperResult(null);
     
     try {
-      const { data, error } = await supabase.functions.invoke('ingest-fantasycalc', {
-        body: {}
-      });
+      const { data, error } = await invokeWithAuth('ingest-fantasycalc');
 
       if (error) throw error;
 
@@ -629,7 +635,7 @@ export default function Admin() {
         description: "Fetching player data from Sleeper API...",
       });
 
-      const { data, error } = await supabase.functions.invoke('ingest-sleeper-players', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: {}
       });
 
@@ -673,7 +679,7 @@ export default function Admin() {
         description: `Fetching weeks ${sleeperStartWeek}-${sleeperEndWeek} from Sleeper API...`,
       });
 
-      const { data, error } = await supabase.functions.invoke('fetch-sleeper-projections', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { 
           season: 2025,
           startWeek: sleeperStartWeek,
@@ -711,7 +717,7 @@ export default function Admin() {
         description: "Fetching actual fantasy points for season 2025...",
       });
 
-      const { data, error } = await supabase.functions.invoke('ingest-nfl-fantasy-points', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { season: 2025 }
       });
 
@@ -745,7 +751,7 @@ export default function Admin() {
         description: "Processing NFL team schedules for season 2025...",
       });
 
-      const { data, error } = await supabase.functions.invoke('ingest-team-schedules', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { season: 2025 }
       });
 
@@ -779,7 +785,7 @@ export default function Admin() {
         description: "Fetching roster/injury data from nflverse...",
       });
 
-      const { data, error } = await supabase.functions.invoke('ingest-nfl-injuries', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { season: 2025 }
       });
 
@@ -813,7 +819,7 @@ export default function Admin() {
         description: "Consolidating player data from multiple sources...",
       });
 
-      const { data, error } = await supabase.functions.invoke('compute-player-pool', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: {}
       });
 
@@ -847,7 +853,7 @@ export default function Admin() {
         description: "Fetching weekly player stats from nflverse...",
       });
 
-      const { data, error } = await supabase.functions.invoke('ingest-player-stats', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { season: 2025 }
       });
 
@@ -881,7 +887,7 @@ export default function Admin() {
         description: "Fetching snap count data from nflverse...",
       });
 
-      const { data, error } = await supabase.functions.invoke('ingest-snap-counts', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { season: 2025 }
       });
 
@@ -919,7 +925,7 @@ export default function Admin() {
         description: "Matching Sleeper and NFL player IDs (single batch of 1000)..."
       });
 
-      const { data, error } = await supabase.functions.invoke('map-canonical-players', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { startIndex: 0, batchLimit: 1000 }
       });
       
@@ -964,7 +970,7 @@ export default function Admin() {
       while (hasMore && iteration < 100) { // Safety limit
         iteration++;
 
-        const { data, error } = await supabase.functions.invoke('map-canonical-players', {
+        const { data, error } = await invokeWithAuth(\1, {
           body: { startIndex: nextIndex, batchLimit: 1000 }
         });
         
@@ -1045,7 +1051,7 @@ export default function Admin() {
           startNflIndex: nextNflIndex
         };
 
-        const { data, error } = await supabase.functions.invoke('populate-player-pool', {
+        const { data, error } = await invokeWithAuth(\1, {
           body
         });
         
@@ -1096,7 +1102,7 @@ export default function Admin() {
         description: "Analyzing defensive performance by position...",
       });
       
-      const { data, error } = await supabase.functions.invoke('compute-defensive-rankings', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { season: 2025 },
       });
 
@@ -1129,7 +1135,7 @@ export default function Admin() {
         description: "Calculating strength of schedule for all teams...",
       });
       
-      const { data, error } = await supabase.functions.invoke('compute-team-sos', {
+      const { data, error } = await invokeWithAuth(\1, {
         body: { season: 2025 },
       });
 
@@ -1162,7 +1168,7 @@ export default function Admin() {
         description: "Computing player rankings from pool data...",
       });
 
-      const { data, error } = await supabase.functions.invoke("compute-player-rankings");
+      const { data, error } = await invokeWithAuth("compute-player-rankings");
       if (error) throw error;
       
       toast({
@@ -1192,7 +1198,7 @@ export default function Admin() {
         description: "Calculating trade values based on player rankings...",
       });
 
-      const { data, error } = await supabase.functions.invoke("compute-trade-value-index");
+      const { data, error } = await invokeWithAuth("compute-trade-value-index");
       if (error) throw error;
       
       toast({
