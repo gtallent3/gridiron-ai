@@ -273,7 +273,7 @@ export default function Admin() {
 
     setAdjusting(true);
     try {
-      const { error } = await invokeWithAuth(\1, {
+      const { error } = await invokeWithAuth("admin-adjust-tokens", {
         body: { 
           userId: selectedUserId,
           action, 
@@ -314,7 +314,7 @@ export default function Admin() {
 
     setAdjusting(true);
     try {
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth("admin-grant-subscription", {
         body: { 
           userId: selectedUserId,
           durationMonths: months 
@@ -354,7 +354,7 @@ export default function Admin() {
 
     setAdjusting(true);
     try {
-      const { error } = await invokeWithAuth(\1, {
+      const { error } = await invokeWithAuth("admin-remove-subscription", {
         body: { userId: selectedUserId },
       });
 
@@ -382,7 +382,7 @@ export default function Admin() {
   const handleManageRole = async (targetUserId: string, action: "grant" | "revoke") => {
     setAdjusting(true);
     try {
-      const { error } = await invokeWithAuth(\1, {
+      const { error } = await invokeWithAuth("admin-manage-role", {
         body: { targetUserId, action },
       });
 
@@ -456,7 +456,7 @@ export default function Admin() {
       // Convert datetime-local to ISO format for the API
       const gameTimeISO = newProp.game_time ? new Date(newProp.game_time).toISOString() : new Date().toISOString();
       
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('admin-create-prop', {
         body: { ...newProp, game_time: gameTimeISO }
       });
 
@@ -635,7 +635,7 @@ export default function Admin() {
         description: "Fetching player data from Sleeper API...",
       });
 
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('ingest-sleeper-players', {
         body: {}
       });
 
@@ -679,7 +679,7 @@ export default function Admin() {
         description: `Fetching weeks ${sleeperStartWeek}-${sleeperEndWeek} from Sleeper API...`,
       });
 
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('fetch-sleeper-projections', {
         body: { 
           season: 2025,
           startWeek: sleeperStartWeek,
@@ -717,7 +717,7 @@ export default function Admin() {
         description: "Fetching actual fantasy points for season 2025...",
       });
 
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('ingest-nfl-fantasy-points', {
         body: { season: 2025 }
       });
 
@@ -751,7 +751,7 @@ export default function Admin() {
         description: "Processing NFL team schedules for season 2025...",
       });
 
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('ingest-team-schedules', {
         body: { season: 2025 }
       });
 
@@ -785,7 +785,7 @@ export default function Admin() {
         description: "Fetching roster/injury data from nflverse...",
       });
 
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('ingest-nfl-injuries', {
         body: { season: 2025 }
       });
 
@@ -819,7 +819,7 @@ export default function Admin() {
         description: "Consolidating player data from multiple sources...",
       });
 
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('compute-player-pool', {
         body: {}
       });
 
@@ -853,7 +853,7 @@ export default function Admin() {
         description: "Fetching weekly player stats from nflverse...",
       });
 
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('ingest-player-stats', {
         body: { season: 2025 }
       });
 
@@ -887,7 +887,7 @@ export default function Admin() {
         description: "Fetching snap count data from nflverse...",
       });
 
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('ingest-snap-counts', {
         body: { season: 2025 }
       });
 
@@ -925,7 +925,7 @@ export default function Admin() {
         description: "Matching Sleeper and NFL player IDs (single batch of 1000)..."
       });
 
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('map-canonical-players', {
         body: { startIndex: 0, batchLimit: 1000 }
       });
       
@@ -970,7 +970,7 @@ export default function Admin() {
       while (hasMore && iteration < 100) { // Safety limit
         iteration++;
 
-        const { data, error } = await invokeWithAuth(\1, {
+        const { data, error } = await invokeWithAuth('map-canonical-players', {
           body: { startIndex: nextIndex, batchLimit: 1000 }
         });
         
@@ -1051,7 +1051,7 @@ export default function Admin() {
           startNflIndex: nextNflIndex
         };
 
-        const { data, error } = await invokeWithAuth(\1, {
+        const { data, error } = await invokeWithAuth('populate-player-pool', {
           body
         });
         
@@ -1102,7 +1102,7 @@ export default function Admin() {
         description: "Analyzing defensive performance by position...",
       });
       
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('compute-defensive-rankings', {
         body: { season: 2025 },
       });
 
@@ -1135,7 +1135,7 @@ export default function Admin() {
         description: "Calculating strength of schedule for all teams...",
       });
       
-      const { data, error } = await invokeWithAuth(\1, {
+      const { data, error } = await invokeWithAuth('compute-team-sos', {
         body: { season: 2025 },
       });
 
