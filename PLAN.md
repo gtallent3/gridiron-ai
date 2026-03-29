@@ -144,7 +144,13 @@ Run in this order each season:
 - [ ] Dynasty draft + trade tools
 - [ ] ML score predictions
 - [ ] Immaculate Grid game
-- [ ] Apple Developer account + App Store submission ($99/yr)
+- [ ] **Apple Developer account + TestFlight beta** ($99/yr)
+  - Sign up at developer.apple.com
+  - Install Xcode on a Mac with full Xcode (not just Command Line Tools)
+  - Build and archive the Capacitor iOS app
+  - Upload to App Store Connect → distribute via TestFlight
+  - Invite friends as internal/external testers by email
+  - Goal: get friends testing before full App Store submission
 
 ---
 
