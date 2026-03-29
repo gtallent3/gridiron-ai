@@ -1,7 +1,7 @@
 -- Create mock draft tables for Phase 1: Solo vs AI
 
 -- mock_drafts: stores draft session settings and state
-CREATE TABLE public.mock_drafts (
+CREATE TABLE IF NOT EXISTS public.mock_drafts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   draft_type TEXT NOT NULL DEFAULT 'redraft',
@@ -17,7 +17,7 @@ CREATE TABLE public.mock_drafts (
 );
 
 -- mock_draft_picks: individual picks within a draft
-CREATE TABLE public.mock_draft_picks (
+CREATE TABLE IF NOT EXISTS public.mock_draft_picks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   draft_id UUID NOT NULL REFERENCES public.mock_drafts(id) ON DELETE CASCADE,
   pick_number INT NOT NULL,
@@ -33,10 +33,10 @@ CREATE TABLE public.mock_draft_picks (
 );
 
 -- Index for efficient pick lookups
-CREATE INDEX idx_mock_draft_picks_draft_pick ON public.mock_draft_picks(draft_id, pick_number);
+CREATE INDEX IF NOT EXISTS idx_mock_draft_picks_draft_pick ON public.mock_draft_picks(draft_id, pick_number);
 
 -- Index for user's drafts
-CREATE INDEX idx_mock_drafts_user ON public.mock_drafts(user_id);
+CREATE INDEX IF NOT EXISTS idx_mock_drafts_user ON public.mock_drafts(user_id);
 
 -- RLS
 ALTER TABLE public.mock_drafts ENABLE ROW LEVEL SECURITY;
