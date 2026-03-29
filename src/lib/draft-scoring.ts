@@ -21,13 +21,16 @@ interface ArchetypeWeights {
   DEF: number;
 }
 
+// Weight convention: applied as (weight - 1.0) * 40 additive adjustment.
+// weight < 1.0 → negative score adjustment → position is MORE attractive
+// weight > 1.0 → positive score adjustment → position is LESS attractive
 const ARCHETYPE_WEIGHTS: Record<Archetype, ArchetypeWeights> = {
   balanced:  { QB: 1.0, RB: 1.0, WR: 1.0, TE: 1.0, K: 1.0, DEF: 1.0 },
   rb_heavy:  { QB: 1.2, RB: 0.7, WR: 1.1, TE: 1.1, K: 1.0, DEF: 1.0 },
   zero_rb:   { QB: 1.0, RB: 1.4, WR: 0.7, TE: 1.0, K: 1.0, DEF: 1.0 },
-  hero_te:   { QB: 1.1, RB: 1.0, WR: 1.0, TE: 0.6, K: 1.0, DEF: 1.0 },
-  wr_early:  { QB: 1.1, RB: 1.1, WR: 0.75, TE: 1.1, K: 1.0, DEF: 1.0 },
-  late_qb:   { QB: 1.5, RB: 0.95, WR: 0.95, TE: 1.0, K: 1.0, DEF: 1.0 },
+  hero_te:   { QB: 1.1, RB: 1.0, WR: 1.1, TE: 0.6, K: 1.0, DEF: 1.0 },
+  wr_early:  { QB: 1.1, RB: 1.2, WR: 0.7, TE: 1.1, K: 1.0, DEF: 1.0 },
+  late_qb:   { QB: 1.5, RB: 0.95, WR: 0.9, TE: 1.0, K: 1.0, DEF: 1.0 },
 };
 
 const ARCHETYPES: Archetype[] = [
@@ -221,8 +224,10 @@ export function scorePlayer(
   const vor = vorMap.get(player.name) ?? 0;
   let score = -vor;
 
-  // Archetype modifier — multiply by weight (>1 means less attractive, <1 more)
-  score *= archetypeWeight;
+  // Archetype modifier — additive so it works correctly regardless of VOR sign.
+  // weight < 1.0 → negative adjustment → more attractive for this archetype
+  // weight > 1.0 → positive adjustment → less attractive for this archetype
+  score += (archetypeWeight - 1.0) * 40;
 
   // Tier bonus: being the last player in a tier triggers urgency
   const tier = tierMap.get(player.name) ?? 99;
